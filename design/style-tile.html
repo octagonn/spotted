@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spotted — Visual Identity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Boldonse&family=Anton&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --black: #000000;
+  --ink: #0A0A0A;
+  --graphite: #141416;
+  --charcoal: #1F1F22;
+  --iron: #27272A;
+  --slate: #3F3F46;
+  --ash: #52525B;
+  --fog: #71717A;
+  --silver: #A1A1AA;
+  --mist: #D4D4D8;
+  --bone: #E4E4E7;
+  --white: #FAFAFA;
+  --pure: #FFFFFF;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  background: var(--black);
+  color: var(--bone);
+  font-family: 'Geist', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body { position: relative; overflow-x: hidden; }
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  pointer-events: none;
+  z-index: 1000;
+  mix-blend-mode: overlay;
+}
+
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 64px 56px;
+  position: relative;
+}
+
+.display {
+  font-family: 'Boldonse', 'Anton', 'Bricolage Grotesque', sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  color: var(--white);
+}
+.display-xxl {
+  font-size: clamp(72px, 11vw, 120px);
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+}
+.display-xl {
+  font-size: clamp(56px, 7vw, 80px);
+  line-height: 0.95;
+}
+.display-lg { font-size: clamp(44px, 5.5vw, 64px); line-height: 0.98; }
+.display-md { font-size: clamp(32px, 3.5vw, 40px); line-height: 1.0; letter-spacing: -0.005em; }
+.display-sm { font-size: 26px; line-height: 1.05; letter-spacing: -0.005em; }
+
+.body { font-size: 17px; line-height: 1.5; color: var(--bone); }
+.body-lg { font-size: 22px; line-height: 1.45; color: var(--bone); }
+.caption { font-size: 13px; line-height: 1.45; color: var(--silver); }
+.micro {
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fog);
+  font-weight: 500;
+}
+
+.italic { font-style: italic; }
+.secondary { color: var(--silver); }
+.tertiary { color: var(--fog); }
+.mono { font-family: 'Geist Mono', monospace; }
+
+a { color: inherit; text-decoration: none; }
+
+/* ============ HEADER ============ */
+.masthead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 64px;
+  padding-bottom: 56px;
+  border-bottom: 1px solid var(--iron);
+  margin-bottom: 8px;
+}
+
+.masthead-meta { text-align: right; min-width: 200px; }
+.masthead-meta .micro { margin-bottom: 12px; }
+
+.tagline {
+  font-style: italic;
+  color: var(--silver);
+  font-size: 17px;
+  margin-top: 28px;
+  max-width: 480px;
+  letter-spacing: -0.005em;
+}
+
+/* ============ SECTIONS ============ */
+section {
+  padding: 96px 0;
+  border-bottom: 1px solid var(--iron);
+}
+
+.section-header {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 48px;
+  margin-bottom: 56px;
+  align-items: start;
+}
+
+.section-num {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 16px;
+  color: var(--fog);
+  letter-spacing: 0.04em;
+}
+
+.section-title { margin-bottom: 20px; }
+
+.section-desc {
+  color: var(--silver);
+  max-width: 600px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.section-desc + .section-desc { margin-top: 16px; }
+
+/* ============ PALETTE ============ */
+.palette {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  background: var(--iron);
+  border: 1px solid var(--iron);
+}
+
+.swatch {
+  aspect-ratio: 1 / 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.swatch-label-block { display: flex; flex-direction: column; gap: 2px; }
+.swatch-name { font-family: 'Geist'; font-weight: 500; font-size: 14px; }
+.swatch-hex {
+  font-family: 'Geist Mono';
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.swatch-role {
+  font-family: 'Geist';
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  text-transform: uppercase;
+}
+
+.s-black { background: var(--black); color: var(--silver); }
+.s-ink { background: var(--ink); color: var(--silver); }
+.s-graphite { background: var(--graphite); color: var(--silver); }
+.s-charcoal { background: var(--charcoal); color: var(--mist); }
+.s-iron { background: var(--iron); color: var(--mist); }
+.s-slate { background: var(--slate); color: var(--bone); }
+.s-ash { background: var(--ash); color: var(--bone); }
+.s-fog { background: var(--fog); color: var(--ink); }
+.s-silver { background: var(--silver); color: var(--ink); }
+.s-mist { background: var(--mist); color: var(--ink); }
+.s-bone { background: var(--bone); color: var(--ink); }
+.s-white { background: var(--white); color: var(--ink); }
+
+/* ============ TYPE SPECIMEN ============ */
+.type-spec { display: grid; gap: 0; }
+
+.type-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 200px;
+  gap: 40px;
+  align-items: baseline;
+  padding: 32px 0;
+  border-top: 1px solid var(--iron);
+}
+.type-row:first-child { border-top: none; padding-top: 0; }
+
+.type-meta { color: var(--fog); }
+.type-meta-name { font-family: 'Geist Mono'; font-size: 12px; }
+.type-tech {
+  text-align: right;
+  color: var(--fog);
+  font-family: 'Geist Mono';
+  font-size: 11px;
+  line-height: 1.5;
+}
+.type-tech-line { display: block; }
+
+.type-display {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  letter-spacing: -0.005em;
+  line-height: 1.0;
+  color: var(--white);
+}
+
+.type-body { font-family: 'Geist'; color: var(--bone); }
+
+/* ============ COMPOSITIONS ============ */
+.comps {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px;
+}
+
+.comp {
+  background: var(--ink);
+  border: 1px solid var(--iron);
+  padding: 32px;
+  min-height: 580px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.comp-tag {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  font-family: 'Geist Mono';
+  font-size: 11px;
+  color: var(--fog);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.comp-title {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 20px;
+  color: var(--white);
+  letter-spacing: -0.005em;
+  line-height: 1.05;
+  margin-bottom: 8px;
+}
+
+.comp-sub {
+  font-style: italic;
+  color: var(--fog);
+  font-size: 13px;
+  margin-bottom: 32px;
+}
+
+/* feed card */
+.feed-card {
+  background: var(--graphite);
+  border: 1px solid var(--iron);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.4);
+}
+
+.feed-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--iron);
+}
+
+.avatar-sq {
+  width: 32px;
+  height: 32px;
+  background: var(--slate);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.avatar-sq::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.06));
+}
+
+.feed-meta-text { flex: 1; }
+.feed-username { font-size: 13px; color: var(--bone); font-weight: 500; }
+.feed-gym { font-size: 11px; color: var(--fog); margin-top: 2px; }
+
+.verified-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.feed-photo {
+  flex: 1;
+  background:
+    linear-gradient(180deg, var(--charcoal) 0%, var(--ash) 50%, var(--slate) 100%);
+  position: relative;
+  border-bottom: 1px solid var(--iron);
+}
+
+.feed-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.4 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+  opacity: 0.3;
+}
+
+.feed-caption {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: var(--bone);
+  line-height: 1.4;
+}
+
+.feed-react {
+  display: flex;
+  gap: 18px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--iron);
+  font-size: 17px;
+  color: var(--mist);
+  filter: grayscale(1) contrast(1.1) brightness(1.1);
+}
+
+/* streak comp */
+.streak-display {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.streak-flame-svg { margin-bottom: 8px; }
+
+.streak-count {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: clamp(96px, 14vw, 144px);
+  line-height: 0.95;
+  color: var(--white);
+  letter-spacing: -0.02em;
+}
+
+.streak-line {
+  margin-top: 20px;
+  color: var(--silver);
+  font-size: 15px;
+  font-style: italic;
+  max-width: 240px;
+  line-height: 1.4;
+}
+
+.streak-stat-row {
+  display: flex;
+  gap: 32px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--iron);
+}
+
+.streak-stat-label {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--fog);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.streak-stat-val {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 26px;
+  color: var(--white);
+  margin-top: 6px;
+  letter-spacing: -0.01em;
+}
+
+/* empty state */
+.empty-comp {
+  flex: 1;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  align-items: end;
+  padding-bottom: 8px;
+}
+
+.empty-title {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 40px;
+  line-height: 1.0;
+  color: var(--white);
+  letter-spacing: -0.01em;
+}
+
+.empty-body {
+  font-style: italic;
+  color: var(--silver);
+  font-size: 15px;
+  margin-top: 20px;
+  max-width: 240px;
+  line-height: 1.45;
+}
+
+.empty-cta {
+  margin-top: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--iron);
+  width: 100%;
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.arrow { font-family: 'Geist Mono'; font-weight: 500; }
+
+/* viewer list */
+.viewer-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--iron);
+}
+
+.viewer-row:first-child { border-top: 1px solid var(--iron); }
+
+.viewer-avatar {
+  width: 28px;
+  height: 28px;
+  background: var(--slate);
+  border-radius: 4px;
+}
+
+.viewer-name { font-size: 14px; color: var(--bone); }
+.viewer-handle { font-size: 11px; color: var(--fog); margin-top: 2px; }
+.viewer-time {
+  font-family: 'Geist Mono';
+  font-size: 11px;
+  color: var(--fog);
+  letter-spacing: 0.04em;
+}
+
+.viewer-paywall {
+  margin-top: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--iron);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.viewer-paywall-text {
+  font-style: italic;
+  color: var(--silver);
+  font-size: 13px;
+}
+.viewer-paywall-cta {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--white);
+}
+
+.premium-mark {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--white);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ============ BLURRED VIEWER SILHOUETTES ============ */
+.silhouette-row {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 28px;
+}
+
+.blur-pfp-wrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--iron);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.blur-pfp {
+  width: 100%;
+  height: 100%;
+  filter: blur(10px) grayscale(1) contrast(1.05);
+  transform: scale(1.4);
+}
+
+.blur-pfp.v1 {
+  background:
+    radial-gradient(circle at 38% 28%, #A1A1AA 0%, transparent 38%),
+    radial-gradient(circle at 50% 75%, #71717A 0%, transparent 55%),
+    radial-gradient(circle at 50% 50%, #3F3F46 0%, transparent 70%),
+    #1F1F22;
+}
+
+.blur-pfp.v2 {
+  background:
+    radial-gradient(circle at 50% 32%, #D4D4D8 0%, transparent 42%),
+    radial-gradient(circle at 45% 80%, #52525B 0%, transparent 50%),
+    radial-gradient(circle at 50% 60%, #27272A 0%, transparent 72%),
+    #141416;
+}
+
+.blur-pfp.v3 {
+  background:
+    radial-gradient(circle at 60% 28%, #71717A 0%, transparent 36%),
+    radial-gradient(circle at 50% 72%, #3F3F46 0%, transparent 55%),
+    radial-gradient(circle at 50% 50%, #27272A 0%, transparent 75%),
+    #0A0A0A;
+}
+
+.silhouette-count {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 28px;
+  color: var(--white);
+  letter-spacing: -0.005em;
+  line-height: 1.0;
+  padding-top: 16px;
+  border-top: 1px solid var(--iron);
+}
+
+.silhouette-count-sub {
+  font-size: 12px;
+  color: var(--fog);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 8px;
+  font-family: 'Geist';
+  font-weight: 500;
+}
+
+.silhouette-cta {
+  margin-top: auto;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--iron);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.silhouette-cta-text { line-height: 1.3; }
+
+.silhouette-cta-headline {
+  font-size: 14px;
+  color: var(--bone);
+  font-weight: 500;
+}
+
+.silhouette-cta-sub {
+  font-size: 12px;
+  color: var(--silver);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ============ REVEAL COMPARISON ============ */
+.reveal {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  border: 1px solid var(--iron);
+  background: var(--ink);
+  margin-top: 32px;
+}
+
+.reveal-side {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.reveal-divider {
+  background: var(--iron);
+}
+
+.reveal-tag {
+  font-family: 'Geist Mono';
+  font-size: 11px;
+  color: var(--fog);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.reveal-tag.plus { color: var(--white); }
+
+.reveal-headline {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 22px;
+  color: var(--white);
+  letter-spacing: -0.005em;
+  line-height: 1.05;
+  margin-bottom: 28px;
+}
+
+.reveal-pfps {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.reveal-pfp-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--iron);
+}
+
+.reveal-pfp {
+  width: 100%;
+  height: 100%;
+  filter: blur(8px) grayscale(1);
+  transform: scale(1.4);
+}
+
+.reveal-list {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 24px;
+}
+
+.reveal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--iron);
+}
+
+.reveal-row:last-child { border-bottom: none; }
+
+.reveal-avatar {
+  width: 28px;
+  height: 28px;
+  background: var(--slate);
+  border-radius: 4px;
+}
+
+.reveal-name {
+  font-size: 14px;
+  color: var(--bone);
+  flex: 1;
+}
+
+.reveal-name-more {
+  color: var(--fog);
+  font-style: italic;
+}
+
+.reveal-count-block {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--iron);
+}
+
+.reveal-count-num {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 32px;
+  color: var(--white);
+  letter-spacing: -0.005em;
+  line-height: 1.0;
+}
+
+.reveal-count-label {
+  font-size: 12px;
+  color: var(--fog);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.reveal-note {
+  margin-top: auto;
+  font-style: italic;
+  color: var(--silver);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ============ DETAILS PANEL ============ */
+.details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--iron);
+  border: 1px solid var(--iron);
+  margin-top: 24px;
+}
+
+.detail-cell {
+  background: var(--ink);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 200px;
+}
+
+.detail-num {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 13px;
+  color: var(--fog);
+  letter-spacing: 0.04em;
+}
+
+.detail-title {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 20px;
+  color: var(--white);
+  letter-spacing: -0.005em;
+  line-height: 1.1;
+}
+
+.detail-body {
+  font-size: 14px;
+  color: var(--silver);
+  line-height: 1.5;
+}
+
+.detail-spec {
+  font-family: 'Geist Mono';
+  font-size: 11px;
+  color: var(--fog);
+  letter-spacing: 0.04em;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--iron);
+}
+
+/* ============ DO / DONT ============ */
+.do-dont {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--iron);
+}
+
+.dd-col {
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dd-col + .dd-col { border-left: 1px solid var(--iron); }
+
+.dd-tag {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dd-tag.do { color: var(--white); }
+.dd-tag.dont { color: var(--fog); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+
+.dd-list { display: flex; flex-direction: column; gap: 14px; }
+
+.dd-item {
+  font-size: 14px;
+  color: var(--bone);
+  line-height: 1.45;
+  padding-left: 20px;
+  position: relative;
+}
+
+.dd-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 8px;
+  height: 1px;
+  background: var(--silver);
+}
+
+.dd-col.dont .dd-item { color: var(--silver); }
+.dd-col.dont .dd-item::before { background: var(--fog); }
+
+/* ============ MOTION ============ */
+.motion-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--iron);
+  border: 1px solid var(--iron);
+}
+
+.motion-cell {
+  background: var(--ink);
+  padding: 32px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.motion-name {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: 16px;
+  color: var(--white);
+  letter-spacing: -0.005em;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+
+.motion-desc {
+  font-size: 13px;
+  color: var(--silver);
+  line-height: 1.5;
+}
+
+.motion-spec {
+  font-family: 'Geist Mono';
+  font-size: 11px;
+  color: var(--fog);
+  text-align: right;
+  letter-spacing: 0.04em;
+}
+
+/* ============ FOOTER ============ */
+.footer {
+  margin-top: 80px;
+  padding-top: 48px;
+  border-top: 1px solid var(--iron);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 48px;
+  align-items: end;
+}
+
+.footer-brand {
+  font-family: 'Boldonse', 'Anton', sans-serif;
+  font-size: clamp(48px, 7vw, 72px);
+  line-height: 0.95;
+  color: var(--white);
+  letter-spacing: -0.02em;
+}
+
+.footer-meta { text-align: right; color: var(--fog); }
+.footer-meta .micro { margin-bottom: 8px; }
+
+@media (max-width: 920px) {
+  .page { padding: 40px 24px; }
+  .palette { grid-template-columns: repeat(3, 1fr); }
+  .comps { grid-template-columns: 1fr !important; }
+  .details { grid-template-columns: 1fr; }
+  .motion-grid { grid-template-columns: 1fr; }
+  .do-dont { grid-template-columns: 1fr; }
+  .dd-col + .dd-col { border-left: none; border-top: 1px solid var(--iron); }
+  .section-header { grid-template-columns: 1fr; gap: 16px; }
+  .type-row { grid-template-columns: 1fr; gap: 8px; }
+  .type-tech { text-align: left; }
+  .reveal { grid-template-columns: 1fr; }
+  .reveal-divider { height: 1px; }
+  .masthead { grid-template-columns: 1fr; gap: 24px; }
+  .masthead-meta { text-align: left; }
+  .footer { grid-template-columns: 1fr; }
+  .footer-meta { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ========= MASTHEAD ========= -->
+  <header class="masthead">
+    <div>
+      <h1 class="display display-xxl">SPOTTED</h1>
+      <p class="tagline">A visual identity reference. The gym, but everyone's watching.</p>
+    </div>
+    <div class="masthead-meta">
+      <p class="micro">Style tile · v1</p>
+      <p class="caption">Luxury monochrome / editorial brutalist</p>
+    </div>
+  </header>
+
+  <!-- ========= 01 — THE LOOK ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <div>
+        <h2 class="display display-md section-title">The look</h2>
+        <p class="section-desc">Black-and-white film, surveillance footage, and editorial magazine — Aimé Leon Dore × Off-White × Aesop. Confident, refined, characterful. Generous negative space. Sharp hairlines. Deliberate grain. Restraint reads as expensive.</p>
+        <p class="section-desc">Refined minimalism only works through precision. Spacing is exact. Typography is deliberate. Motion is choreographed. Every detail is intentional — otherwise it reads as AI slop.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 02 — PALETTE ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <div>
+        <h2 class="display display-md section-title">Palette</h2>
+        <p class="section-desc">Twelve named neutrals, black to white. No color accents anywhere — no flame orange, no electric green, no status colors. Verified marks, streak flames, premium accents are differentiated by weight, scale, opacity, and texture, not hue.</p>
+      </div>
+    </div>
+    <div class="palette">
+      <div class="swatch s-black">
+        <span class="swatch-role">App background</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">black</span>
+          <span class="swatch-hex">#000000</span>
+        </div>
+      </div>
+      <div class="swatch s-ink">
+        <span class="swatch-role">Raised surface</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">ink</span>
+          <span class="swatch-hex">#0A0A0A</span>
+        </div>
+      </div>
+      <div class="swatch s-graphite">
+        <span class="swatch-role">Card / sheet</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">graphite</span>
+          <span class="swatch-hex">#141416</span>
+        </div>
+      </div>
+      <div class="swatch s-charcoal">
+        <span class="swatch-role">Hover / pressed</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">charcoal</span>
+          <span class="swatch-hex">#1F1F22</span>
+        </div>
+      </div>
+      <div class="swatch s-iron">
+        <span class="swatch-role">Hairline border</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">iron</span>
+          <span class="swatch-hex">#27272A</span>
+        </div>
+      </div>
+      <div class="swatch s-slate">
+        <span class="swatch-role">Emphasized border</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">slate</span>
+          <span class="swatch-hex">#3F3F46</span>
+        </div>
+      </div>
+      <div class="swatch s-ash">
+        <span class="swatch-role">Tertiary text</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">ash</span>
+          <span class="swatch-hex">#52525B</span>
+        </div>
+      </div>
+      <div class="swatch s-fog">
+        <span class="swatch-role">Secondary text</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">fog</span>
+          <span class="swatch-hex">#71717A</span>
+        </div>
+      </div>
+      <div class="swatch s-silver">
+        <span class="swatch-role">Muted text</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">silver</span>
+          <span class="swatch-hex">#A1A1AA</span>
+        </div>
+      </div>
+      <div class="swatch s-mist">
+        <span class="swatch-role">Subdued primary</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">mist</span>
+          <span class="swatch-hex">#D4D4D8</span>
+        </div>
+      </div>
+      <div class="swatch s-bone">
+        <span class="swatch-role">Primary text</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">bone</span>
+          <span class="swatch-hex">#E4E4E7</span>
+        </div>
+      </div>
+      <div class="swatch s-white">
+        <span class="swatch-role">Foreground / CTA</span>
+        <div class="swatch-label-block">
+          <span class="swatch-name">white</span>
+          <span class="swatch-hex">#FAFAFA</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 03 — TYPOGRAPHY ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <div>
+        <h2 class="display display-md section-title">Typography</h2>
+        <p class="section-desc"><strong style="color: var(--white); font-weight: 500;">Boldonse</strong> for display — heavy, geometric, brutalist caps energy. Streak counters, screen titles, gym names. <strong style="color: var(--white); font-weight: 500;">Geist</strong> for body and UI — a modern grotesk with character. Italic Geist is reserved for empty-state copy and pull quotes.</p>
+        <p class="section-desc">Banned: Inter, Roboto, Arial, San Francisco, Space Grotesk, Poppins. They're too common and they kill the aesthetic.</p>
+      </div>
+    </div>
+    <div class="type-spec">
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Display</span>
+        <div class="type-display" style="font-size: 64px;">158 days</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Boldonse · 64px</span>
+          <span class="type-tech-line">tracking −0.02em</span>
+          <span class="type-tech-line">streak counter</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Display</span>
+        <div class="type-display" style="font-size: 40px;">Eyes on you.</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Boldonse · 40px</span>
+          <span class="type-tech-line">tracking −0.005em</span>
+          <span class="type-tech-line">screen title</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Display</span>
+        <div class="type-display" style="font-size: 26px;">GOLD'S GYM CHELSEA</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Boldonse · 26px</span>
+          <span class="type-tech-line">uppercase</span>
+          <span class="type-tech-line">gym name</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Body</span>
+        <div class="type-body" style="font-size: 22px; line-height: 1.45; color: var(--bone);">Streak broken. Your friends saw.</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Geist 500 · 22px</span>
+          <span class="type-tech-line">leading 1.45</span>
+          <span class="type-tech-line">primary message</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Body</span>
+        <div class="type-body" style="font-size: 17px; line-height: 1.5; color: var(--bone);">Octavio just got to Gold's Gym. He's been viewing your drops a lot lately.</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Geist 400 · 17px</span>
+          <span class="type-tech-line">leading 1.5</span>
+          <span class="type-tech-line">UI / paragraph</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Italic</span>
+        <div class="type-body italic" style="font-size: 17px; line-height: 1.5; color: var(--silver);">Your friends are slacking. Or you have no friends yet. Either way — fix it.</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Geist Italic · 17px</span>
+          <span class="type-tech-line">color silver</span>
+          <span class="type-tech-line">empty state</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Caption</span>
+        <div class="type-body" style="font-size: 13px; line-height: 1.4; color: var(--fog);">Posted 14m ago at Gold's Gym Chelsea</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Geist 400 · 13px</span>
+          <span class="type-tech-line">color fog</span>
+          <span class="type-tech-line">metadata</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <span class="type-meta type-meta-name">Micro</span>
+        <div class="type-body" style="font-size: 11px; line-height: 1.3; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fog); font-weight: 500;">Verified at gym · 23 viewers</div>
+        <div class="type-tech">
+          <span class="type-tech-line">Geist 500 · 11px</span>
+          <span class="type-tech-line">tracking +0.06em</span>
+          <span class="type-tech-line">micro label</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 04 — COMPOSITIONS ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <div>
+        <h2 class="display display-md section-title">In context</h2>
+        <p class="section-desc">Reference compositions. Photos full-bleed and rectangular. Square avatars (4px corners). Hairline borders only. Verified marks are white-on-black inverted circles, never green. Premium uses outline-stroke marks, never gold fills.</p>
+      </div>
+    </div>
+
+    <div class="comps">
+
+      <!-- FEED CARD -->
+      <div class="comp">
+        <span class="comp-tag">Feed card · 04.1</span>
+        <h3 class="comp-title">Pump drop</h3>
+        <p class="comp-sub">Verified at gym · 23 viewers</p>
+        <div class="feed-card">
+          <div class="feed-meta">
+            <div class="avatar-sq"></div>
+            <div class="feed-meta-text">
+              <div class="feed-username">octavio</div>
+              <div class="feed-gym">Gold's Gym Chelsea</div>
+            </div>
+            <div class="verified-mark">✓</div>
+          </div>
+          <div class="feed-photo"></div>
+          <div class="feed-caption">Push day. 4 sets, 8 reps, no excuses.</div>
+          <div class="feed-react">
+            <span>🔥</span><span>💪</span><span>😍</span><span>👀</span><span>💀</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STREAK -->
+      <div class="comp">
+        <span class="comp-tag">Streak detail · 04.2</span>
+        <h3 class="comp-title">Streak</h3>
+        <p class="comp-sub">Boldonse 188px / lh 0.82 / track −0.05em</p>
+        <div class="streak-display">
+          <svg class="streak-flame-svg" width="40" height="56" viewBox="0 0 40 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <radialGradient id="flameGrad" cx="50%" cy="65%" r="55%">
+                <stop offset="0%" stop-color="#FAFAFA" stop-opacity="1"/>
+                <stop offset="60%" stop-color="#D4D4D8" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#71717A" stop-opacity="0.2"/>
+              </radialGradient>
+            </defs>
+            <path d="M20 4 C 22 14, 32 18, 32 32 C 32 44, 26 52, 20 52 C 14 52, 8 44, 8 32 C 8 22, 14 22, 14 14 C 14 18, 18 18, 20 14 Z" fill="url(#flameGrad)" stroke="#A1A1AA" stroke-width="0.5" />
+          </svg>
+          <div class="streak-count">158</div>
+          <p class="streak-line">Days. Don't break it now.</p>
+          <div class="streak-stat-row">
+            <div>
+              <div class="streak-stat-label">Longest</div>
+              <div class="streak-stat-val">189</div>
+            </div>
+            <div>
+              <div class="streak-stat-label">Freeze tokens</div>
+              <div class="streak-stat-val">3</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EMPTY STATE -->
+      <div class="comp">
+        <span class="comp-tag">Empty state · 04.3</span>
+        <h3 class="comp-title">No active drops</h3>
+        <p class="comp-sub">Asymmetric composition · italic body</p>
+        <div class="empty-comp">
+          <div></div>
+          <div>
+            <div class="empty-title">No active<br/>drops.</div>
+            <p class="empty-body">Get to the gym. Your friends are watching.</p>
+          </div>
+          <div class="empty-cta">
+            <span>Set a schedule</span>
+            <span class="arrow">→</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEWER LIST — FREE BLURRED -->
+      <div class="comp">
+        <span class="comp-tag">Viewer list · 04.4 · free</span>
+        <h3 class="comp-title">Eyes on you</h3>
+        <p class="comp-sub">3 silhouettes · no names · no timestamps</p>
+        <div class="silhouette-row">
+          <div class="blur-pfp-wrap"><div class="blur-pfp v1"></div></div>
+          <div class="blur-pfp-wrap"><div class="blur-pfp v2"></div></div>
+          <div class="blur-pfp-wrap"><div class="blur-pfp v3"></div></div>
+        </div>
+        <div>
+          <div class="silhouette-count">+ 20 more</div>
+          <div class="silhouette-count-sub">Watching, hidden</div>
+        </div>
+        <div class="silhouette-cta">
+          <div class="silhouette-cta-text">
+            <div class="silhouette-cta-headline">See who's been watching.</div>
+            <div class="silhouette-cta-sub">Unblur with Spotted+</div>
+          </div>
+          <span class="arrow" style="font-family: 'Geist Mono'; font-size: 20px; color: var(--white);">→</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- REVEAL — FREE vs PLUS -->
+    <div class="reveal">
+      <div class="reveal-side">
+        <span class="reveal-tag">Free · 04.5</span>
+        <div class="reveal-headline">Three blurred<br/>silhouettes.</div>
+        <div class="reveal-pfps">
+          <div class="reveal-pfp-wrap"><div class="reveal-pfp" style="background: radial-gradient(circle at 38% 28%, #A1A1AA 0%, transparent 38%), radial-gradient(circle at 50% 75%, #71717A 0%, transparent 55%), #1F1F22;"></div></div>
+          <div class="reveal-pfp-wrap"><div class="reveal-pfp" style="background: radial-gradient(circle at 50% 32%, #D4D4D8 0%, transparent 42%), radial-gradient(circle at 45% 80%, #52525B 0%, transparent 50%), #141416;"></div></div>
+          <div class="reveal-pfp-wrap"><div class="reveal-pfp" style="background: radial-gradient(circle at 60% 28%, #71717A 0%, transparent 36%), radial-gradient(circle at 50% 72%, #3F3F46 0%, transparent 55%), #0A0A0A;"></div></div>
+        </div>
+        <div class="reveal-count-block">
+          <div class="reveal-count-num">+ 20</div>
+          <div class="reveal-count-label">Hidden viewers</div>
+        </div>
+        <p class="reveal-note">Curiosity is the engine. Don't show the count too clinically — show enough to make them ask "who?"</p>
+      </div>
+      <div class="reveal-divider"></div>
+      <div class="reveal-side">
+        <span class="reveal-tag plus">Spotted+ · 04.5</span>
+        <div class="reveal-headline">Names. Order.<br/>No clock.</div>
+        <div class="reveal-list">
+          <div class="reveal-row">
+            <div class="reveal-avatar"></div>
+            <div class="reveal-name">mia</div>
+            <div class="premium-mark">✓</div>
+          </div>
+          <div class="reveal-row">
+            <div class="reveal-avatar"></div>
+            <div class="reveal-name">jordan</div>
+          </div>
+          <div class="reveal-row">
+            <div class="reveal-avatar"></div>
+            <div class="reveal-name">sam</div>
+          </div>
+          <div class="reveal-row">
+            <div class="reveal-avatar"></div>
+            <div class="reveal-name">alex</div>
+            <div class="premium-mark">✓</div>
+          </div>
+          <div class="reveal-row">
+            <div class="reveal-name reveal-name-more">+ 19 more, in viewed order</div>
+          </div>
+        </div>
+        <p class="reveal-note">Full unblurred list. Recency order, never timestamps — when reads as surveillance; that reads as curiosity.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 05 — DETAILS ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <div>
+        <h2 class="display display-md section-title">Details that earn it</h2>
+        <p class="section-desc">The aesthetic dies if these are missed. Each must be implemented exactly.</p>
+      </div>
+    </div>
+    <div class="details">
+      <div class="detail-cell">
+        <span class="detail-num">05.1</span>
+        <div>
+          <h3 class="detail-title">Grain overlay</h3>
+          <p class="detail-body">SVG fractal noise rendered at 4–5% opacity over the entire app, applied at the root layout. Adds the "film stock" character that distinguishes this from a generic dark theme.</p>
+        </div>
+        <span class="detail-spec">Skia · perlin · opacity 0.04</span>
+      </div>
+      <div class="detail-cell">
+        <span class="detail-num">05.2</span>
+        <div>
+          <h3 class="detail-title">1px hairlines</h3>
+          <p class="detail-body">Every divider, card edge, sheet handle, and bottom border uses a single 1px stroke in iron. Never thicker. Never doubled. The discipline of the hairline carries the entire interface.</p>
+        </div>
+        <span class="detail-spec">1px solid #27272A</span>
+      </div>
+      <div class="detail-cell">
+        <span class="detail-num">05.3</span>
+        <div>
+          <h3 class="detail-title">Photo treatment</h3>
+          <p class="detail-body">Posts render with 0 corner radius — full bleed and rectangular. 1px iron border + a tight inset shadow at 40% black. Reads as printed-on-paper, not floating glass.</p>
+        </div>
+        <span class="detail-spec">radius 0 · inset shadow</span>
+      </div>
+      <div class="detail-cell">
+        <span class="detail-num">05.4</span>
+        <div>
+          <h3 class="detail-title">Square avatars</h3>
+          <p class="detail-body">Avatars use 4px corners, not circles. Circles are the universal "generic social app" tell. Squares with subtle rounding read as editorial. DM headers are the one exception.</p>
+        </div>
+        <span class="detail-spec">radius 4px</span>
+      </div>
+      <div class="detail-cell">
+        <span class="detail-num">05.5</span>
+        <div>
+          <h3 class="detail-title">Verified mark</h3>
+          <p class="detail-body">A small white-fill circle with a black checkmark — never green. Inverted from the surrounding palette so it asserts itself without color. Premium gets a thicker outline-only stroke instead of a fill.</p>
+        </div>
+        <span class="detail-spec">22px · #FAFAFA fill</span>
+      </div>
+      <div class="detail-cell">
+        <span class="detail-num">05.6</span>
+        <div>
+          <h3 class="detail-title">Streak flame</h3>
+          <p class="detail-body">Skia-rendered flame with white-to-fog radial gradient and subtle ember particles in mist. Continuous breathing scale (1.0 → 1.03 → 1.0) at 2.4s. Never orange.</p>
+        </div>
+        <span class="detail-spec">white → fog · breathing 2400ms</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 06 — MOTION ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <div>
+        <h2 class="display display-md section-title">Motion</h2>
+        <p class="section-desc">Choreographed, not scattered. Most elements are still; one or two move with intent. Restraint reads as expensive. Cubic-bezier easings, not springs (springs feel toy-like in a luxury aesthetic).</p>
+      </div>
+    </div>
+    <div class="motion-grid">
+      <div class="motion-cell">
+        <div>
+          <div class="motion-name">App launch</div>
+          <p class="motion-desc">Logo center → fades to top-left of feed (480ms). Streak bar slides in 60ms after.</p>
+        </div>
+        <span class="motion-spec">480ms<br/>emphasized</span>
+      </div>
+      <div class="motion-cell">
+        <div>
+          <div class="motion-name">Tab switch</div>
+          <p class="motion-desc">Outgoing fades + scales to 0.98 (220ms). Incoming fades + scales from 1.02 to 1.0 (320ms).</p>
+        </div>
+        <span class="motion-spec">220 / 320ms<br/>standard</span>
+      </div>
+      <div class="motion-cell">
+        <div>
+          <div class="motion-name">Pump drop entrance</div>
+          <p class="motion-desc">Opacity 0→1, translateY 12→0. No scale. Stagger 60ms across visible cards.</p>
+        </div>
+        <span class="motion-spec">320ms<br/>emphasized</span>
+      </div>
+      <div class="motion-cell">
+        <div>
+          <div class="motion-name">Streak flame</div>
+          <p class="motion-desc">Continuous breathing scale 1.0 → 1.03 → 1.0. Subtle ember particles drift up.</p>
+        </div>
+        <span class="motion-spec">2400ms loop<br/>sine</span>
+      </div>
+      <div class="motion-cell">
+        <div>
+          <div class="motion-name">Camera shutter</div>
+          <p class="motion-desc">Press: scale to 0.92 over 120ms. Release: spring back. Heavy haptic on press, success on capture.</p>
+        </div>
+        <span class="motion-spec">120ms<br/>standard</span>
+      </div>
+      <div class="motion-cell">
+        <div>
+          <div class="motion-name">Streak break</div>
+          <p class="motion-desc">Number renders large, then crosses out with a single hairline stroke (480ms), then desaturates to silver. Cold and final. No bounce.</p>
+        </div>
+        <span class="motion-spec">480ms<br/>exit easing</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 07 — DO / DONT ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">07</span>
+      <div>
+        <h2 class="display display-md section-title">Aesthetic test</h2>
+        <p class="section-desc">If a screen wouldn't feel at home next to an Aimé Leon Dore lookbook page or an Aesop product page, redo it. If a screenshot of the screen could be from a generic Cursor demo video, redo it.</p>
+      </div>
+    </div>
+    <div class="do-dont">
+      <div class="dd-col do">
+        <span class="dd-tag do">Do</span>
+        <div class="dd-list">
+          <div class="dd-item">Commit to the monochrome palette. No exceptions.</div>
+          <div class="dd-item">Use Boldonse for any number that wants to dominate.</div>
+          <div class="dd-item">Set big numbers in Boldonse and let them dominate their card.</div>
+          <div class="dd-item">Use generous negative space. Empty states use 1/3 of the screen for whitespace alone.</div>
+          <div class="dd-item">Use asymmetric compositions. Place text bottom-left or top-right.</div>
+          <div class="dd-item">Use 1px hairlines in iron everywhere. Never thicker.</div>
+          <div class="dd-item">Use square 4px-radius avatars. Photos full-bleed and rectangular.</div>
+          <div class="dd-item">Hand-tune empty, loading, and error states for every list. Never default.</div>
+          <div class="dd-item">Add the grain overlay at the root. It's the difference between dark theme and editorial.</div>
+          <div class="dd-item">Use weight, opacity, and texture to differentiate states. Never hue.</div>
+          <div class="dd-item">Hide identities with heavy blur + grayscale. Curiosity is the engine — never replace it with a cold counter.</div>
+        </div>
+      </div>
+      <div class="dd-col dont">
+        <span class="dd-tag dont">Don't</span>
+        <div class="dd-list">
+          <div class="dd-item">Use Inter, SF Pro, Roboto, Space Grotesk, or Poppins. Anywhere.</div>
+          <div class="dd-item">Add color accents — flame orange, electric green, status colors. Banned.</div>
+          <div class="dd-item">Use circular avatars outside DM headers.</div>
+          <div class="dd-item">Use shimmer skeletons. Use a still grain overlay with a single Boldonse word instead.</div>
+          <div class="dd-item">Use gradients, except the Skia flame's white-to-fog radial.</div>
+          <div class="dd-item">Use glassmorphism, frosted blur, or any "iOS-glass" effect.</div>
+          <div class="dd-item">Use bouncy springs everywhere. Use cubic-bezier easings.</div>
+          <div class="dd-item">Use rounded-full pills for content. Reserve them for status only.</div>
+          <div class="dd-item">Center everything. Asymmetry is a feature.</div>
+          <div class="dd-item">Use red for errors, green for success. Use copy weight and texture instead.</div>
+          <div class="dd-item">Show timestamps next to viewers. Reads as surveillance.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 08 — PREMIUM ========= -->
+  <section>
+    <div class="section-header">
+      <span class="section-num">08</span>
+      <div>
+        <h2 class="display display-md section-title">Spotted+</h2>
+        <p class="section-desc">Premium stays in the monochrome palette. No gold fills. No purple gradients. Premium gets a thicker outlined check ring (1.5px white stroke, hollow center), an optional white-on-black flame variant, and access to themed app icons. Restraint signals luxury better than color.</p>
+      </div>
+    </div>
+    <div class="comps" style="grid-template-columns: 1fr 2fr;">
+      <div class="comp">
+        <span class="comp-tag">Premium mark · 08.1</span>
+        <h3 class="comp-title">Gold check, no gold</h3>
+        <p class="comp-sub">Outline stroke vs filled mark</p>
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 48px;">
+          <div style="text-align: center;">
+            <div class="verified-mark" style="width: 56px; height: 56px; font-size: 24px;">✓</div>
+            <div class="micro" style="margin-top: 16px;">Free · verified at gym</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid var(--white); display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--white); margin: 0 auto;">✓</div>
+            <div class="micro" style="margin-top: 16px;">Spotted+</div>
+          </div>
+        </div>
+      </div>
+      <div class="comp">
+        <span class="comp-tag">Paywall · 08.2</span>
+        <h3 class="comp-title">Go gold.</h3>
+        <p class="comp-sub">Headline · sub · 4 bullets · CTA</p>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 24px; padding: 16px 0;">
+          <div>
+            <div class="display display-md" style="font-size: 44px; line-height: 1.0;">Go gold.</div>
+            <p class="body italic" style="color: var(--silver); margin-top: 16px; font-size: 17px;">Spotted+ shows you who's really watching.</p>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--iron);">
+            <div style="font-size: 14px; color: var(--bone); padding-left: 16px; position: relative;">
+              <span style="position: absolute; left: 0; color: var(--white);">—</span>
+              See every viewer, unblurred. Names included.
+            </div>
+            <div style="font-size: 14px; color: var(--bone); padding-left: 16px; position: relative;">
+              <span style="position: absolute; left: 0; color: var(--white);">—</span>
+              3 freeze tokens a month.
+            </div>
+            <div style="font-size: 14px; color: var(--bone); padding-left: 16px; position: relative;">
+              <span style="position: absolute; left: 0; color: var(--white);">—</span>
+              Travel mode. Full features at every gym.
+            </div>
+            <div style="font-size: 14px; color: var(--bone); padding-left: 16px; position: relative;">
+              <span style="position: absolute; left: 0; color: var(--white);">—</span>
+              Gold flame. Gold check. Gold reactions.
+            </div>
+          </div>
+          <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--iron);">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 0;">
+              <div>
+                <div style="font-family: 'Boldonse', 'Anton', sans-serif; font-size: 22px; color: var(--white); letter-spacing: -0.005em;">Start 7 days free</div>
+                <div class="caption" style="color: var(--fog); margin-top: 4px;">$4.99/mo or $34.99/yr · cancel anytime</div>
+              </div>
+              <div class="arrow" style="font-family: 'Geist Mono'; font-size: 24px; color: var(--white);">→</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= FOOTER ========= -->
+  <footer class="footer">
+    <div>
+      <div class="footer-brand">SPOTTED.</div>
+    </div>
+    <div class="footer-meta">
+      <p class="micro">Style tile · v1 · for Codex</p>
+      <p class="caption">If a screen wouldn't sit next to an Aimé Leon Dore lookbook, redo it.</p>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -26,7 +26,11 @@ export default function SignInScreen() {
           >
             Continue with Apple
           </Button>
-          <Button icon={<Phone color={colors.white} size={18} />} variant="ghost" onPress={() => router.push("/profile")}>
+          <Button
+            icon={<Phone color={colors.white} size={18} />}
+            variant="ghost"
+            onPress={() => router.push("/profile")}
+          >
             Phone OTP
           </Button>
         </View>

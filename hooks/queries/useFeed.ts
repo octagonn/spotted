@@ -10,9 +10,11 @@ export function useFeed() {
       if (!isSupabaseConfigured) {
         return mockFeed;
       }
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("posts")
-        .select("*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude)")
+        .select(
+          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude)"
+        )
         .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false });
       if (error) {

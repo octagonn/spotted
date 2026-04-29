@@ -31,7 +31,12 @@ export function ReactionBar({ onReact }: ReactionBarProps) {
   return (
     <View className="h-16 flex-row items-center justify-around border-t border-iron bg-black/80">
       {reactions.map((reaction) => (
-        <Pressable key={reaction} className="h-12 w-12 items-center justify-center" haptic={false} onPress={() => handlePress(reaction)}>
+        <Pressable
+          key={reaction}
+          className="h-12 w-12 items-center justify-center"
+          haptic={false}
+          onPress={() => handlePress(reaction)}
+        >
           <Animated.View style={active === reaction ? animatedStyle : undefined}>
             <Text variant="body-xl" className={active === reaction ? "text-white" : "text-mist"}>
               {reaction}

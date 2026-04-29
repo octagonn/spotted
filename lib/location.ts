@@ -36,7 +36,12 @@ export async function registerGeofences(regions: GymRegion[]) {
   await Location.startGeofencingAsync(GEOFENCE_TASK, selectedRegions);
 }
 
-export async function checkin(gymId: string, userCoordinate: Coordinate, gymCoordinate: Coordinate, radiusMeters: number) {
+export async function checkin(
+  gymId: string,
+  userCoordinate: Coordinate,
+  gymCoordinate: Coordinate,
+  radiusMeters: number
+) {
   const verified = isInsideGeofence(userCoordinate, gymCoordinate, radiusMeters);
   const { data, error } = await supabase.rpc("checkin", {
     p_gym_id: gymId,

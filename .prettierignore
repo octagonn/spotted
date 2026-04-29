@@ -1,0 +1,7 @@
+node_modules
+.expo
+dist
+design/*.html
+package-lock.json
+supabase/functions/**
+*.sql

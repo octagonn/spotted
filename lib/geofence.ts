@@ -16,10 +16,7 @@ export function distanceMeters(a: Coordinate, b: Coordinate) {
   const latitudeB = toRadians(b.latitude);
   const h =
     Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) +
-    Math.cos(latitudeA) *
-      Math.cos(latitudeB) *
-      Math.sin(longitudeDelta / 2) *
-      Math.sin(longitudeDelta / 2);
+    Math.cos(latitudeA) * Math.cos(latitudeB) * Math.sin(longitudeDelta / 2) * Math.sin(longitudeDelta / 2);
   return 2 * earthRadiusMeters * Math.asin(Math.sqrt(h));
 }
 

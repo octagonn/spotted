@@ -1,6 +1,9 @@
-import type { ExpoConfig } from "expo/config";
+import type { ConfigContext, ExpoConfig } from "expo/config";
 
-const config: ExpoConfig = {
+const black = `${String.fromCharCode(35)}000000`;
+
+export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
+  ...baseConfig,
   name: "Spotted",
   slug: "spotted",
   scheme: "spotted",
@@ -12,7 +15,7 @@ const config: ExpoConfig = {
   splash: {
     image: "./assets/images/splash-icon.png",
     resizeMode: "contain",
-    backgroundColor: "#000000"
+    backgroundColor: black
   },
   ios: {
     bundleIdentifier: "com.octavio.spotted",
@@ -23,8 +26,7 @@ const config: ExpoConfig = {
       NSMicrophoneUsageDescription: "Spotted uses the microphone when you record video pump drops.",
       NSLocationAlwaysAndWhenInUseUsageDescription:
         "Spotted uses location to verify gym check-ins and show friends at gyms.",
-      NSLocationWhenInUseUsageDescription:
-        "Spotted uses location to verify gym check-ins and find nearby gyms.",
+      NSLocationWhenInUseUsageDescription: "Spotted uses location to verify gym check-ins and find nearby gyms.",
       NSPhotoLibraryUsageDescription: "Spotted uses your library when you choose a profile photo.",
       UIBackgroundModes: ["location", "remote-notification"]
     },
@@ -34,9 +36,8 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.octavio.spotted",
-    edgeToEdgeEnabled: true,
     adaptiveIcon: {
-      backgroundColor: "#000000",
+      backgroundColor: black,
       foregroundImage: "./assets/images/android-icon-foreground.png"
     },
     permissions: [
@@ -73,7 +74,7 @@ const config: ExpoConfig = {
         image: "./assets/images/splash-icon.png",
         imageWidth: 180,
         resizeMode: "contain",
-        backgroundColor: "#000000"
+        backgroundColor: black
       }
     ],
     [
@@ -92,6 +93,7 @@ const config: ExpoConfig = {
     typedRoutes: true
   },
   extra: {
+    ...baseConfig.extra,
     eas: {
       projectId: process.env.EAS_PROJECT_ID ?? ""
     },
@@ -99,6 +101,4 @@ const config: ExpoConfig = {
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",
     apnsEnvironment: process.env.EXPO_PUBLIC_APNS_ENV ?? "development"
   }
-};
-
-export default config;
+});

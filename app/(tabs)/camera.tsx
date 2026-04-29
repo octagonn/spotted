@@ -32,10 +32,13 @@ export default function CameraScreen() {
         <Text variant="italic" className="mt-5">
           Permission first. Pump drops after.
         </Text>
-        <Button className="mt-8" onPress={async () => {
-          await camera.cameraPermission.requestPermission();
-          await camera.microphonePermission.requestPermission();
-        }}>
+        <Button
+          className="mt-8"
+          onPress={async () => {
+            await camera.cameraPermission.requestPermission();
+            await camera.microphonePermission.requestPermission();
+          }}
+        >
           Enable camera
         </Button>
       </View>
@@ -49,7 +52,10 @@ export default function CameraScreen() {
         <Pressable className="h-12 w-12 items-center justify-center border border-iron bg-black/70">
           <Zap color={colors.white} size={22} />
         </Pressable>
-        <Pressable className="h-12 w-12 items-center justify-center border border-iron bg-black/70" onPress={() => setPosition(position === "back" ? "front" : "back")}>
+        <Pressable
+          className="h-12 w-12 items-center justify-center border border-iron bg-black/70"
+          onPress={() => setPosition(position === "back" ? "front" : "back")}
+        >
           <RefreshCcw color={colors.white} size={22} />
         </Pressable>
       </View>
@@ -64,7 +70,11 @@ export default function CameraScreen() {
             </Text>
           </View>
         ) : null}
-        <Pressable className="h-24 w-24 items-center justify-center border border-white bg-white" pressedClassName="scale-95" onPress={capture}>
+        <Pressable
+          className="h-24 w-24 items-center justify-center border border-white bg-white"
+          pressedClassName="scale-95"
+          onPress={capture}
+        >
           <CameraIcon color={colors.black} size={34} strokeWidth={2.4} />
         </Pressable>
       </View>

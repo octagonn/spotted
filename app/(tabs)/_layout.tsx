@@ -32,7 +32,10 @@ function SpottedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const atGym = usePresenceStore((store) => store.atGym);
 
   return (
-    <View className="absolute bottom-0 left-0 right-0 border-t border-iron bg-black px-3 pt-2" style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
+    <View
+      className="absolute bottom-0 left-0 right-0 border-t border-iron bg-black px-3 pt-2"
+      style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+    >
       <GrainOverlay opacity={0.05} />
       <View className="flex-row items-end justify-between">
         {state.routes.map((route, index) => {
@@ -45,7 +48,11 @@ function SpottedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           return (
             <Pressable
               key={route.key}
-              className={isCamera ? "-mt-8 h-16 w-16 items-center justify-center bg-white" : "h-14 flex-1 items-center justify-center gap-1"}
+              className={
+                isCamera
+                  ? "-mt-8 h-16 w-16 items-center justify-center bg-white"
+                  : "h-14 flex-1 items-center justify-center gap-1"
+              }
               pressedClassName={isCamera ? "scale-95" : "opacity-60"}
               onPress={() => navigation.navigate(route.name)}
             >

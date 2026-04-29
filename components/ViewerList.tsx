@@ -18,7 +18,10 @@ export function ViewerList({ data, onUpgrade }: ViewerListProps) {
         <Text variant="title">WATCHING</Text>
         <View className="gap-3">
           {data.viewers.map((viewer, index) => (
-            <View key={`${viewer.avatar_blurred_url ?? "viewer"}-${index}`} className="flex-row items-center gap-3 border-t border-iron pt-3">
+            <View
+              key={`${viewer.avatar_blurred_url ?? "viewer"}-${index}`}
+              className="flex-row items-center gap-3 border-t border-iron pt-3"
+            >
               <Avatar uri={viewer.avatar_blurred_url} muted />
               <View className="flex-1">
                 <View className="h-3 w-28 bg-slate" />

@@ -12,10 +12,14 @@ export function useRealtime(userId?: string | null) {
     }
     const channel = supabase
       .channel(`user:${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` }, () => {
-        void queryClient.invalidateQueries({ queryKey: ["notifications"] });
-        void queryClient.invalidateQueries({ queryKey: ["post-viewers"] });
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          void queryClient.invalidateQueries({ queryKey: ["post-viewers"] });
+        }
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);

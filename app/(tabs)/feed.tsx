@@ -30,7 +30,10 @@ export default function FeedScreen() {
             The gym, but everyone's watching.
           </Text>
         </View>
-        <Pressable className="min-w-20 items-center border border-iron bg-ink px-3 py-2" onPress={() => router.push("/streak")}>
+        <Pressable
+          className="min-w-20 items-center border border-iron bg-ink px-3 py-2"
+          onPress={() => router.push("/streak")}
+        >
           <Text variant="micro">YOU</Text>
           <Text variant="body-strong">{streak.data?.current_streak ?? 0}</Text>
         </Pressable>
@@ -63,7 +66,12 @@ export default function FeedScreen() {
         </View>
       ) : posts.length === 0 ? (
         <View className="p-4">
-          <EmptyState title="NO ACTIVE DROPS." body="Your friends are slacking. Or you have no friends yet. Either way, fix it." action="Open camera" onAction={() => router.push("/camera")} />
+          <EmptyState
+            title="NO ACTIVE DROPS."
+            body="Your friends are slacking. Or you have no friends yet. Either way, fix it."
+            action="Open camera"
+            onAction={() => router.push("/camera")}
+          />
         </View>
       ) : (
         <FlashList

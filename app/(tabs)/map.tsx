@@ -40,7 +40,11 @@ export default function GymMapScreen() {
         style={{ flex: 1 }}
       >
         {data?.gyms.map((gym) => (
-          <Marker key={gym.id} coordinate={{ latitude: gym.latitude, longitude: gym.longitude }} onPress={() => router.push(`/gym/${gym.id}`)}>
+          <Marker
+            key={gym.id}
+            coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
+            onPress={() => router.push(`/gym/${gym.id}`)}
+          >
             <View className="border border-iron bg-black px-3 py-2">
               <Text variant="micro" className="text-white">
                 {gym.name}
@@ -50,7 +54,10 @@ export default function GymMapScreen() {
           </Marker>
         ))}
         {data?.presence.map((item) => {
-          const coordinate = jitterGymCoordinate({ latitude: item.gym.latitude, longitude: item.gym.longitude }, item.id);
+          const coordinate = jitterGymCoordinate(
+            { latitude: item.gym.latitude, longitude: item.gym.longitude },
+            item.id
+          );
           return (
             <Marker key={item.id} coordinate={coordinate}>
               <AvatarPin uri={item.profile.avatar_url} name={item.profile.display_name} />
@@ -58,7 +65,10 @@ export default function GymMapScreen() {
           );
         })}
       </MapView>
-      <View className="absolute left-4 right-4 flex-row items-center gap-3 border border-iron bg-black px-4 py-3" style={{ top: insets.top + 16 }}>
+      <View
+        className="absolute left-4 right-4 flex-row items-center gap-3 border border-iron bg-black px-4 py-3"
+        style={{ top: insets.top + 16 }}
+      >
         <Search color={colors.fog} size={18} />
         <Text variant="caption" className="flex-1 text-silver">
           Search gyms

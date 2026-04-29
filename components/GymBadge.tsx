@@ -18,7 +18,7 @@ export function GymBadge({ gymName, verified }: GymBadgeProps) {
         </View>
       ) : null}
       <Text variant="micro" className={verified ? "text-white" : "text-fog"}>
-        {verified && gymName ? `VERIFIED AT ${gymName}` : gymName ?? "NOT AT A GYM"}
+        {verified && gymName ? `VERIFIED AT ${gymName}` : (gymName ?? "NOT AT A GYM")}
       </Text>
     </View>
   );

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { mockProfiles } from "@/lib/mockData";
 import { reconcileSubscription } from "@/lib/subscription";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 

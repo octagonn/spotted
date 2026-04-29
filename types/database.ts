@@ -364,7 +364,7 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: {};
+    Views: Record<string, never>;
     Functions: {
       checkin: {
         Args: {
@@ -382,6 +382,6 @@ export type Database = {
         Returns: undefined;
       };
     };
-    CompositeTypes: {};
+    CompositeTypes: Record<string, never>;
   };
 };

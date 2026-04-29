@@ -10,7 +10,7 @@ export function useGymPresence() {
       if (!isSupabaseConfigured) {
         return { gyms: mockGyms, presence: mockFriendPresence };
       }
-      const { data, error } = await supabase.from("checkins").select("*").is("checked_out_at", null);
+      const { error } = await supabase.from("checkins").select("*").is("checked_out_at", null);
       if (error) {
         throw error;
       }

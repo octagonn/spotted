@@ -10,7 +10,7 @@ export function usePostViewers(postId: string) {
       if (!isSupabaseConfigured) {
         return mockViewersFree;
       }
-      const { data, error } = await supabase.functions.invoke("get-post-viewers", { body: { post_id: postId } });
+      const { error } = await supabase.functions.invoke("get-post-viewers", { body: { post_id: postId } });
       if (error) {
         throw error;
       }

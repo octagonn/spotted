@@ -36,7 +36,11 @@ export default function ScheduleScreen() {
             key={muscle}
             muscle={muscle}
             selected={selected.includes(muscle)}
-            onPress={() => setSelected((current) => (current.includes(muscle) ? current.filter((item) => item !== muscle) : [...current, muscle]))}
+            onPress={() =>
+              setSelected((current) =>
+                current.includes(muscle) ? current.filter((item) => item !== muscle) : [...current, muscle]
+              )
+            }
           />
         ))}
       </View>

@@ -71,7 +71,11 @@ export default function FriendsScreen() {
       ) : (
         <View className="mt-4 gap-3">
           {friendList.map((friend, index) => (
-            <Pressable key={friend.id} className="flex-row items-center gap-3 border border-iron bg-ink p-3" onPress={() => router.push(`/chat/${friend.id}`)}>
+            <Pressable
+              key={friend.id}
+              className="flex-row items-center gap-3 border border-iron bg-ink p-3"
+              onPress={() => router.push(`/chat/${friend.id}`)}
+            >
               <Avatar uri={friend.avatar_url} />
               <View className="flex-1">
                 <Text variant="body-strong">{friend.display_name}</Text>

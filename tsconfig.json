@@ -3,17 +3,10 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ],
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"],
   "exclude": [
     "components/external-link.tsx",
     "components/haptic-tab.tsx",
@@ -30,6 +23,7 @@
     "hooks/use-color-scheme.ts",
     "hooks/use-color-scheme.web.ts",
     "scripts/**",
-    "supabase/functions/**"
+    "supabase/functions/**",
+    "vitest.config.ts"
   ]
 }

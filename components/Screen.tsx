@@ -18,7 +18,11 @@ export function Screen({ children, scroll = true, className }: ScreenProps) {
     );
   }
   return (
-    <ScrollView className="flex-1 bg-black" contentContainerClassName={`px-4 pb-32 ${className ?? ""}`} contentInsetAdjustmentBehavior="never">
+    <ScrollView
+      className="flex-1 bg-black"
+      contentContainerClassName={`px-4 pb-32 ${className ?? ""}`}
+      contentInsetAdjustmentBehavior="never"
+    >
       <View style={{ height: insets.top + 16 }} />
       {children}
     </ScrollView>

@@ -1,50 +1,110 @@
-# Welcome to your Expo app 👋
+# Spotted
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Spotted is an Expo + React Native gym social app with a Supabase backend. It uses the provided `design/style-tile.html` and `design/demo.html` as the canonical visual reference: luxury monochrome, Boldonse display type, Geist UI type, square avatars, grain, hard hairlines, and Snapchat-style social mechanics.
 
-## Get started
+## Stack
 
-1. Install dependencies
+- Expo SDK 52, React Native 0.76, Expo Router v4 typed routes
+- NativeWind v4, Reanimated 3, Gesture Handler
+- Supabase Auth, Postgres, RLS, Storage, Realtime, Edge Functions
+- Vision Camera, React Native Maps, Skia, MMKV, React Query, Zustand
+- Raw APNs fan-out from `supabase/functions/send-push`
+
+## Local Setup
+
+1. Install dependencies:
 
    ```bash
-   npm install
+   npm install --legacy-peer-deps
    ```
 
-2. Start the app
+2. Create `.env` from `.env.example`:
 
    ```bash
-   npx expo start
+   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   EXPO_PUBLIC_APNS_ENV=development
+   EAS_PROJECT_ID=your-eas-project-id
    ```
 
-In the output, you'll find options to open the app in a
+3. Start Expo:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   ```bash
+   npm run start
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+The app boots without Supabase credentials using local mock data. Once credentials are set, all fetches go through typed React Query hooks in `hooks/queries`.
 
-## Get a fresh project
+## Supabase
 
-When you're ready, run:
+Apply migrations to a fresh Supabase project:
 
 ```bash
-npm run reset-project
+supabase db push
+supabase db reset --linked
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Run pgTAP policy tests:
 
-## Learn more
+```bash
+supabase test db
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Deploy functions:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+supabase functions deploy streak-tick
+supabase functions deploy checkout-stale
+supabase functions deploy send-push
+supabase functions deploy sign-post-url
+supabase functions deploy seed-gyms
+supabase functions deploy iap-webhook
+supabase functions deploy grant-consumable
+supabase functions deploy get-post-viewers
+supabase functions deploy get-friend-suggestions
+supabase functions deploy avatar-process
+```
 
-## Join the community
+Required Supabase secrets:
 
-Join our community of developers creating universal apps.
+```bash
+supabase secrets set APNS_TEAM_ID=...
+supabase secrets set APNS_KEY_ID=...
+supabase secrets set APNS_PRIVATE_KEY=...
+supabase secrets set APNS_BUNDLE_ID=com.octavio.spotted
+supabase secrets set APNS_ENV=development
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+`APNS_PRIVATE_KEY` is the base64-encoded contents of the `.p8` key.
+
+## EAS Build From Windows
+
+No local Mac is required. Use Expo's cloud builders:
+
+```bash
+npx eas login
+npx eas build:configure
+npx eas build --platform ios --profile preview
+npx eas build --platform android --profile preview
+```
+
+An Apple Developer account is required for installable iOS builds. For day-to-day Windows development, use Android Studio's emulator for fast iteration and a real iPhone with an `expo-dev-client` build for iOS hardware features.
+
+## Checks
+
+```bash
+npm run typecheck
+npm test
+npm run lint
+npx expo-doctor
+```
+
+Cloud EAS builds and Supabase deployments require authenticated CLI sessions and project secrets.
+
+## Backend Notes
+
+- `posts` media lives in the private `posts` bucket and is read via `sign-post-url`.
+- Viewer access is enforced in `get-post-viewers`; free callers only receive blurred avatar paths and total count.
+- `checkin` verifies distance server-side using `earthdistance`.
+- Gym map presence never shares user lat/lng with friends; it only exposes active gym presence.
+- Paywall placement is restricted to viewer-list, travel-mode, locked flame color, streak revival, Settings, and the day-seven push.

@@ -26,7 +26,10 @@ export default function StreakModal() {
         <Text variant="micro">LAST 30 DAYS</Text>
         <View className="mt-4 flex-row flex-wrap gap-2">
           {days.map((day) => (
-            <View key={day} className={`h-9 w-9 items-center justify-center border ${day < current ? "border-white bg-white" : "border-iron bg-black"}`}>
+            <View
+              key={day}
+              className={`h-9 w-9 items-center justify-center border ${day < current ? "border-white bg-white" : "border-iron bg-black"}`}
+            >
               <Text variant="micro" className={day < current ? "text-black" : "text-fog"}>
                 {day < current ? "✓" : "×"}
               </Text>

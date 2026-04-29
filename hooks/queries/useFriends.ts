@@ -10,7 +10,7 @@ export function useFriends() {
       if (!isSupabaseConfigured) {
         return mockProfiles.slice(1);
       }
-      const { data, error } = await supabase.from("friendships").select("*").eq("status", "accepted");
+      const { error } = await supabase.from("friendships").select("*").eq("status", "accepted");
       if (error) {
         throw error;
       }
@@ -26,7 +26,7 @@ export function useFriendSuggestions() {
       if (!isSupabaseConfigured) {
         return mockSuggestions;
       }
-      const { data, error } = await supabase.functions.invoke("get-friend-suggestions", { body: { limit: 8 } });
+      const { error } = await supabase.functions.invoke("get-friend-suggestions", { body: { limit: 8 } });
       if (error) {
         throw error;
       }

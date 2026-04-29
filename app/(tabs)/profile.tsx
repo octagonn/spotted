@@ -35,7 +35,10 @@ export default function ProfileScreen() {
     <Screen>
       <View className="flex-row items-start justify-between">
         <Avatar uri={profile.avatar_url} size="lg" />
-        <Pressable className="h-12 w-12 items-center justify-center border border-iron bg-ink" onPress={() => router.push("/settings")}>
+        <Pressable
+          className="h-12 w-12 items-center justify-center border border-iron bg-ink"
+          onPress={() => router.push("/settings")}
+        >
           <Settings color={colors.white} size={20} />
         </Pressable>
       </View>
@@ -77,7 +80,12 @@ export default function ProfileScreen() {
         <Text variant="title">ACTIVE DROPS</Text>
         {posts.length === 0 ? (
           <View className="mt-4">
-            <EmptyState title="NO ACTIVE DROPS." body="Get to the gym." action="Post" onAction={() => router.push("/camera")} />
+            <EmptyState
+              title="NO ACTIVE DROPS."
+              body="Get to the gym."
+              action="Post"
+              onAction={() => router.push("/camera")}
+            />
           </View>
         ) : null}
       </View>

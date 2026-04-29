@@ -26,6 +26,7 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 expo-start*.log
+expo-web*.log
 supabase/.temp/
 
 # macOS
@@ -33,6 +34,7 @@ supabase/.temp/
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript

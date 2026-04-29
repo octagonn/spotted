@@ -64,7 +64,7 @@ create table checkins (
   source text not null default 'geofence' check (source in ('geofence','manual','post')),
   verified boolean not null default true
 );
-create index checkins_user_day_idx on checkins (user_id, (checked_in_at::date));
+create index checkins_user_day_idx on checkins (user_id, checked_in_at);
 create index checkins_active_idx on checkins (gym_id) where checked_out_at is null;
 
 create table streaks (

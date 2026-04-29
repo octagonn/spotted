@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { createClient } from "@supabase/supabase-js";
+import { Platform } from "react-native";
 
 import type { Database } from "@/types/database";
 
@@ -12,6 +13,7 @@ type Extra = {
 const extra: Extra = Constants.expoConfig?.extra ?? {};
 const configuredUrl = extra.supabaseUrl ?? "";
 const configuredAnonKey = extra.supabaseAnonKey ?? "";
+const isWebServer = Platform.OS === "web" && typeof window === "undefined";
 
 export const isSupabaseConfigured = configuredUrl.length > 0 && configuredAnonKey.length > 0;
 
@@ -19,12 +21,18 @@ export const supabase = createClient<Database>(
   isSupabaseConfigured ? configuredUrl : "https://example.supabase.co",
   isSupabaseConfigured ? configuredAnonKey : "anon-key-not-configured",
   {
-    auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false
-    }
+    auth: isWebServer
+      ? {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false
+        }
+      : {
+          storage: AsyncStorage,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false
+        }
   }
 );
 

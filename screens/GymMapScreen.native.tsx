@@ -66,13 +66,21 @@ export default function GymMapScreen() {
         })}
       </MapView>
       <View
-        className="absolute left-4 right-4 flex-row items-center gap-3 border border-iron bg-black px-4 py-3"
+        className="absolute left-4 right-4 gap-3 border border-iron bg-black px-4 py-3"
         style={{ top: insets.top + 16 }}
       >
-        <Search color={colors.fog} size={18} />
-        <Text variant="caption" className="flex-1 text-silver">
-          Search gyms
-        </Text>
+        <View className="flex-row items-center gap-3">
+          <Search color={colors.fog} size={18} />
+          <Text variant="caption" className="flex-1 text-silver">
+            Search usernames or gyms
+          </Text>
+        </View>
+        <View>
+          <Text variant="micro" className="text-mist">
+            MY GYM
+          </Text>
+          <Text variant="title">{initial?.name.toUpperCase() ?? "HOME GYM"}</Text>
+        </View>
       </View>
       <View className="absolute bottom-28 left-4 right-4">
         <Button icon={<LocateFixed color={colors.black} size={18} />}>I'm here</Button>

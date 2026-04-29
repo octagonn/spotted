@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Tabs } from "expo-router";
-import { Camera, Flame, Map, User, Users } from "lucide-react-native";
+import { Camera, CircleDot, MapPin, MessageCircle, User } from "lucide-react-native";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -13,13 +13,13 @@ import { colors } from "@/theme/colors";
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const color = focused ? colors.white : colors.slate;
   if (name === "feed") {
-    return <Flame color={color} size={23} strokeWidth={1.8} />;
+    return <CircleDot color={color} size={23} strokeWidth={1.8} />;
   }
   if (name === "map") {
-    return <Map color={color} size={23} strokeWidth={1.8} />;
+    return <MapPin color={color} size={23} strokeWidth={1.8} />;
   }
   if (name === "friends") {
-    return <Users color={color} size={23} strokeWidth={1.8} />;
+    return <MessageCircle color={color} size={23} strokeWidth={1.8} />;
   }
   if (name === "profile") {
     return <User color={color} size={23} strokeWidth={1.8} />;
@@ -55,6 +55,9 @@ function SpottedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               }
               pressedClassName={isCamera ? "scale-95" : "opacity-60"}
               onPress={() => navigation.navigate(route.name)}
+              testID={`tab-${route.name}`}
+              accessibilityRole="button"
+              accessibilityLabel={String(options?.title ?? route.name)}
             >
               {isCamera && atGym ? <View className="absolute inset-[-5px] border border-mist opacity-60" /> : null}
               <TabIcon name={route.name} focused={focused} />
@@ -76,10 +79,10 @@ export default function TabLayout() {
     <Tabs tabBar={(props) => <SpottedTabBar {...props} />} screenOptions={{ headerShown: false, lazy: false }}>
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="feed" options={{ title: "Feed" }} />
-      <Tabs.Screen name="map" options={{ title: "Map" }} />
-      <Tabs.Screen name="camera" options={{ title: "Camera" }} />
-      <Tabs.Screen name="friends" options={{ title: "Friends" }} />
+      <Tabs.Screen name="feed" options={{ title: "Today" }} />
+      <Tabs.Screen name="map" options={{ title: "Gym" }} />
+      <Tabs.Screen name="camera" options={{ title: "Check In" }} />
+      <Tabs.Screen name="friends" options={{ title: "Inbox" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );

@@ -88,7 +88,6 @@ export default function RootLayout() {
               <Stack.Screen name="chat/[id]" />
               <Stack.Screen name="streak" options={{ presentation: "modal" }} />
               <Stack.Screen name="paywall" options={{ presentation: "modal" }} />
-              <Stack.Screen name="settings" />
               <Stack.Screen name="+not-found" />
             </Stack>
             <GrainOverlay />

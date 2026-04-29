@@ -6,7 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
 
-export default function OnboardingProfileScreen() {
+export default function OnboardingCreateProfileScreen() {
   return (
     <Screen>
       <View className="min-h-[660px] justify-end">

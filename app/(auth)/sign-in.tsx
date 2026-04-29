@@ -21,7 +21,7 @@ export default function SignInScreen() {
             icon={<Apple color={colors.black} size={19} />}
             onPress={async () => {
               await signInWithApple();
-              router.replace("/profile");
+              router.replace("/create-profile");
             }}
           >
             Continue with Apple
@@ -29,7 +29,7 @@ export default function SignInScreen() {
           <Button
             icon={<Phone color={colors.white} size={18} />}
             variant="ghost"
-            onPress={() => router.push("/profile")}
+            onPress={() => router.push("/create-profile")}
           >
             Phone OTP
           </Button>

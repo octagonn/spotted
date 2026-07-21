@@ -121,15 +121,19 @@ export default function WorkoutScreen() {
   const lifts = useUserLifts(userId);
 
   // Start (or resume) the session on mount. Also prune empty entries left
-  // behind if the app closed mid-logger.
+  // behind if the app closed mid-logger. The timer does NOT auto-start —
+  // the user starts it explicitly with the Start workout button (or by
+  // logging their first set).
   const startedRef = useRef(false);
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    if (!useWorkoutSession.getState().active) {
-      useWorkoutSession.getState().start();
-    } else {
+    if (useWorkoutSession.getState().active) {
+      // Resuming an in-progress session: drop any empty leftover entries.
       useWorkoutSession.getState().setExercises((prev) => prev.filter((ex) => ex.sets.length > 0));
+    } else {
+      // Fresh visit: clean slate, timer idle until Start is pressed.
+      useWorkoutSession.getState().clear();
     }
   }, []);
 
@@ -151,7 +155,7 @@ export default function WorkoutScreen() {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, [summary]);
-  const elapsed = session.startedAt ? Math.max(0, Math.floor((nowMs - session.startedAt) / 1000)) : 0;
+  const elapsed = session.active && session.startedAt ? Math.max(0, Math.floor((nowMs - session.startedAt) / 1000)) : 0;
 
   // Picker + logger state (local — the entry list itself lives in the store).
   const [picker, setPicker] = useState<null | "lift" | "cardio">(null);
@@ -283,9 +287,21 @@ export default function WorkoutScreen() {
     setActiveId(null);
   };
 
+  /** Start the clock, keeping anything the user set up before pressing Start. */
+  const startSession = () => {
+    const state = useWorkoutSession.getState();
+    if (state.active) return;
+    const kept = state.exercises;
+    state.start();
+    if (kept.length > 0) state.setExercises(() => kept);
+    state.seedBests(derivedBests);
+  };
+
   const logSet = () => {
     const entry = active;
     if (!entry) return;
+    // Logging before pressing Start starts the clock implicitly.
+    startSession();
     let isPR = false;
     let prInfo: SessionPR | null = null;
     let newBest = 0;
@@ -296,7 +312,7 @@ export default function WorkoutScreen() {
       if (r <= 0) return;
       const repsGraded = isRepsGraded(entry.name);
       const metric = repsGraded ? r : w;
-      const cur = session.bests[entry.name] ?? 0;
+      const cur = useWorkoutSession.getState().bests[entry.name] ?? 0;
       if (metric > cur && metric > 0) {
         isPR = true;
         newBest = metric;
@@ -314,7 +330,7 @@ export default function WorkoutScreen() {
       const mi = parseFloat(a) || 0;
       const min = parseInt(b, 10) || 0;
       if (min <= 0) return;
-      const cur = session.bests[entry.name] ?? 0;
+      const cur = useWorkoutSession.getState().bests[entry.name] ?? 0;
       if (mi > cur && mi > 0) {
         isPR = true;
         newBest = mi;
@@ -607,10 +623,18 @@ export default function WorkoutScreen() {
           <Text style={{ fontFamily: DISP, fontSize: 28, letterSpacing: -0.6, color: tokens.text.primary }}>Workout</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 9, paddingLeft: 36, marginTop: 6 }}>
-          <BlinkDot />
-          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, letterSpacing: 1.5, color: tokens.text.secondary }}>
-            LIVE · <Text style={{ fontFamily: NUM, color: tokens.text.primary }}>{fmtClock(elapsed)}</Text>
-          </Text>
+          {session.active ? (
+            <>
+              <BlinkDot />
+              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, letterSpacing: 1.5, color: tokens.text.secondary }}>
+                LIVE · <Text style={{ fontFamily: NUM, color: tokens.text.primary }}>{fmtClock(elapsed)}</Text>
+              </Text>
+            </>
+          ) : (
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, letterSpacing: 1.5, color: tokens.text.tertiary }}>
+              READY · hit Start to run the clock
+            </Text>
+          )}
         </View>
       </View>
 
@@ -713,21 +737,41 @@ export default function WorkoutScreen() {
           </Text>
           <Micro style={{ marginTop: 4, letterSpacing: 1.5 }}>Sets</Micro>
         </View>
-        <Pressable
-          onPress={() => void finish()}
-          disabled={totals.sets === 0 || saving}
-          style={{
-            marginLeft: "auto",
-            paddingVertical: 16,
-            paddingHorizontal: 26,
-            borderRadius: radius.pill,
-            backgroundColor: totals.sets > 0 ? tokens.text.primary : tokens.bg.subtle
-          }}
-        >
-          <Text style={{ fontFamily: DISP, fontSize: 16, color: totals.sets > 0 ? colors.black : tokens.text.tertiary }}>
-            {saving ? "Saving…" : "Finish workout"}
-          </Text>
-        </Pressable>
+        {/* One button, two lives: Start workout (runs the clock) → Finish
+            workout once the session is live. */}
+        {session.active ? (
+          <Pressable
+            onPress={() => void finish()}
+            disabled={totals.sets === 0 || saving}
+            style={{
+              marginLeft: "auto",
+              paddingVertical: 16,
+              paddingHorizontal: 26,
+              borderRadius: radius.pill,
+              backgroundColor: totals.sets > 0 ? tokens.text.primary : tokens.bg.subtle
+            }}
+          >
+            <Text style={{ fontFamily: DISP, fontSize: 16, color: totals.sets > 0 ? colors.black : tokens.text.tertiary }}>
+              {saving ? "Saving…" : "Finish workout"}
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => {
+              startSession();
+              void impactHaptic();
+            }}
+            style={{
+              marginLeft: "auto",
+              paddingVertical: 16,
+              paddingHorizontal: 26,
+              borderRadius: radius.pill,
+              backgroundColor: tokens.accent.gold
+            }}
+          >
+            <Text style={{ fontFamily: DISP, fontSize: 16, color: colors.black }}>Start workout</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* ---------------------------- picker sheet --------------------------- */}

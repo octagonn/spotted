@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
   MapPin,
   Music,
+  Pencil,
   Plus,
   RefreshCw,
   Tag,
@@ -30,7 +31,6 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
-  PanResponder,
   Platform,
   ScrollView,
   Text,
@@ -42,6 +42,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LiftVideoReview, type VideoTrim } from "@/components/camera/LiftVideoReview";
+import { MusicClipScrubber } from "@/components/camera/MusicClipScrubber";
+import { ShutterButton } from "@/components/camera/ShutterButton";
+import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
+import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
+import { LIFT_OPTIONS, LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
+import { useLogLift, useUserLifts } from "@/hooks/queries/useUserLifts";
 import { FILTERS, PhotoEditor } from "@/components/camera/PhotoEditor";
 import { EditorBoundary } from "@/components/EditorBoundary";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
@@ -88,35 +94,10 @@ type SelectedGym =
   | { type: "other" };
 
 
-/** Feed card photo aspect (width / height) — see FbMedia's 3/3.6. */
-const POST_ASPECT = 3 / 3.6;
+// Module-scoped so it survives camera remounts: we only auto-prompt for
+// location once per app session, never on every open.
+let locationAskedThisSession = false;
 
-/** Center-crop a captured photo to the feed card aspect so preview == post. */
-async function cropToPostAspect(uri: string): Promise<string> {
-  try {
-    const info = await ImageManipulator.manipulateAsync(uri, [], { compress: 1 });
-    const { width, height } = info;
-    let cropW = width;
-    let cropH = Math.round(width / POST_ASPECT);
-    if (cropH > height) {
-      cropH = height;
-      cropW = Math.round(height * POST_ASPECT);
-    }
-    const originX = Math.floor((width - cropW) / 2);
-    const originY = Math.floor((height - cropH) / 2);
-    const out = await ImageManipulator.manipulateAsync(
-      uri,
-      [{ crop: { originX, originY, width: cropW, height: cropH } }],
-      { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
-    );
-    return out.uri;
-  } catch {
-    return uri;
-  }
-}
-
-const LIFTS = ["Bench press", "Squat", "Deadlift"] as const;
-const WEIGHTS = ["225", "245", "275", "315"] as const;
 
 function gymName(gym: SelectedGym | null): string | null {
   if (!gym) return null;
@@ -150,19 +131,23 @@ function StepPill({ children }: { children: ReactNode }) {
   return (
     <View
       style={{
-        backgroundColor: "rgba(0,0,0,0.55)",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 7,
+        backgroundColor: "rgba(0,0,0,0.62)",
         borderWidth: 1,
-        borderColor: colors.slate,
+        borderColor: colors.white,
         borderRadius: 999,
-        paddingVertical: 7,
-        paddingHorizontal: 14
+        paddingVertical: 8,
+        paddingHorizontal: 16
       }}
     >
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white }} />
       <Text
         style={{
-          fontFamily: "GeistMono_400Regular",
-          fontSize: 11,
-          letterSpacing: 11 * 0.14,
+          fontFamily: "Geist_700Bold",
+          fontSize: 12,
+          letterSpacing: 12 * 0.1,
           textTransform: "uppercase",
           color: colors.white
         }}
@@ -227,35 +212,6 @@ function IconTile({ children, round = false }: { children: ReactNode; round?: bo
       }}
     >
       {children}
-    </View>
-  );
-}
-
-/** Dim bars marking the 5:6 area that becomes the post (WYSIWYG framing). */
-function CaptureFrame() {
-  const { width, height } = useWindowDimensions();
-  const frameH = width / POST_ASPECT;
-  // If the crop is taller than the screen it's full-bleed — no bars needed.
-  if (frameH >= height) return null;
-  const bar = (height - frameH) / 2;
-  return (
-    <View pointerEvents="none" style={{ position: "absolute", inset: 0 }}>
-      <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: bar, backgroundColor: "rgba(0,0,0,0.55)" }} />
-      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: bar, backgroundColor: "rgba(0,0,0,0.55)" }} />
-      <View style={{ position: "absolute", top: bar, left: 0, right: 0, height: 1, backgroundColor: "rgba(255,255,255,0.25)" }} />
-      <View style={{ position: "absolute", bottom: bar, left: 0, right: 0, height: 1, backgroundColor: "rgba(255,255,255,0.25)" }} />
-    </View>
-  );
-}
-
-function RuleOfThirds() {
-  const line = { position: "absolute" as const, backgroundColor: "rgba(255,255,255,0.05)" };
-  return (
-    <View pointerEvents="none" style={{ position: "absolute", inset: 0 }}>
-      <View style={[line, { top: "33.4%", left: 0, right: 0, height: 1 }]} />
-      <View style={[line, { top: "66.7%", left: 0, right: 0, height: 1 }]} />
-      <View style={[line, { left: "33.4%", top: 0, bottom: 0, width: 1 }]} />
-      <View style={[line, { left: "66.7%", top: 0, bottom: 0, width: 1 }]} />
     </View>
   );
 }
@@ -480,9 +436,6 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
   const [clipStart, setClipStart] = useState(selected?.clipStart ?? 0);
   const clipStartRef = useRef(clipStart);
   clipStartRef.current = clipStart;
-  const [barWidth, setBarWidth] = useState(0);
-  const barWidthRef = useRef(0);
-  barWidthRef.current = barWidth;
 
   const player = useAudioPlayer(chosen?.previewUrl ? { uri: chosen.previewUrl } : null);
   const status = useAudioPlayerStatus(player);
@@ -517,24 +470,6 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
   }, [chosen?.id, status.isLoaded]);
 
   const dismissKeyboard = () => Keyboard.dismiss();
-
-  const scrubPan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (evt) => {
-        const w = barWidthRef.current;
-        const locationX = evt.nativeEvent?.locationX;
-        if (!w || !Number.isFinite(locationX)) return;
-        const x = Math.max(0, Math.min(w, locationX));
-        const next = Math.round((x / w) * (PREVIEW_SECONDS - 5));
-        if (Number.isFinite(next)) setClipStart(next);
-      },
-      onPanResponderRelease: () => {
-        safeSeekPlay(clipStartRef.current);
-      }
-    })
-  ).current;
 
   return (
     // Tapping anywhere outside the search field closes the keyboard.
@@ -600,57 +535,37 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
       {/* Audition + clip picker for the chosen song */}
       {chosen ? (
         <View style={{ marginHorizontal: 20, marginTop: 4, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.iron, backgroundColor: colors.charcoal }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <TrackArt uri={chosen.artworkUrl} />
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
+              <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>
                 {chosen.title}
               </Text>
-              <Text numberOfLines={1} style={{ marginTop: 1, fontSize: 11.5, color: colors.fog }}>
+              <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12.5, color: colors.silver }}>
                 {chosen.explicit ? "🅴 " : ""}{chosen.artist}
               </Text>
             </View>
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.silver }}>
+            <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 12, color: colors.silver }}>
               {`0:${String(clipStart).padStart(2, "0")}`}
             </Text>
           </View>
           {chosen.previewUrl ? (
-            <View
-              {...scrubPan.panHandlers}
-              onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-              style={{ marginTop: 12, height: 28, justifyContent: "center" }}
-            >
-              <View style={{ height: 5, borderRadius: 2.5, backgroundColor: colors.iron }} />
-              {/* Played-window highlight from clipStart to end */}
-              <View
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  left: barWidth ? (clipStart / PREVIEW_SECONDS) * barWidth : 0,
-                  right: 0,
-                  height: 5,
-                  borderRadius: 2.5,
-                  backgroundColor: colors.silver
-                }}
-              />
-              <View
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  left: Math.max(0, (barWidth ? (clipStart / PREVIEW_SECONDS) * barWidth : 0) - 7),
-                  width: 14,
-                  height: 14,
-                  borderRadius: 7,
-                  backgroundColor: colors.white
-                }}
-              />
-            </View>
+            <MusicClipScrubber
+              previewSeconds={PREVIEW_SECONDS}
+              maxStart={PREVIEW_SECONDS - 5}
+              initialStart={clipStart}
+              onChange={setClipStart}
+              onCommit={(sec) => {
+                setClipStart(sec);
+                safeSeekPlay(sec);
+              }}
+            />
           ) : (
             <Text style={{ marginTop: 10, fontSize: 11.5, color: colors.fog }}>
               No preview available for this song — it will still show on your post.
             </Text>
           )}
-          <Text style={{ marginTop: 6, fontSize: 10.5, color: colors.fog }}>
+          <Text style={{ marginTop: 8, fontSize: 10.5, color: colors.fog }}>
             Drag to choose where your clip starts. It plays out loud so you can hear it.
           </Text>
         </View>
@@ -759,10 +674,14 @@ export default function CameraScreen() {
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const permissionAsked = useRef(false);
   const cameraRef = useRef<CameraView>(null);
+  // Set by onCameraReady; gates recordAsync so we never record mid-reconfigure.
+  const videoReadyRef = useRef(false);
   const lastTapRef = useRef(0);
 
+  // Capture starts on Story or Daily; video is now always a hold-to-record
+  // action on the shutter, so there's no separate Video mode to start in.
   const [mode, setMode] = useState<Mode>(() =>
-    params.mode === "story" ? "story" : postedToday ? "lift" : "daily"
+    params.mode === "story" ? "story" : postedToday ? "story" : "daily"
   );
   const [dailyStep, setDailyStep] = useState<DailyStep>("capture");
   const [liftStep, setLiftStep] = useState<LiftStep>("record");
@@ -770,14 +689,29 @@ export default function CameraScreen() {
   const videoTrimRef = useRef<VideoTrim | null>(null);
   const [editing, setEditing] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
+  const [zoom, setZoom] = useState(0);
+  const zoomBaseRef = useRef(0);
+  // Debounce the flip: rapid taps otherwise reconfigure the session faster than
+  // it can keep up and stall the camera.
+  const flipLockRef = useRef(false);
   const [recording, setRecording] = useState(false);
+  /** Hands-free lock (slid onto the lock icon) — recording continues after release. */
+  const [recordLocked, setRecordLocked] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  // Camera session config: "picture" captures full-sensor stills (best photo
+  // quality); we only flip to "video" while actually recording (video mode
+  // caps stills to video resolution, which made photos look terrible).
+  const [camMode, setCamMode] = useState<"picture" | "video">("picture");
   const [photoUri, setPhotoUri] = useState<string>();
   /** Earlier shots in a multi-photo daily post (carousel). Max 4 total. */
   const [extraPhotos, setExtraPhotos] = useState<string[]>([]);
-  const [lift, setLift] = useState<(typeof LIFTS)[number]>("Bench press");
-  const [weight, setWeight] = useState("245");
-  const [customWeight, setCustomWeight] = useState("");
+  // Workout entry — the exercise list is the strength trophy catalog, and the
+  // number (weight for barbell lifts, reps for bodyweight) drives the trophy.
+  const [liftExercise, setLiftExercise] = useState<LiftExercise>("bench");
+  const [liftValue, setLiftValue] = useState("");
+  const [celebrate, setCelebrate] = useState<TrophyShareData | null>(null);
+  const userLifts = useUserLifts(userId);
+  const logLift = useLogLift();
   const [gym, setGym] = useState<SelectedGym | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [track, setTrack] = useState<(MusicTrack & { clipStart?: number }) | null>(null);
@@ -790,6 +724,8 @@ export default function CameraScreen() {
   const [storyTrack, setStoryTrack] = useState<SelectedTrack | null>(null);
   // Story review filter — cycled by horizontal swipes on the preview.
   const [storyFilter, setStoryFilter] = useState(0);
+  // Friends tagged on the story — rendered as tappable chips in the viewer.
+  const [storyTags, setStoryTags] = useState<string[]>([]);
   const [filterFlash, setFilterFlash] = useState(false);
   const storyShotRef = useRef<View>(null);
   const filterFlashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -814,9 +750,11 @@ export default function CameraScreen() {
     (async () => {
       try {
         let status = await Location.getForegroundPermissionsAsync();
-        if (!status.granted && status.canAskAgain) {
-          // Actually ask — before, we only checked, so users who hadn't granted
-          // location elsewhere never got gym distances or geofence resolution.
+        // Ask AT MOST once per app session — otherwise "Allow once" grants
+        // expire and we'd re-prompt on every camera open (the spam bug). If the
+        // user hasn't granted after that, fall back silently to no coords.
+        if (!status.granted && status.canAskAgain && !locationAskedThisSession) {
+          locationAskedThisSession = true;
           status = await Location.requestForegroundPermissionsAsync();
         }
         if (!status.granted) return;
@@ -868,7 +806,11 @@ export default function CameraScreen() {
     }
   }, [mode, locationSettled, withinGym, gym, nearestGym]);
 
-  const resolvedWeight = `${customWeight.trim() || weight} lb`;
+  const liftOption = LIFT_OPTION_BY_ID[liftExercise];
+  const liftUnit = liftOption.unit;
+  const liftName = liftOption.name;
+  const liftNum = Number.parseInt(liftValue || "0", 10);
+  const resolvedWeight = liftValue ? `${liftValue} ${liftUnit}` : "";
   const chosenGym = gymName(gym);
   const selectedFriends = (myFriends.data ?? [])
     .filter((friend) => tags.includes(friend.id))
@@ -877,10 +819,8 @@ export default function CameraScreen() {
 
   const switchMode = (next: Mode) => {
     if (next === "daily" && postedToday) return;
-    if (next === "lift" && !postedToday) {
-      showToast("Post your daily first");
-      return;
-    }
+    // Video (lift) is a peer option from the moment the camera opens — no longer
+    // gated behind posting the daily photo first (composer spec C3).
     setRecording(false);
     setRecordSeconds(0);
     setExtraPhotos([]);
@@ -898,16 +838,38 @@ export default function CameraScreen() {
     }
   };
 
-  /** Double-tap anywhere on the camera flips front/back (button still works). */
+  /** Flip front/back, debounced so spamming can't outrun the camera session. */
+  const flipCamera = () => {
+    if (flipLockRef.current || recording) return;
+    flipLockRef.current = true;
+    setZoom(0);
+    setFacing((value) => (value === "back" ? "front" : "back"));
+    setTimeout(() => {
+      flipLockRef.current = false;
+    }, 650);
+  };
+
+  /** Double-tap anywhere on the camera flips (button still works). */
   const handleCameraTap = () => {
     const now = Date.now();
     if (now - lastTapRef.current < 300) {
-      setFacing((value) => (value === "back" ? "front" : "back"));
+      flipCamera();
       lastTapRef.current = 0;
     } else {
       lastTapRef.current = now;
     }
   };
+
+  /** Pinch-to-zoom over the preview. expo-camera zoom is 0–1. */
+  const pinchZoom = Gesture.Pinch()
+    .onBegin(() => {
+      zoomBaseRef.current = zoom;
+    })
+    .runOnJS(true)
+    .onUpdate((e) => {
+      const next = zoomBaseRef.current + (e.scale - 1) * 0.35;
+      setZoom(Math.max(0, Math.min(1, next)));
+    });
 
   const shareStory = async () => {
     if (!photoUri) {
@@ -940,9 +902,11 @@ export default function CameraScreen() {
               previewUrl: storyTrack.previewUrl,
               clipStart: storyTrack.clipStart ?? 0
             }
-          : null
+          : null,
+        tagUserIds: storyTags
       });
       setStoryTrack(null);
+      setStoryTags([]);
       showToast("Added to your story");
       router.replace("/(tabs)/feed");
     } catch (error) {
@@ -958,7 +922,14 @@ export default function CameraScreen() {
   /** Story mode: pick an existing photo from the library instead of capturing. */
   const pickStoryPhoto = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.9,
+        selectionLimit: 1,
+        // Skip iOS's transcode step — hand back the current representation so the
+        // picker returns fast instead of re-encoding the asset.
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current
+      });
       if (result.canceled || !result.assets[0]) return;
       setPhotoUri(result.assets[0].uri);
       setDailyStep("review");
@@ -981,26 +952,27 @@ export default function CameraScreen() {
     // Immediate feedback at tap time — capture feels instant even while the
     // file finalizes in the background.
     triggerFlash();
+    // Tapping while routed to the lift/video flow drops back to a photo post.
+    if (mode === "lift") setMode("daily");
     let uri: string | undefined;
     try {
-      // skipProcessing: skips the slow post-capture processing pass (EXIF is
-      // still honored by expo-image / the manipulator downstream).
-      uri = (await cameraRef.current?.takePictureAsync({ quality: 0.7, skipProcessing: true }))?.uri;
-      // The OS un-mirrors front-camera captures; flip back so the saved photo
-      // matches the mirrored preview — selfies should look like the mirror.
-      if (uri && facing === "front") {
-        const flipped = await ImageManipulator.manipulateAsync(
-          uri,
-          [{ flip: ImageManipulator.FlipType.Horizontal }],
-          { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
-        );
-        uri = flipped.uri;
-      }
-      // WYSIWYG crop: the feed card shows photos at POST_ASPECT (5:6). Crop the
-      // capture to that ratio centered here so the post matches what the frame
-      // guide showed at capture time — no more "cropped in half" surprise.
-      if (uri && mode !== "story") {
-        uri = await cropToPostAspect(uri);
+      // Full-quality still (no skipProcessing → keep iOS image processing) in
+      // picture mode = best resolution the device offers. No automatic crop —
+      // the photo keeps its full frame; cropping is user-driven in the editor.
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 1 });
+      if (photo?.uri) {
+        // The OS un-mirrors front-camera captures; flip back so the saved photo
+        // matches the mirrored selfie preview. Single near-lossless re-encode.
+        if (facing === "front") {
+          const flipped = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ flip: ImageManipulator.FlipType.Horizontal }],
+            { compress: 0.98, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = flipped.uri;
+        } else {
+          uri = photo.uri;
+        }
       }
     } catch {
       uri = undefined;
@@ -1009,44 +981,61 @@ export default function CameraScreen() {
     setDailyStep("review");
   }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission]);
 
-  const handleShutter = () => {
-    if (mode === "daily" || mode === "story") {
-      void capturePhoto();
+  // Snapchat-style capture: tap = photo (capturePhoto), hold = video. Holding
+  // records; sliding onto the lock keeps it recording hands-free. A recorded
+  // clip routes to the video review → compose → publish flow.
+  const startRecording = () => {
+    if (!permission?.granted) {
+      if (permission?.canAskAgain) void requestPermission();
+      else showToast("Enable camera access in Settings to record");
       return;
     }
-    if (!recording) {
-      if (!permission?.granted) {
-        if (permission?.canAskAgain) void requestPermission();
-        else showToast("Enable camera access in Settings to record");
-        return;
-      }
-      setRecordSeconds(0);
-      setRecording(true);
-      // recordAsync resolves when the user stops (or maxDuration hits). Any
-      // failure lands back on the record step with a toast — never a crash.
-      void (async () => {
-        try {
-          const result = await cameraRef.current?.recordAsync({ maxDuration: 60 });
-          if (result?.uri) {
-            videoTrimRef.current = null;
-            setVideoUri(result.uri);
-            // Review the clip before continuing — never jump straight to the next step.
-            setLiftStep("review");
-          } else {
-            showToast("Recording didn't save — try again");
-          }
-        } catch (error) {
-          logger.warn("lift_record_failed", { message: error instanceof Error ? error.message : String(error) });
-          showToast("Couldn't record — try again");
-        } finally {
-          setRecording(false);
-          triggerFlash();
+    // Ask for the mic on the first hold so the clip has sound (denied = muted).
+    if (!micPermission?.granted && micPermission?.canAskAgain) {
+      void requestMicPermission();
+    }
+    setRecordSeconds(0);
+    setRecordLocked(false);
+    setRecording(true);
+    // Flip the session to video mode, then record ONLY once the freshly-remounted
+    // camera reports ready (onCameraReady). The old fixed-400ms guess called
+    // recordAsync mid-reconfigure, which could hang and produce nothing — the
+    // "video doesn't work at all" bug. recordAsync resolves when stopRecording is
+    // called (or maxDuration hits); any failure lands back on capture with a toast.
+    videoReadyRef.current = false;
+    setCamMode("video");
+    void (async () => {
+      try {
+        // Wait for the video session to be ready (bounded), then record.
+        const start = Date.now();
+        while (!videoReadyRef.current && Date.now() - start < 2500) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
         }
-      })();
-      return;
-    }
-    cameraRef.current?.stopRecording();
+        // A touch of settle time after "ready" so the first frames aren't dropped.
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        const result = await cameraRef.current?.recordAsync({ maxDuration: 60 });
+        if (result?.uri) {
+          videoTrimRef.current = null;
+          setVideoUri(result.uri);
+          setMode("lift");
+          setLiftStep("review");
+        } else {
+          showToast("Recording didn't save — try again");
+        }
+      } catch (error) {
+        logger.warn("record_failed", { message: error instanceof Error ? error.message : String(error) });
+        showToast("Couldn't record — try again");
+      } finally {
+        setRecording(false);
+        setRecordLocked(false);
+        // Restore picture mode so the next tap captures a full-quality photo.
+        setCamMode("picture");
+        triggerFlash();
+      }
+    })();
   };
+
+  const stopRecording = () => cameraRef.current?.stopRecording();
 
   const chooseGym = (next: SelectedGym) => {
     setGym(next);
@@ -1088,22 +1077,50 @@ export default function CameraScreen() {
         Alert.alert("No video", "The clip didn't save. Go back and retake it.");
         return;
       }
+      const logged = liftNum > 0;
       setPublishing(true);
       try {
-        await publishLiftVideo({
+        const postId = await publishLiftVideo({
           userId,
           videoUri,
           trimStart: videoTrimRef.current?.start ?? null,
           trimEnd: videoTrimRef.current?.end ?? null,
-          liftName: lift,
+          liftName,
           liftWeight: resolvedWeight,
+          liftExercise: logged ? liftExercise : null,
+          liftValue: logged ? liftNum : null,
+          liftUnit: logged ? liftUnit : null,
           caption,
           gymId: gym?.type === "gym" ? gym.id : null,
           locationKind: gym?.type ?? "other"
         });
+        // Posting is the unlock trigger: record the lift, then celebrate any
+        // newly-crossed tiers (cascade includes all lower ones).
+        let unlockedData: TrophyShareData | null = null;
+        if (logged) {
+          const oldBest = userLifts.data?.[liftExercise] ?? 0;
+          await logLift.mutateAsync({ userId, exercise: liftExercise, value: liftNum, unit: liftUnit, postId }).catch(() => {});
+          const crossed = newlyUnlockedTiers(liftExercise, oldBest, liftNum);
+          if (crossed.length > 0) {
+            const top = crossed[0];
+            unlockedData = {
+              icon: liftOption.def.icon,
+              name: top.name,
+              familyName: liftOption.name,
+              earnedAt: new Date().toISOString(),
+              rarityPct: top.rarityPct
+            };
+          }
+        }
         await queryClient.invalidateQueries({ queryKey: ["feed"] });
-        showToast("Video posted");
-        router.replace("/(tabs)/feed");
+        await queryClient.invalidateQueries({ queryKey: ["user-lifts", userId] });
+        if (unlockedData) {
+          // Celebrate first; navigate to the feed when the modal closes.
+          setCelebrate(unlockedData);
+        } else {
+          showToast("Video posted");
+          router.replace("/(tabs)/feed");
+        }
       } catch (error) {
         logger.warn("lift_publish_failed", {
           message: error instanceof Error ? error.message : String(error)
@@ -1199,15 +1216,34 @@ export default function CameraScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
         {permission?.granted ? (
-          <CameraView
-            ref={cameraRef}
-            facing={facing}
-            mode={mode === "lift" ? "video" : "picture"}
-            mute={!micPermission?.granted}
-            videoQuality="720p"
-            animateShutter={false}
-            style={{ position: "absolute", inset: 0 }}
-          />
+          <GestureDetector gesture={pinchZoom}>
+            <View style={{ position: "absolute", inset: 0 }}>
+              <CameraView
+                // Remount on mode change so onCameraReady re-fires for the new
+                // (video) session — that's the signal we wait on before recording.
+                key={camMode}
+                ref={cameraRef}
+                facing={facing}
+                mode={camMode}
+                zoom={zoom}
+                mute={!micPermission?.granted}
+                videoQuality="1080p"
+                animateShutter={false}
+                onCameraReady={() => {
+                  videoReadyRef.current = true;
+                }}
+                style={{ position: "absolute", inset: 0 }}
+              />
+              {/* Double-tap to flip — behind the controls so buttons still work. */}
+              <Pressable
+                onPress={handleCameraTap}
+                style={{ position: "absolute", inset: 0 }}
+                accessibilityLabel="Double tap to switch camera"
+              >
+                <View style={{ flex: 1 }} />
+              </Pressable>
+            </View>
+          </GestureDetector>
         ) : (
           <Pressable
             onPress={() => { if (permission?.canAskAgain) void requestPermission(); }}
@@ -1217,19 +1253,14 @@ export default function CameraScreen() {
             <View style={{ flex: 1 }} />
           </Pressable>
         )}
-        {/* Double-tap to flip — behind the controls so buttons still work. */}
-        <Pressable
-          onPress={handleCameraTap}
-          style={{ position: "absolute", inset: 0 }}
-          accessibilityLabel="Double tap to switch camera"
-        >
-          <View style={{ flex: 1 }} />
-        </Pressable>
-        <RuleOfThirds />
-        {/* WYSIWYG frame: dims the area outside the 5:6 crop that becomes the
-            post, so what you frame here is exactly what's posted. Photo modes
-            only — stories are full-bleed. */}
-        {mode !== "lift" && mode !== "story" ? <CaptureFrame /> : null}
+        {/* Zoom readout while zoomed in. */}
+        {zoom > 0.01 ? (
+          <View pointerEvents="none" style={{ position: "absolute", top: insets.top + 60, alignSelf: "center", paddingVertical: 4, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.55)" }}>
+            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.white }}>
+              {`${(1 + zoom * 4).toFixed(1)}x`}
+            </Text>
+          </View>
+        ) : null}
 
         <View
           style={{
@@ -1246,7 +1277,7 @@ export default function CameraScreen() {
             <X color={colors.white} size={20} strokeWidth={2.2} />
           </CircleButton>
           <StepPill>{stepLabel}</StepPill>
-          <CircleButton label="Flip camera" onPress={() => setFacing((value) => value === "back" ? "front" : "back")}>
+          <CircleButton label="Flip camera" onPress={flipCamera}>
             <RefreshCw color={colors.white} size={19} strokeWidth={2} />
           </CircleButton>
         </View>
@@ -1280,57 +1311,52 @@ export default function CameraScreen() {
                 backgroundColor: "rgba(0,0,0,0.6)"
               }}
             >
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white }} />
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#EF4444" }} />
               <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 12, color: colors.white }}>
                 {`0:${String(recordSeconds).padStart(2, "0")}`}
+                {recordLocked ? "  ·  LOCKED" : ""}
               </Text>
             </View>
           ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 34 }}>
-            {/* Library picker — story mode only (Snapchat-style). */}
-            {mode === "story" ? (
+            {/* Library picker — story mode only (Snapchat-style). Hidden while recording. */}
+            {mode === "story" && !recording ? (
               <CircleButton label="Choose from library" onPress={() => void pickStoryPhoto()}>
                 <ImageIcon color={colors.white} size={19} strokeWidth={2} />
               </CircleButton>
             ) : (
               <View style={{ width: 40 }} />
             )}
-            <Pressable onPress={handleShutter} accessibilityRole="button" accessibilityLabel={recording ? "Stop recording" : "Capture"}>
-              <View
-                style={{
-                  width: 76,
-                  height: 76,
-                  borderRadius: 38,
-                  borderWidth: 4,
-                  borderColor: colors.white,
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                <View
-                  style={{
-                    width: recording ? 32 : 58,
-                    height: recording ? 32 : 58,
-                    borderRadius: recording ? 10 : 29,
-                    backgroundColor: recording ? colors.mist : colors.white
-                  }}
-                />
-              </View>
-            </Pressable>
+            <ShutterButton
+              recording={recording}
+              locked={recordLocked}
+              onTap={() => void capturePhoto()}
+              onStartRecording={startRecording}
+              onStopRecording={stopRecording}
+              onLock={() => setRecordLocked(true)}
+            />
             {/* Spacer to keep the shutter centered. */}
             <View style={{ width: 40 }} />
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-            <ModePill active={mode === "story"} onPress={() => switchMode("story")}>
-              Story
-            </ModePill>
-            <ModePill active={mode === "daily"} disabled={postedToday} onPress={() => switchMode("daily")}>
-              {postedToday ? "Daily \u2713" : "Daily"}
-            </ModePill>
-            <ModePill active={mode === "lift"} disabled={!postedToday} onPress={() => switchMode("lift")}>
-              Video
-            </ModePill>
-          </View>
+          {recording ? (
+            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 1, color: "rgba(255,255,255,0.75)" }}>
+              {recordLocked ? "TAP TO STOP" : "SLIDE TO LOCK"}
+            </Text>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+                <ModePill active={mode === "story"} onPress={() => switchMode("story")}>
+                  Story
+                </ModePill>
+                <ModePill active={mode === "daily"} disabled={postedToday} onPress={() => switchMode("daily")}>
+                  {postedToday ? "Daily \u2713" : "Daily"}
+                </ModePill>
+              </View>
+              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.55)" }}>
+                TAP FOR PHOTO {"\u00b7"} HOLD FOR VIDEO
+              </Text>
+            </>
+          )}
         </View>
       </View>
     );
@@ -1393,9 +1419,10 @@ export default function CameraScreen() {
           </CircleButton>
           <StepPill>{mode === "story" ? "STORY" : "YOUR SHOT"}</StepPill>
           {mode === "story" ? (
-            <Pressable onPress={() => setEditing(true)} accessibilityLabel="Edit">
-              <View style={{ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: colors.white }}>Edit</Text>
+            <Pressable onPress={() => setEditing(true)} accessibilityLabel="Edit story">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 7, height: 48, paddingHorizontal: 22, borderRadius: 24, backgroundColor: colors.white, justifyContent: "center" }}>
+                <Pencil size={16} color={colors.black} strokeWidth={2.4} />
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.black }}>Edit</Text>
               </View>
             </Pressable>
           ) : extraPhotos.length + 1 < 4 ? (
@@ -1464,6 +1491,31 @@ export default function CameraScreen() {
                   </Text>
                 </View>
               </Pressable>
+              {/* Tag friends pill — same picker as posts; renders tappable chips in the viewer. */}
+              <Pressable
+                onPress={() => sheet.open(<FriendsSheet initial={storyTags} onDone={setStoryTags} />)}
+                accessibilityLabel="Tag friends on story"
+                style={{ alignSelf: "center", marginBottom: 12 }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.slate,
+                    backgroundColor: "rgba(0,0,0,0.5)"
+                  }}
+                >
+                  <Tag size={14} color={colors.white} strokeWidth={2} />
+                  <Text numberOfLines={1} style={{ maxWidth: 220, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}>
+                    {storyTags.length ? `${storyTags.length} tagged` : "Tag friends"}
+                  </Text>
+                </View>
+              </Pressable>
               <Text style={{ paddingBottom: 10, textAlign: "center", fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 1, color: "rgba(255,255,255,0.65)" }}>
                 SWIPE FOR FILTERS
               </Text>
@@ -1516,59 +1568,46 @@ export default function CameraScreen() {
   if (mode === "lift" && liftStep === "liftmeta") {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
-          <PanelHeader title="Which lift?" onBack={() => { setLiftStep("review"); setFacing("back"); }} />
-          <MediaPreview mode="lift" videoUri={videoUri} lift={lift} weight={resolvedWeight} width="62%" />
-          <SectionLabel>Lift</SectionLabel>
-          {LIFTS.map((item) => (
-            <ChoiceRow key={item} title={item} selected={lift === item} onPress={() => setLift(item)} />
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+          <PanelHeader title="Log your lift" onBack={() => { setLiftStep("review"); setFacing("back"); }} />
+          <MediaPreview mode="lift" videoUri={videoUri} lift={liftName} weight={resolvedWeight} width="62%" />
+          <Text style={{ paddingHorizontal: 18, paddingTop: 12, fontSize: 12.5, lineHeight: 18, color: colors.fog }}>
+            Enter what you hit — posting checks it against your trophies. Your friends see the video, so keep it honest.
+          </Text>
+          <SectionLabel>Exercise</SectionLabel>
+          {LIFT_OPTIONS.map((opt) => (
+            <ChoiceRow
+              key={opt.id}
+              title={opt.name}
+              sub={opt.unit === "lb" ? "Weight (lb)" : "Reps"}
+              selected={liftExercise === opt.id}
+              onPress={() => { setLiftExercise(opt.id); setLiftValue(""); }}
+            />
           ))}
-          <SectionLabel>Weight</SectionLabel>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 18 }}>
-            {WEIGHTS.map((item) => {
-              const active = !customWeight && weight === item;
-              return (
-                <Pressable key={item} onPress={() => { setWeight(item); setCustomWeight(""); }}>
-                  <View
-                    style={{
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: active ? colors.white : colors.iron,
-                      backgroundColor: active ? colors.white : colors.graphite,
-                      paddingVertical: 8,
-                      paddingHorizontal: 13
-                    }}
-                  >
-                    <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: active ? colors.black : colors.silver }}>
-                      {item} lb
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={{ paddingHorizontal: 18, paddingTop: 10 }}>
+          <SectionLabel>{liftUnit === "lb" ? "Weight (lb)" : "Reps"}</SectionLabel>
+          <View style={{ paddingHorizontal: 18 }}>
             <TextInput
-              value={customWeight}
-              onChangeText={(value) => setCustomWeight(value.replace(/[^0-9]/g, ""))}
+              value={liftValue}
+              onChangeText={(value) => setLiftValue(value.replace(/[^0-9]/g, "").slice(0, 4))}
               keyboardType="number-pad"
-              placeholder="Custom weight (lb)"
+              returnKeyType="done"
+              placeholder={liftUnit === "lb" ? "e.g. 225" : "e.g. 12"}
               placeholderTextColor={colors.fog}
               style={{
-                minHeight: 46,
+                minHeight: 52,
                 borderRadius: 12,
                 borderWidth: 1,
-                borderColor: customWeight ? colors.slate : colors.iron,
+                borderColor: liftValue ? colors.slate : colors.iron,
                 backgroundColor: colors.graphite,
-                paddingHorizontal: 14,
-                fontFamily: "GeistMono_400Regular",
-                fontSize: 13,
+                paddingHorizontal: 16,
+                fontFamily: "Geist_700Bold",
+                fontSize: 22,
                 color: colors.white
               }}
             />
           </View>
           <View style={{ paddingHorizontal: 18, paddingTop: 18 }}>
-            <Button disabled={!customWeight.trim() && !weight} onPress={() => setLiftStep("compose")}>Continue</Button>
+            <Button disabled={liftNum <= 0} onPress={() => setLiftStep("compose")}>Continue</Button>
           </View>
         </ScrollView>
       </View>
@@ -1594,7 +1633,7 @@ export default function CameraScreen() {
           photoUri={photoUri}
           videoUri={videoUri}
           photoCount={extraPhotos.length + 1}
-          lift={lift}
+          lift={liftName}
           weight={resolvedWeight}
         />
         <SectionLabel>Details</SectionLabel>
@@ -1682,6 +1721,17 @@ export default function CameraScreen() {
           </Button>
         </View>
       </ScrollView>
+
+      {/* Trophy unlock — shown after a lift post crosses a new tier; closing it
+          continues to the feed. */}
+      <TrophyUnlockModal
+        data={celebrate}
+        visible={celebrate !== null}
+        onClose={() => {
+          setCelebrate(null);
+          router.replace("/(tabs)/feed");
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

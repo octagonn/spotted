@@ -23,17 +23,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path as SvgPath } from "react-native-svg";
 import { captureRef } from "react-native-view-shot";
 
+import { FreeformCrop } from "@/components/camera/FreeformCrop";
 import { colors } from "@/theme/colors";
 
 type Tool = "none" | "draw" | "text" | "sticker" | "filter" | "crop";
-
-/** Center-crop aspect presets. null = original framing. */
-const CROP_PRESETS: { key: string; label: string; ratio: number | null }[] = [
-  { key: "original", label: "Original", ratio: null },
-  { key: "square", label: "1:1", ratio: 1 },
-  { key: "portrait", label: "4:5", ratio: 4 / 5 },
-  { key: "story", label: "9:16", ratio: 9 / 16 }
-];
 
 type Stroke = { id: string; d: string; color: string; width: number };
 type TextItem = { id: string; text: string; color: string; x: number; y: number };
@@ -61,7 +54,6 @@ const uid = () => `e${++counter}`;
 function DraggableOverlay({
   x,
   y,
-  selected,
   onSelect,
   onTap,
   onDragEnd,
@@ -73,7 +65,6 @@ function DraggableOverlay({
 }: {
   x: number;
   y: number;
-  selected?: boolean;
   onSelect: () => void;
   /** Fired on a clean tap (no drag) — used to re-open text for editing. */
   onTap?: () => void;
@@ -132,7 +123,7 @@ function DraggableOverlay({
     .onUpdate((e) => {
       rot.value = baseRot.value + e.rotation;
     });
-  const tap = Gesture.Tap().onEnd(() => {
+  const tap = Gesture.Tap().maxDistance(10).onEnd(() => {
     runOnJS(onSelect)();
     if (onTap) runOnJS(onTap)();
   });
@@ -150,15 +141,10 @@ function DraggableOverlay({
 
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View
-        style={[
-          { position: "absolute", top: 0, left: 0 },
-          selected
-            ? { borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(255,255,255,0.75)", borderRadius: 6 }
-            : null,
-          style
-        ]}
-      >
+      {/* Generous padding = a bigger multi-touch target so pinch-to-resize and
+          rotate register on small emoji/text. No visible background or border —
+          the element sits clean on the photo like Instagram/Snapchat. */}
+      <Animated.View style={[{ position: "absolute", top: 0, left: 0, padding: 16 }, style]}>
         {children}
       </Animated.View>
     </GestureDetector>
@@ -192,7 +178,6 @@ export function PhotoEditor({
   // Rotate/crop write real pixels via expo-image-manipulator; the edited base
   // image lives in workingUri (uri stays untouched for "Original" crop reset).
   const [workingUri, setWorkingUri] = useState(uri);
-  const [cropKey, setCropKey] = useState("original");
   const [transforming, setTransforming] = useState(false);
 
   const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -252,41 +237,6 @@ export function PhotoEditor({
       setWorkingUri(result.uri);
     } catch {
       // Leave the image as-is rather than crash or lose edits.
-    } finally {
-      setTransforming(false);
-    }
-  };
-
-  /** Center-crop the ORIGINAL image to the preset aspect (so presets don't compound). */
-  const applyCrop = async (key: string) => {
-    if (transforming) return;
-    const preset = CROP_PRESETS.find((p) => p.key === key);
-    if (!preset) return;
-    setTransforming(true);
-    try {
-      if (preset.ratio === null) {
-        setWorkingUri(uri);
-        setCropKey("original");
-        return;
-      }
-      const size = await ImageManipulator.manipulateAsync(uri, [], { compress: 1 });
-      const srcW = size.width;
-      const srcH = size.height;
-      let cropW = srcW;
-      let cropH = Math.round(srcW / preset.ratio);
-      if (cropH > srcH) {
-        cropH = srcH;
-        cropW = Math.round(srcH * preset.ratio);
-      }
-      const result = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ crop: { originX: Math.floor((srcW - cropW) / 2), originY: Math.floor((srcH - cropH) / 2), width: cropW, height: cropH } }],
-        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
-      );
-      setWorkingUri(result.uri);
-      setCropKey(key);
-    } catch {
-      // Keep the current image; a failed crop must never take the editor down.
     } finally {
       setTransforming(false);
     }
@@ -380,7 +330,6 @@ export function PhotoEditor({
             key={t.id}
             x={t.x}
             y={t.y}
-            selected={selected === t.id}
             onSelect={() => setSelected(t.id)}
             onTap={() => editText(t)}
             onDragEnd={handleDrop(t.id)}
@@ -409,7 +358,6 @@ export function PhotoEditor({
             key={s.id}
             x={s.x}
             y={s.y}
-            selected={selected === s.id}
             onSelect={() => setSelected(s.id)}
             onDragEnd={handleDrop(s.id)}
             onDragStateChange={setDragging}
@@ -491,32 +439,6 @@ export function PhotoEditor({
         </View>
       ) : null}
 
-      {/* Crop presets row */}
-      {tool === "crop" ? (
-        <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 14, right: 60, flexDirection: "row", gap: 10 }}>
-          {CROP_PRESETS.map((p) => (
-            <Pressable key={p.key} onPress={() => void applyCrop(p.key)} accessibilityLabel={`Crop ${p.label}`}>
-              <View
-                style={{
-                  height: 40,
-                  paddingHorizontal: 16,
-                  borderRadius: 20,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: cropKey === p.key ? colors.white : "rgba(0,0,0,0.45)",
-                  borderWidth: cropKey === p.key ? 0 : 1,
-                  borderColor: "rgba(255,255,255,0.35)"
-                }}
-              >
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12.5, color: cropKey === p.key ? colors.black : colors.white }}>
-                  {p.label}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
       {/* Busy overlay while rotating/cropping */}
       {transforming ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
@@ -560,25 +482,37 @@ export function PhotoEditor({
         </View>
       ) : null}
 
-      {/* Text composer */}
+      {/* Text composer — tapping anywhere outside the field commits and exits
+          (no need to find the button), and a Done chip sits at the top where the
+          keyboard can't cover it. */}
       {composing ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }]}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Type…"
-            placeholderTextColor="rgba(255,255,255,0.6)"
-            autoFocus
-            multiline
-            onSubmitEditing={addText}
-            style={{ minWidth: 200, maxWidth: "100%", fontFamily: "Geist_700Bold", fontSize: 30, color: penColor, textAlign: "center" }}
-          />
-          <Pressable onPress={addText} style={{ marginTop: 24 }} accessibilityLabel="Add text">
-            <View style={{ height: 44, paddingHorizontal: 26, borderRadius: 22, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Add</Text>
+        <Pressable
+          onPress={addText}
+          accessibilityLabel="Done editing text"
+          style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)" }]}
+        >
+          <View style={{ position: "absolute", top: insets.top + 10, right: 14 }}>
+            <View style={{ height: 40, paddingHorizontal: 20, borderRadius: 20, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Done</Text>
             </View>
-          </Pressable>
-        </View>
+          </View>
+          {/* Input sits in the upper third so the keyboard never hides it. */}
+          <View style={{ position: "absolute", top: insets.top + 90, left: 24, right: 24 }} pointerEvents="box-none">
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Type…"
+              placeholderTextColor="rgba(255,255,255,0.6)"
+              autoFocus
+              multiline
+              blurOnSubmit
+              style={{ minWidth: 200, fontFamily: "Geist_700Bold", fontSize: 30, color: penColor, textAlign: "center" }}
+            />
+            <Text style={{ marginTop: 14, textAlign: "center", fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1, color: "rgba(255,255,255,0.6)" }}>
+              TAP ANYWHERE TO FINISH
+            </Text>
+          </View>
+        </Pressable>
       ) : null}
 
       {/* Hint */}
@@ -611,6 +545,20 @@ export function PhotoEditor({
           >
             <Trash2 size={24} color={colors.white} strokeWidth={2} />
           </Animated.View>
+        </View>
+      ) : null}
+
+      {/* Freeform crop — full-screen overlay; applies to the working image. */}
+      {tool === "crop" ? (
+        <View style={StyleSheet.absoluteFill}>
+          <FreeformCrop
+            uri={workingUri}
+            onApply={(cropped) => {
+              setWorkingUri(cropped);
+              setTool("none");
+            }}
+            onCancel={() => setTool("none")}
+          />
         </View>
       ) : null}
     </View>

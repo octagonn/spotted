@@ -1,12 +1,16 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, Check, Flame, Home, MapPin, MessageCircle, Users } from "lucide-react-native";
+import { Camera, Check, Flame, Home, MapPin, MessageCircle, MoreHorizontal, Users } from "lucide-react-native";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { CommentsSheet, type CommentRow } from "@/components/post/CommentsSheet";
 import { MediaFrame } from "@/components/post/MediaFrame";
+import { ReactionsSheet } from "@/components/post/ReactionsSheet";
+import { ContentMenu } from "@/components/ContentMenu";
+import { useSheet } from "@/components/ui/Sheet";
+import { useDeletePost } from "@/hooks/queries/useContentModeration";
 import { MusicChip } from "@/components/post/MusicChip";
 import { PostMedia } from "@/components/post/PostMedia";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
@@ -49,6 +53,8 @@ type PostCardProps = {
 
 /** Feed post card (spec §4.2–4.4). */
 export function PostCard({ post, locked = false, audible = false, onReact }: PostCardProps) {
+  const sheet = useSheet();
+  const deletePost = useDeletePost();
   const isRealPost = UUID_RE.test(post.id);
   const localSelfieUri = useUiStore((state) => state.reactedSelfies[post.id]);
   const reactedLocally = localSelfieUri !== undefined;
@@ -137,6 +143,30 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
 
   const LocIcon = post.gym ? MapPin : Home;
 
+  const isOwnPost = isRealPost && Boolean(myProfile.data?.username) && myProfile.data?.username === post.user.handle;
+  const openMenu = () => {
+    sheet.open(
+      <ContentMenu
+        contentType="post"
+        contentId={post.id}
+        reportLabel="post"
+        reportedUserId={undefined}
+        onDelete={
+          isOwnPost
+            ? () =>
+                deletePost.mutate(
+                  { postId: post.id, mediaPaths: [] },
+                  {
+                    onSuccess: () => showToast("Post deleted"),
+                    onError: () => showToast("Couldn't delete — try again")
+                  }
+                )
+            : undefined
+        }
+      />
+    );
+  };
+
   return (
     <View style={{ paddingTop: 14, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.graphite }}>
       {/* Header row */}
@@ -162,6 +192,11 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
           </View>
         </View>
         <Text style={mono(10.5, colors.ash)}>{post.time}</Text>
+        {isRealPost && !locked ? (
+          <Pressable onPress={openMenu} accessibilityLabel="Post options" hitSlop={8} haptic={false} style={{ paddingLeft: 4 }}>
+            <MoreHorizontal size={18} color={colors.fog} strokeWidth={2} />
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Attached song — Instagram-style line under the header; auto-plays
@@ -181,7 +216,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
           }
         }}
       >
-        <PostMedia post={post} blurRadius={blurRadius} />
+        <PostMedia post={post} blurRadius={blurRadius} active={audible && !locked} />
       </MediaFrame>
 
       {/* Public-feed context chips */}
@@ -249,7 +284,14 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
           )}
         </Pressable>
         {reactorCount > 0 ? (
-          <View style={{ flexDirection: "row" }}>
+          <Pressable
+            onPress={() => {
+              if (serverReactions.length > 0) sheet.open(<ReactionsSheet reactors={serverReactions} />);
+            }}
+            accessibilityLabel="See who reacted"
+            haptic={false}
+            style={{ flexDirection: "row" }}
+          >
             {/* Real reactors from the backend (signed selfie or avatar fallback) */}
             {serverReactions.slice(0, 5).map((reactor, index) => (
               <View
@@ -312,7 +354,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
                 )}
               </View>
             ) : null}
-          </View>
+          </Pressable>
         ) : null}
         <Text style={mono(11, colors.fog)}>
           {`${reactorCount} live reaction${reactorCount === 1 ? "" : "s"}`}

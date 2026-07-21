@@ -1,39 +1,61 @@
+import * as Haptics from "expo-haptics";
 import { Share2, X } from "lucide-react-native";
-import { Modal, Pressable, Share, Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Modal, Platform, Pressable, Share, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
+import { captureRef } from "react-native-view-shot";
 
 import { TrophyIcon } from "@/components/trophies/TrophyIcon";
+import { TrophyShareCard, type TrophyShareData } from "@/components/trophies/TrophyShareCard";
+import { formatEarnedDate } from "@/components/trophies/trophyFormat";
 import { logger } from "@/lib/logger";
-import { tierPrimary, type EvaluatedTrophy, type StackedTrophyDef } from "@/lib/trophies";
-import { rarityBlurb, rarityColor, type Rarity } from "@/lib/trophyRarity";
+import { formatRarity, PREMIUM_RARITY_THRESHOLD } from "@/lib/trophyRaritySeeds";
 import { colors } from "@/theme/colors";
 
 /**
- * Celebration popup shown the moment a trophy (or a new tier) is earned. Same
- * language as StreakPopup — dimmed backdrop, spring scale-in, X to close — plus
- * a Share action. Share is plain text for now (a deep link can slot in later).
+ * Celebration modal shown the moment a trophy or tier is earned. Same pattern as
+ * StreakPopup — dimmed backdrop, spring scale-in, haptic — with the numeric
+ * rarity, exact date, a Share button (renders + captures a TrophyShareCard), and
+ * an X. Gold communicates earned status without flooding the modal.
  */
 export function TrophyUnlockModal({
+  data,
   visible,
-  trophy,
-  rarity,
   onClose
 }: {
+  data: TrophyShareData | null;
   visible: boolean;
-  trophy: EvaluatedTrophy | null;
-  rarity?: Rarity;
   onClose: () => void;
 }) {
-  if (!trophy) return null;
-  const { def } = trophy;
-  const tierLine =
-    def.kind === "stacked" && trophy.highestTier ? tierPrimary(def as StackedTrophyDef, trophy.highestTier) : null;
+  const shareRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (visible) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+  }, [visible]);
+
+  if (!data) return null;
+  const premium = data.rarityPct < PREMIUM_RARITY_THRESHOLD;
+  const date = formatEarnedDate(data.earnedAt);
 
   const share = async () => {
-    const bits = [`I just earned "${def.name}"${tierLine ? ` — ${tierLine}` : ""} on Spotted 🏆`];
-    if (rarity) bits.push(`Only ${rarityBlurb(rarity.pct)} have it (${rarity.label}).`);
+    // Capture the branded share card to an image; fall back to text.
+    let imageUri: string | null = null;
     try {
-      await Share.share({ message: bits.join(" ") });
+      imageUri = await Promise.race([
+        captureRef(shareRef, { format: "png", quality: 1 }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500))
+      ]);
+    } catch {
+      imageUri = null;
+    }
+    try {
+      if (imageUri && Platform.OS !== "web") {
+        await Share.share({ url: imageUri, message: `I earned "${data.name}" on Spotted 🏆 — ${formatRarity(data.rarityPct)} have it.` });
+      } else {
+        await Share.share({ message: `I earned "${data.name}" on Spotted 🏆 — ${formatRarity(data.rarityPct)} have it.` });
+      }
     } catch (error) {
       logger.warn("trophy_share_failed", { message: error instanceof Error ? error.message : String(error) });
     }
@@ -41,6 +63,13 @@ export function TrophyUnlockModal({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      {/* Off-screen share card for capture. */}
+      <View style={{ position: "absolute", top: -10000, left: 0 }} pointerEvents="none">
+        <View ref={shareRef} collapsable={false}>
+          <TrophyShareCard data={data} />
+        </View>
+      </View>
+
       <Pressable onPress={onClose} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <Animated.View
           entering={FadeIn.duration(160)}
@@ -57,7 +86,7 @@ export function TrophyUnlockModal({
               borderRadius: 24,
               backgroundColor: colors.graphite,
               borderWidth: 1,
-              borderColor: colors.iron,
+              borderColor: premium ? colors.gold : colors.iron,
               alignItems: "center"
             }}
           >
@@ -66,33 +95,26 @@ export function TrophyUnlockModal({
             </Pressable>
 
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 2, textTransform: "uppercase", color: colors.gold }}>
-              Trophy unlocked
+              Trophy Unlocked
             </Text>
 
-            <View
-              style={{
-                marginTop: 16,
-                width: 84,
-                height: 84,
-                borderRadius: 42,
-                backgroundColor: colors.goldSoft,
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              <TrophyIcon iconKey={def.iconKey} earned size={40} />
+            <View style={{ marginTop: 16, width: 84, height: 84, borderRadius: 42, backgroundColor: colors.goldSoft, alignItems: "center", justifyContent: "center" }}>
+              <TrophyIcon iconKey={data.icon} earned size={40} />
             </View>
 
-            <Text style={{ marginTop: 18, fontFamily: "Geist_700Bold", fontSize: 19, textAlign: "center", color: colors.white }}>
-              {def.name}
-            </Text>
-            {tierLine ? (
-              <Text style={{ marginTop: 3, fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.gold }}>{tierLine}</Text>
-            ) : null}
-            {rarity ? (
-              <Text style={{ marginTop: 6, fontFamily: "GeistMono_400Regular", fontSize: 11, color: rarityColor(rarity.label) }}>
-                {rarity.label} · {rarityBlurb(rarity.pct)}
+            {data.familyName ? (
+              <Text style={{ marginTop: 14, fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.fog }}>
+                {data.familyName}
               </Text>
+            ) : null}
+            <Text style={{ marginTop: data.familyName ? 3 : 18, fontFamily: "Geist_700Bold", fontSize: 19, textAlign: "center", color: colors.white }}>
+              {data.name}
+            </Text>
+            <Text style={{ marginTop: 6, fontFamily: "GeistMono_400Regular", fontSize: 11, color: premium ? colors.gold : colors.silver }}>
+              {formatRarity(data.rarityPct)}
+            </Text>
+            {date ? (
+              <Text style={{ marginTop: 3, fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.fog }}>Earned {date}</Text>
             ) : null}
 
             <Pressable

@@ -4,49 +4,39 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TrophyIcon } from "@/components/trophies/TrophyIcon";
 import { TrophyProgressBar } from "@/components/trophies/TrophyProgressBar";
-import {
-  tierPrimary,
-  tierSecondary,
-  type EvaluatedTrophy,
-  type StackedTrophyDef,
-  type StandaloneTrophyDef
-} from "@/lib/trophies";
-import { rarityBlurb, rarityColor, type Rarity } from "@/lib/trophyRarity";
+import { TrophyTierLadder } from "@/components/trophies/TrophyTierLadder";
+import { formatEarnedDate } from "@/components/trophies/trophyFormat";
+import { formatRarity, PREMIUM_RARITY_THRESHOLD } from "@/lib/trophyRaritySeeds";
+import { type LadderRow, type TrophyCardModel } from "@/lib/trophySelectors";
 import { colors } from "@/theme/colors";
 
-function formatDate(iso?: string): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 /**
- * Trophy detail bottom sheet — a plain RN Modal so it renders on native AND web
- * (the old gorhom sheet didn't). Handles both shapes:
- *  - stacked:    the full tier ladder (earned gold + date, next shows progress).
- *  - standalone: the requirement, earned state, or live progress (Nomad x/24).
- * Rarity is shown for both. Strength trophies note the video-verify requirement.
+ * Trophy detail bottom sheet (plain RN Modal so it renders on native + web).
+ *  - stacked:    the full tier ladder, each row with its rarity + earned date.
+ *  - standalone: requirement, earned state + exact date, rarity.
+ * Rarity is always the numeric "X% of users". Sub-1% trophies get a subtle gold
+ * "Premium" chip, but the number is still the primary display.
  */
 export function TrophyDetailSheet({
-  trophy,
-  rarity,
+  card,
+  ladder,
   visible,
   onClose,
   onShare
 }: {
-  trophy: EvaluatedTrophy | null;
-  rarity?: Rarity;
+  card: TrophyCardModel | null;
+  ladder: LadderRow[];
   visible: boolean;
   onClose: () => void;
-  /** Shown as a Share button when the trophy is earned. */
   onShare?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  if (!trophy) return null;
-  const { def } = trophy;
-  const isStacked = def.kind === "stacked";
-  const isVideo = isStacked && (def as StackedTrophyDef).verify === "video";
+  if (!card) return null;
+  const { def } = card;
+  const isStacked = def.type === "stacked";
+  const isVideo = def.trackingType === "videoVerification";
+  const premium = card.rarityPct < PREMIUM_RARITY_THRESHOLD;
+  const earnedDate = formatEarnedDate(card.earnedAt);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -59,7 +49,7 @@ export function TrophyDetailSheet({
             borderTopRightRadius: 22,
             borderWidth: 1,
             borderBottomWidth: 0,
-            borderColor: colors.iron,
+            borderColor: premium ? colors.gold : colors.iron,
             maxHeight: "82%",
             paddingBottom: insets.bottom + 14
           }}
@@ -80,32 +70,37 @@ export function TrophyDetailSheet({
                 borderRadius: 27,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: trophy.earned ? colors.goldSoft : colors.charcoal,
-                borderWidth: trophy.earned ? 0 : 1,
+                backgroundColor: card.earned ? colors.goldSoft : colors.charcoal,
+                borderWidth: card.earned ? 0 : 1,
                 borderColor: colors.iron
               }}
             >
-              <TrophyIcon iconKey={def.iconKey} earned={trophy.earned} size={26} />
+              <TrophyIcon iconKey={def.icon} earned={card.earned} size={26} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 19, color: colors.white }}>{def.name}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 }}>
-                {rarity ? (
-                  <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: rarityColor(rarity.label) }}>
-                    {rarity.label} · {rarityBlurb(rarity.pct)}
-                  </Text>
-                ) : null}
+                <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: premium ? colors.gold : colors.silver }}>
+                  {formatRarity(card.rarityPct)}
+                </Text>
                 {isStacked ? (
-                  <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>
-                    {trophy.earnedCount}/{trophy.total} tiers
-                  </Text>
+                  <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>{card.tierPosition} tiers</Text>
+                ) : null}
+                {premium ? (
+                  <View style={{ paddingVertical: 2, paddingHorizontal: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.gold }}>
+                    <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9, letterSpacing: 0.5, color: colors.gold }}>PREMIUM</Text>
+                  </View>
                 ) : null}
               </View>
             </View>
           </View>
 
+          <Text style={{ paddingHorizontal: 20, paddingTop: 10, fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.silver }}>
+            {def.description}
+          </Text>
+
           {isVideo ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 20, marginTop: 14, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 20, marginTop: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
               <Video size={14} color={colors.silver} strokeWidth={2} />
               <Text style={{ flex: 1, fontFamily: "Geist_400Regular", fontSize: 12, color: colors.silver }}>
                 Tiers unlock when a max-lift video is verified.
@@ -113,15 +108,15 @@ export function TrophyDetailSheet({
             </View>
           ) : null}
 
-          <ScrollView contentContainerStyle={{ paddingTop: 8 }}>
+          <ScrollView contentContainerStyle={{ paddingTop: 10 }}>
             {isStacked ? (
-              <StackedLadder trophy={trophy} />
+              <TrophyTierLadder def={def} rows={ladder} progress={card.progress} />
             ) : (
-              <StandaloneBody trophy={trophy} def={def as StandaloneTrophyDef} />
+              <StandaloneBody card={card} earnedDate={earnedDate} />
             )}
           </ScrollView>
 
-          {trophy.earned && onShare ? (
+          {card.earned && onShare ? (
             <Pressable
               onPress={onShare}
               accessibilityLabel="Share trophy"
@@ -147,89 +142,29 @@ export function TrophyDetailSheet({
   );
 }
 
-function StackedLadder({ trophy }: { trophy: EvaluatedTrophy }) {
-  const def = trophy.def as StackedTrophyDef;
-  const tiers = trophy.tiers ?? [];
-  const trackable = def.trackable === true;
+function StandaloneBody({ card, earnedDate }: { card: TrophyCardModel; earnedDate: string | null }) {
   return (
-    <View style={{ paddingHorizontal: 20 }}>
-      {tiers.map((t) => {
-        const primary = tierPrimary(def, t.tier);
-        const secondary = tierSecondary(def, t.tier);
-        const date = formatDate(t.date);
-        return (
-          <View
-            key={t.tier.threshold}
-            style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.graphite }}
-          >
-            <View
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: 13,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: t.earned ? colors.gold : "transparent",
-                borderWidth: t.earned ? 0 : 1.5,
-                borderColor: t.isNext ? colors.gold : colors.iron
-              }}
-            >
-              {t.earned ? (
-                <Check size={14} color={colors.black} strokeWidth={3} />
-              ) : t.isNext ? (
-                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.gold }} />
-              ) : (
-                <Lock size={11} color={colors.ash} strokeWidth={2} />
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: t.earned ? colors.white : t.isNext ? colors.bone : colors.silver }}>
-                {primary}
-              </Text>
-              {secondary ? (
-                <Text style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>{secondary}</Text>
-              ) : null}
-            </View>
-            <View style={{ alignItems: "flex-end", minWidth: 64 }}>
-              {t.earned ? (
-                <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.gold }}>{date ?? "Earned"}</Text>
-              ) : t.isNext && trackable && trophy.progress ? (
-                <View style={{ width: 64 }}>
-                  <TrophyProgressBar current={trophy.progress.current} target={t.tier.threshold} unit={def.unit} showLabel />
-                </View>
-              ) : (
-                <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.ash }}>Locked</Text>
-              )}
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function StandaloneBody({ trophy, def }: { trophy: EvaluatedTrophy; def: StandaloneTrophyDef }) {
-  const date = formatDate(trophy.earnedDate);
-  return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 4, gap: 14 }}>
+    <View style={{ paddingHorizontal: 20, paddingTop: 6, gap: 14 }}>
       <View>
         <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: colors.fog }}>
           How to earn it
         </Text>
         <Text style={{ marginTop: 6, fontFamily: "Geist_400Regular", fontSize: 14, lineHeight: 20, color: colors.silver }}>
-          {def.requirement}
+          {card.def.requirement}
         </Text>
       </View>
 
-      {def.progress && trophy.progress ? (
-        <TrophyProgressBar current={trophy.progress.current} target={trophy.progress.target} unit={trophy.progress.unit} earned={trophy.earned} />
+      {card.progress ? (
+        <TrophyProgressBar current={card.progress.current} target={card.progress.target} unit={card.progress.unit} earned={card.earned} />
       ) : null}
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
-        {trophy.earned ? (
+        {card.earned ? (
           <>
             <Check size={15} color={colors.gold} strokeWidth={2.6} />
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>Earned{date ? ` · ${date}` : ""}</Text>
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>
+              Earned{earnedDate ? ` · ${earnedDate}` : ""}
+            </Text>
           </>
         ) : (
           <>

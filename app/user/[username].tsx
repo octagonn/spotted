@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Flame, Lock, MapPin } from "lucide-react-native";
+import { Flame, Grid3x3, Lock, MapPin, Tag } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { Linking, ScrollView, Share, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +15,8 @@ import { useMutualFriends } from "@/hooks/queries/useFollowing";
 import { useRespondToRequest, useSendFriendRequest } from "@/hooks/queries/useFriends";
 import { useFriendshipStatus, useProfileByUsername, useUserStreak } from "@/hooks/queries/useProfile";
 import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
+import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
+import { useTrophies } from "@/hooks/useTrophies";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
 import { useStories } from "@/hooks/queries/useStories";
 import { useUserCounts } from "@/hooks/queries/useUserCounts";
@@ -46,6 +48,8 @@ export default function UserProfileScreen() {
   const ownUserId = useAuthStore((state) => state.userId);
   const friendship = useFriendshipStatus(profile?.id);
   const posts = useSignedUserPosts(profile?.id);
+  const [grid, setGrid] = useState<"posts" | "tagged">("posts");
+  const tagged = useTaggedPosts(profile?.id, grid === "tagged");
   const counts = useUserCounts(profile?.id);
   const streakDays = useStreakDays(profile?.id);
   const userStreak = useUserStreak(profile?.id);
@@ -86,7 +90,8 @@ export default function UserProfileScreen() {
   );
   const currentStreak = gymStreak.count;
   const longestStreak = Math.max(userStreak.data?.longest_streak ?? 0, currentStreak);
-  const trophies = (posts.data ?? []).some((p) => p.media_url) ? 1 : 0;
+  const friendTrophies = useTrophies(profile?.id);
+  const trophyCount = friendTrophies.earnedCount;
   const postCount = counts.data?.posts ?? (posts.data ?? []).filter((p) => p.media_url).length;
   const gridPosts = (posts.data ?? []).filter((p) => p.media_url);
 
@@ -223,7 +228,14 @@ export default function UserProfileScreen() {
                 <Text style={{ marginTop: 5, fontFamily: "Geist_400Regular", fontSize: 11.5, color: colors.fog }}>Gym streak</Text>
               </Pressable>
               <StatCell value={longestStreak} unit="days" label="Longest" />
-              <StatCell value={trophies} label="Trophies" />
+              <StatCell
+                value={trophyCount}
+                label="Trophies"
+                onPress={() =>
+                  profile &&
+                  router.push(`/profile-section/trophies?user=${profile.id}&name=${encodeURIComponent(profile.display_name.split(" ")[0])}` as Href)
+                }
+              />
             </View>
 
             {/* Streak calendar */}
@@ -245,10 +257,36 @@ export default function UserProfileScreen() {
               </View>
             </View>
 
-            {/* Posts grid */}
-            {gridPosts.length ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 22 }}>
-                {gridPosts.map((post) => (
+            {/* Posts / Tagged tabs (same as your own profile) */}
+            <View style={{ marginTop: 22, borderTopWidth: 1, borderTopColor: colors.graphite, flexDirection: "row" }}>
+              <UserProfileTab active={grid === "posts"} icon={Grid3x3} label="POSTS" onPress={() => setGrid("posts")} />
+              <UserProfileTab active={grid === "tagged"} icon={Tag} label="TAGGED" onPress={() => setGrid("tagged")} />
+            </View>
+            {grid === "posts" ? (
+              gridPosts.length ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+                  {gridPosts.map((post) => (
+                    <Pressable
+                      key={post.id}
+                      style={{ width: "33%", aspectRatio: 4 / 5 }}
+                      onPress={() => profile && router.push(`/profile-posts/${post.id}?user=${profile.id}` as Href)}
+                    >
+                      <View style={{ flex: 1, backgroundColor: colors.graphite }}>
+                        {post.media_url ? (
+                          <Image source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
+                  <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center" }}>No posts yet.</Text>
+                </View>
+              )
+            ) : tagged.data?.length ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+                {tagged.data.map((post) => (
                   <Pressable
                     key={post.id}
                     style={{ width: "33%", aspectRatio: 4 / 5 }}
@@ -264,7 +302,9 @@ export default function UserProfileScreen() {
               </View>
             ) : (
               <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
-                <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center" }}>No posts yet.</Text>
+                <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center" }}>
+                  {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet."}
+                </Text>
               </View>
             )}
           </>
@@ -301,6 +341,39 @@ export default function UserProfileScreen() {
 
       <StreakPopup visible={streakOpen} name={name} streak={currentStreak} onClose={() => setStreakOpen(false)} />
     </View>
+  );
+}
+
+function UserProfileTab({
+  active,
+  icon: Icon,
+  label,
+  onPress
+}: {
+  active: boolean;
+  icon: typeof Grid3x3;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={{ flex: 1 }} haptic={false} accessibilityLabel={label}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          paddingVertical: 12,
+          borderBottomWidth: 2,
+          borderBottomColor: active ? colors.white : "transparent"
+        }}
+      >
+        <Icon size={16} color={active ? colors.white : colors.fog} strokeWidth={2} />
+        <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.12, color: active ? colors.white : colors.fog }}>
+          {label}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 

@@ -272,3 +272,67 @@ Client:
 - **Read receipts**: "Seen Xm ago" under my last message when read_at set.
 - **Profile tabs**: POSTS / TAGGED (useTaggedPosts).
 - **Dual camera**: NOT possible — see notes. Needs a dev build + vision-camera multi-cam (unsupported in expo-camera / Expo Go).
+
+## Addendum — 2026-07-20 complete trophy system
+
+- **Two tabs only**: Categories (default) + Earned. Rarest tab and all "rarest first" sorting removed.
+- **Numerical rarity everywhere**: "32% of users" / "0.6% of users" on every card, detail sheet, unlock modal, and earned card. Common/Uncommon/Rare/Legendary words gone. Sub-1% gets a gold PREMIUM cue but still shows the number.
+- **Achievement data model**: TrophyDefinition / TrophyTier(rarityPct) / TrophyAchievement(per-tier earnedAt) / TrophyProgress. Every earned tier is its own record with its own date; highest tier derived, never stored on the family.
+- **Catalog**: exact spec names for all families (Bench…Titan, Streak Rookie…Year of Iron, Home Turf, Holidays, etc.). New files: lib/trophyRaritySeeds.ts (per-tier %, strength-standard anchors), lib/trophyEngine.ts (idempotent deriveAchievements + deriveProgress + Easter/Thanksgiving + verifyLift stub), lib/trophySelectors.ts (category/earned/ladder views), lib/trophyStorage.ts (seen-set), hooks/useTrophies.ts.
+- **Components**: TrophySegmentedControl, TrophyCategorySection, TrophyGrid, TrophyCard→Stacked/Standalone/Earned cards, TrophyRarity, TrophyDetailSheet + TierLadder/TierRow, TrophyUnlockModal (haptic scale-in), TrophyShareCard (captured image share). Locked visual foundation preserved (dark zinc, two-column grid, gold-for-earned only).
+- **Earned tab**: every earned tier separate, newest-first, each with exact date + %. No locked trophies/tiers/empty sections.
+- **Progress bars**: only Streaks, Weekend Warrior, Home Turf, Nomad. Strength is video-verified (no bar). No zero bars on standalone events.
+- **Demo**: Day One earned (dated from first post), streak feeds the ladder; Earned tab shows only Day One unless real data qualifies more.
+
+## Addendum — 2026-07-20 hold-to-record shutter
+
+- Snapchat-style capture: tap = photo, press-and-hold = video, slide left onto the lock icon = hands-free recording (then tap to stop). New components/camera/ShutterButton.tsx (gesture-handler Pan with activateAfterLongPress + Tap; reanimated puck + lock reveal).
+- Removed the separate "Video" mode pill — videos are recorded by holding. Camera now runs mode="video" in capture (takePictureAsync still serves tap-photo, iOS-first). Held clips route to the existing video review → compose → publishLiftVideo flow. Mic permission requested on first hold.
+
+## Addendum — 2026-07-20 tester batch (story/camera/music/feed)
+
+Story editing: text composer commits on tap-anywhere (was hidden Add button behind keyboard — the "can't add text" bug) + Done chip up top; element selection no longer shows a dashed artifact (soft highlight) and has a bigger multi-touch target so pinch-resize/rotate register.
+Second story: "+" badge on Your Story always opens the camera (even after posting); story viewer has an "Add to story" button on your own story.
+Camera: pinch-to-zoom on preview (zoom readout); flip debounced (650ms + blocked while recording) so spamming can't stall the session; removed the AUTOMATIC capture crop (photos keep full frame — cropping is user-driven only); bigger Edit button + clearer top indicator pill.
+Music: clip scrubber rewritten (components/camera/MusicClipScrubber.tsx) — UI-thread knob, continuous (no 1s snapping), smooth; song title bigger.
+Feed/profiles: other users' profiles now have Posts/Tagged tabs with labels; live reactions tappable → ReactionsSheet (who reacted, tap to profile); feed shows skeleton cards while loading (components/ui/Skeleton.tsx) instead of a blank screen.
+Picker: story library picker uses Current representation mode (skips iOS transcode) + selectionLimit 1 for a faster return.
+
+DEFERRED (need their own pass): freeform draggable crop TOOL to replace editor presets (auto-crop already removed, which was the core complaint); fully custom instant photo-grid picker (system picker sped up but not replaced).
+
+## Addendum — 2026-07-20 freeform crop tool
+
+- Replaced the editor's preset crop chips (1:1/4:5/9:16) with a real manual crop: components/camera/FreeformCrop.tsx. Image shown contain-fitted; a crop rectangle with four draggable corner handles + drag-to-move body, dimmed exterior, rule-of-thirds guides, Reset + Apply. Maps the on-screen box to source pixels and crops via expo-image-manipulator (single 0.98 re-encode). Fully user-controlled — no presets, no automatic crop anywhere in the pipeline.
+
+## Addendum — 2026-07-20 batch 3 (permissions, moderation, story viewers)
+
+- Location permission: only auto-prompts ONCE per app session (module-scoped guard) — no more re-prompt on every camera open when the grant was "Allow once". Denied falls back to no coords silently.
+- Profile "y" flash: StoriesRail shows a skeleton circle until the profile resolves instead of the "You" fallback initial (that was the "y").
+- Story viewers: "Seen by" on your own story → inline viewers list (most-recent first) via story_views_select_owner RLS + useStoryViewers. Story viewer uses local overlays (it's a fullScreenModal above the global sheet host).
+- Story element editing: removed the translucent selection background artifact — elements sit clean on the photo now.
+- Reactions: usePostReactionSelfies exposes the emoji; ReactionsSheet always shows WHAT they reacted with (emoji, or selfie thumb + camera glyph, or 🔥).
+- Delete + report: kebab (⋯) on posts (feed, global sheet) and stories (inline overlay). Own content → Delete (confirm); others' → Report with reasons. New reports table + RLS (App Store UGC moderation), useContentModeration (useDeletePost/useDeleteStory/useReportContent), ContentMenu + ReportSheet components.
+
+## Addendum — 2026-07-20 batch (stories/messaging/trophies/feed/camera)
+
+- Story reply previews: reply DMs carry the story media path (messages.reply_story_media) → chat renders an IG-style story thumbnail above the reply.
+- In-app banners: DMs + taunts pop a top banner while the app is foregrounded (stores/banner + NotificationBanner host + useInAppBanners realtime on messages/notifications).
+- Trophy cascade: confirmed inherent (value-based earning cascades to all lower tiers) + tests added.
+- Friends' trophies: useTrophies(userId) parameterized; friend profile "Trophies" stat opens their read-only case (/profile-section/trophies?user=&name=).
+- Comments: fixed tall sheet (85% screen height) — no more content-sized layout gap; list flexes to fill.
+- Public feed: now ONLY people you haven't added (friends stay in Friends tab); pull-to-refresh reshuffles order (seeded shuffle).
+- Home scroll-to-top: tapping the Home tab on the feed scrolls to top (useScrollToTop).
+- Video autoplay: feed videos autoplay muted while the post is the active/visible one (IG-style), tap to pause; unified with music autoplay via one active-post tracker.
+- Camera grid removed (RuleOfThirds gone).
+- Notifications grouped Today / Yesterday / Last week; anything >7 days filtered client-side + daily pg_cron sweep (notifications_cleanup_sweep).
+
+DEFERRED / PLAN: story cube/slide transition (needs its own focused animation pass).
+
+## Addendum — 2026-07-20 batch 5 (posting-flow rework, story tags, video fix)
+
+- Video recording fix: the picture→video mode switch used a fixed 400ms delay and called recordAsync mid-reconfigure, which could hang and record nothing. Now `key={camMode}` remounts CameraView on mode change, `onCameraReady` flips `videoReadyRef`, and startRecording waits (bounded 2.5s) for readiness before recordAsync. Root cause: expo-camera can't do photo+video simultaneously — switching mode reconfigures the session.
+- Posting-flow gating: until the daily photo is posted, video is blocked ("Post your daily photo first to unlock video posts"). Daily = photo only (videos are always non-daily lift posts). Hold-to-record Snapchat UX kept with the "TAP FOR PHOTO · HOLD FOR VIDEO" hint.
+- Workout entry → trophies (honor system): lift-video compose has a "Log your lift" step — pick exercise from the trophy-derived catalog (lib/liftCatalog.ts: bench/squat/deadlift = lb, pullups/pushups = reps), enter the number. **Posting is the unlock trigger** (not entry — the video is the social receipt). On publish, useLogLift inserts a user_lifts row; newlyUnlockedTiers computes the cascade (a first-logged 275 bench earns all lower tiers); crossed tiers fire TrophyUnlockModal before navigating to feed. Best-per-exercise feeds useTrophies via useUserLifts (works for friends too — trophy cases are visible on friends' profiles).
+- Geofence: only dailies are geofenced; lift videos post from anywhere.
+- Story tags: "Tag friends" pill on the story review screen (reuses FriendsSheet) → story_tags rows on publish. The story viewer renders tappable "with @username" chips (lucide Users glyph) that close the viewer and open /user/<username>, consistent with post tags.
+- Schema: migration user_lifts_and_story_tags — user_lifts table (exercise/value/unit/post_id, RLS insert-self / select self-or-friends), story_tags table (story_id/user_id PK, RLS insert-delete-owner / select owner-or-friends), posts.lift_exercise/lift_value/lift_unit.

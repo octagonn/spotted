@@ -1,4 +1,4 @@
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused, useScrollToTop } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { Bell } from "lucide-react-native";
@@ -12,6 +12,7 @@ import { PostCard } from "@/components/post/PostCard";
 import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
 import { Pressable } from "@/components/ui/Pressable";
 import { Segmented } from "@/components/ui/Segmented";
+import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useSheet } from "@/components/ui/Sheet";
 import { useActivityUnreadCount } from "@/hooks/queries/useNotifications";
 import { useFeed } from "@/hooks/queries/useFeed";
@@ -22,6 +23,22 @@ import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
 
 const NAV_H = 84;
+
+/** Deterministic shuffle (seeded) so a refresh reorders the feed but stays
+ * stable between renders of the same refresh. */
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const out = arr.slice();
+  let s = seed * 9301 + 49297;
+  const rand = () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 /** Map a real Supabase post onto the redesign post card shape. */
 function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
@@ -80,15 +97,28 @@ export default function HomeScreen() {
   const userId = useAuthStore((state) => state.userId);
   const friends = useFriends();
   const friendIds = useMemo(() => new Set((friends.data ?? []).map((f) => f.id)), [friends.data]);
-  // Friends tab: you + your crew. Public tab: every real post RLS lets you see
-  // (public-visibility profiles included). No fixtures anywhere.
+  // Pull-to-refresh bumps this to reshuffle the visible order.
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+
+  // Friends tab: you + your crew. Public tab: ONLY people you haven't added
+  // (discovery) — your friends' content stays in the Friends tab. No fixtures.
   const posts = useMemo(() => {
     const rows = feed.data ?? [];
     const scoped = tab === "Friends"
       ? rows.filter((p) => p.user_id === userId || friendIds.has(p.user_id))
-      : rows;
-    return scoped.map(toMockShape);
-  }, [feed.data, tab, userId, friendIds]);
+      : rows.filter((p) => p.user_id !== userId && !friendIds.has(p.user_id));
+    const mapped = scoped.map(toMockShape);
+    return shuffleSeed > 0 ? seededShuffle(mapped, shuffleSeed) : mapped;
+  }, [feed.data, tab, userId, friendIds, shuffleSeed]);
+
+  const listRef = useRef<React.ComponentRef<typeof FlashList<FeedMockPost>>>(null);
+  // Tapping the Home tab while on the feed scrolls back to the top.
+  useScrollToTop(listRef as never);
+
+  const refresh = () => {
+    setShuffleSeed((s) => s + 1);
+    void feed.refetch();
+  };
 
   const openReactionCapture = (postId: string) => {
     sheet.open(<ReactionCaptureSheet postId={postId} onClose={sheet.close} />);
@@ -98,12 +128,13 @@ export default function HomeScreen() {
   // playable track — and only while this screen is focused, so opening a
   // story (which renders on top of the mounted feed) silences the feed.
   const isFocused = useIsFocused();
-  const [audiblePostId, setAudiblePostId] = useState<string | null>(null);
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 55 }).current;
+  // The single most-visible post drives BOTH music and video autoplay (IG-style).
+  const [activePostId, setActivePostId] = useState<string | null>(null);
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: { isViewable: boolean; item?: FeedMockPost }[] }) => {
-      const first = viewableItems.find((v) => v.isViewable && v.item?.music?.previewUrl);
-      setAudiblePostId(first?.item?.id ?? null);
+      const first = viewableItems.find((v) => v.isViewable && v.item);
+      setActivePostId(first?.item?.id ?? null);
     }
   ).current;
 
@@ -112,11 +143,12 @@ export default function HomeScreen() {
     // pull-to-refresh spinner appears below the notch where it's visible.
     <View style={{ flex: 1, backgroundColor: colors.black, paddingTop: insets.top }}>
       <FlashList
+        ref={listRef}
         data={posts}
         refreshControl={
           <RefreshControl
             refreshing={feed.isRefetching}
-            onRefresh={() => void feed.refetch()}
+            onRefresh={refresh}
             tintColor={colors.white}
           />
         }
@@ -139,9 +171,14 @@ export default function HomeScreen() {
               >
                 SPOTTED
               </RNText>
-              <Pressable onPress={() => router.push("/inbox")} accessibilityLabel="Notifications" hitSlop={8}>
+              <Pressable
+                onPress={() => router.push("/inbox")}
+                accessibilityLabel="Notifications"
+                hitSlop={11}
+                style={{ width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}
+              >
                 <View>
-                  <Bell size={23} color={colors.white} strokeWidth={2} />
+                  <Bell size={26} color={colors.white} strokeWidth={2} />
                   {unreadCount > 0 ? (
                     <View
                       style={{
@@ -167,18 +204,24 @@ export default function HomeScreen() {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         renderItem={({ item }: { item: FeedMockPost }) => (
-          <PostCard post={item} locked={locked} audible={isFocused && item.id === audiblePostId} onReact={openReactionCapture} />
+          <PostCard post={item} locked={locked} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
         )}
         ListEmptyComponent={
-          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
-            <RNText style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
-              {feed.isLoading
-                ? "Loading your feed…"
-                : tab === "Friends"
+          feed.isLoading ? (
+            // Skeleton placeholders instead of a blank screen while loading.
+            <View>
+              <PostCardSkeleton />
+              <PostCardSkeleton />
+            </View>
+          ) : (
+            <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
+              <RNText style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
+                {tab === "Friends"
                   ? "Nothing from your crew yet. Add friends or post today's SPOTTED."
                   : "No public posts yet. Set your profile to Public and post to show up here."}
-            </RNText>
-          </View>
+              </RNText>
+            </View>
+          )
         }
       />
       {locked ? <LockOverlay /> : null}

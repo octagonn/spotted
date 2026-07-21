@@ -5,9 +5,12 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-na
 import { Pressable } from "@/components/ui/Pressable";
 import { colors } from "@/theme/colors";
 import { easing } from "@/theme/motion";
+import { radius, tokens } from "@/theme/tokens";
 
 const PADDING = 3;
 const BORDER = 1;
+// Inner content height so the control lands at 44px total (2×BORDER + 2×PADDING).
+const INNER_H = 44 - 2 * (PADDING + BORDER);
 
 type SegmentedProps = {
   options: string[];
@@ -47,12 +50,12 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
       style={[
         {
           flexDirection: "row",
-          marginTop: 10,
-          marginBottom: 14,
-          marginHorizontal: 18,
+          marginTop: 12,
+          marginBottom: 16,
+          marginHorizontal: 16,
           borderWidth: BORDER,
-          borderColor: colors.iron,
-          borderRadius: 12,
+          borderColor: tokens.border.default,
+          borderRadius: radius.lg,
           padding: PADDING,
           backgroundColor: colors.graphite,
           overflow: "hidden"
@@ -70,8 +73,8 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
               bottom: PADDING,
               left: PADDING,
               width: segmentWidth,
-              borderRadius: 9,
-              backgroundColor: colors.white
+              borderRadius: radius.lg - PADDING,
+              backgroundColor: tokens.text.primary
             },
             thumbStyle
           ]}
@@ -91,7 +94,7 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
           >
             <View
               style={{
-                paddingVertical: 9,
+                height: INNER_H,
                 alignItems: "center",
                 justifyContent: "center"
               }}
@@ -101,7 +104,7 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
                   fontFamily: "Geist_600SemiBold",
                   fontSize: 13,
                   letterSpacing: 13 * 0.01,
-                  color: on ? colors.black : colors.fog
+                  color: on ? colors.black : tokens.text.secondary
                 }}
               >
                 {option}

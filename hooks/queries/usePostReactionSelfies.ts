@@ -9,6 +9,8 @@ export type ReactionSelfie = {
   name: string;
   username: string;
   mediaUrl: string | null;
+  /** The emoji they reacted with (null for selfie-only reactions). */
+  emoji: string | null;
   mine: boolean;
 };
 
@@ -26,7 +28,7 @@ export function usePostReactionSelfies(postId: string) {
     queryFn: async (): Promise<ReactionSelfie[]> => {
       const { data, error } = await supabase
         .from("post_reactions")
-        .select("user_id, media_url, created_at, profiles:user_id(display_name, username)")
+        .select("user_id, media_url, reaction, created_at, profiles:user_id(display_name, username)")
         .eq("post_id", postId)
         .order("created_at", { ascending: false })
         .limit(30);
@@ -36,6 +38,7 @@ export function usePostReactionSelfies(postId: string) {
       const rows = (data ?? []) as unknown as {
         user_id: string;
         media_url: string | null;
+        reaction: string | null;
         profiles: { display_name: string; username: string } | null;
       }[];
       return Promise.all(
@@ -56,6 +59,7 @@ export function usePostReactionSelfies(postId: string) {
             name: row.profiles?.display_name ?? "Someone",
             username: row.profiles?.username ?? "someone",
             mediaUrl,
+            emoji: row.reaction ?? null,
             mine: row.user_id === userId
           };
         })

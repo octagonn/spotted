@@ -1,10 +1,11 @@
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Image } from "expo-image";
 import { Music, VolumeX } from "lucide-react-native";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 
 import { Pressable } from "@/components/ui/Pressable";
+import { useAudioStore } from "@/stores/audio";
 import { colors } from "@/theme/colors";
 
 export type PostMusic = {
@@ -35,7 +36,9 @@ export function MusicChip({
   const player = useAudioPlayer(music.previewUrl ? { uri: music.previewUrl } : null);
   const status = useAudioPlayerStatus(player);
   const clipStart = music.clipStart ?? 0;
-  const [muted, setMuted] = useState(false);
+  // Mute is the shared global feed switch (same one videos use).
+  const muted = useAudioStore((s) => s.muted);
+  const toggleMuted = useAudioStore((s) => s.toggleMuted);
   const wasActive = useRef(false);
 
   const safePause = () => {
@@ -46,10 +49,12 @@ export function MusicChip({
     }
   };
 
-  // Autoplay while this post is the active one; stop the moment it isn't.
+  // Autoplay while this post is the active one; stop the moment it isn't. Mute
+  // doesn't pause — it just silences (player.muted), so audio resumes instantly
+  // on unmute without re-seeking.
   useEffect(() => {
     if (!music.previewUrl || disabled) return;
-    if (active && !muted && status.isLoaded) {
+    if (active && status.isLoaded) {
       try {
         if (!wasActive.current) {
           // Fresh activation — restart from the poster's chosen clip position.
@@ -64,18 +69,23 @@ export function MusicChip({
     }
     wasActive.current = active;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, muted, disabled, status.isLoaded, music.previewUrl]);
+  }, [active, disabled, status.isLoaded, music.previewUrl]);
 
-  // Scrolling back to a muted post unmutes it again (Instagram behavior).
+  // Mute the player itself so scrolling to a muted post stays silent but keeps
+  // "playing" (matches video behavior) — the global switch controls it.
   useEffect(() => {
-    if (!active) setMuted(false);
-  }, [active]);
+    try {
+      player.muted = muted;
+    } catch {
+      // Player not ready.
+    }
+  }, [muted, player]);
 
   // Loop the clip while the post stays active.
   useEffect(() => {
     if (!status.didJustFinish) return;
     player.seekTo(clipStart).catch(() => {});
-    if (active && !muted && !disabled) {
+    if (active && !disabled) {
       try {
         player.play();
       } catch {
@@ -96,7 +106,7 @@ export function MusicChip({
     };
   }, [player]);
 
-  const playing = status.playing && !muted;
+  const audible = active && !muted && status.playing;
 
   const body = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 18, paddingTop: 7 }}>
@@ -105,14 +115,14 @@ export function MusicChip({
       ) : (
         <Music size={12} color={colors.silver} strokeWidth={2} />
       )}
-      <Music size={10} color={playing ? colors.white : colors.fog} strokeWidth={2.4} />
+      <Music size={10} color={audible ? colors.white : colors.fog} strokeWidth={2.4} />
       <Text
         numberOfLines={1}
-        style={{ flexShrink: 1, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: playing ? colors.silver : colors.fog }}
+        style={{ flexShrink: 1, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: audible ? colors.silver : colors.fog }}
       >
         {music.title} · {music.artist}
       </Text>
-      {muted ? <VolumeX size={12} color={colors.fog} strokeWidth={2} /> : null}
+      {muted && active ? <VolumeX size={12} color={colors.fog} strokeWidth={2} /> : null}
     </View>
   );
 
@@ -121,8 +131,8 @@ export function MusicChip({
   }
   return (
     <Pressable
-      onPress={() => setMuted((m) => !m)}
-      accessibilityLabel={muted ? "Unmute music" : "Mute music"}
+      onPress={toggleMuted}
+      accessibilityLabel={muted ? "Unmute" : "Mute"}
       haptic={false}
     >
       {body}

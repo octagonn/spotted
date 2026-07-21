@@ -38,7 +38,7 @@ function buildArchive(createdDates: string[]): ArchiveMonth[] {
 }
 
 export default function ProfileSectionScreen() {
-  const { section: rawSection } = useLocalSearchParams<{ section: string }>();
+  const { section: rawSection, user, name } = useLocalSearchParams<{ section: string; user?: string; name?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const profile = useMyProfile();
@@ -46,6 +46,9 @@ export default function ProfileSectionScreen() {
   const section: ProfileSection = ["trophies", "videos", "posts"].includes(rawSection)
     ? (rawSection as ProfileSection)
     : "trophies";
+  // Viewing a friend's trophy case (?user=<id>). Only trophies is supported for
+  // other users; own profile keeps videos/posts too.
+  const otherUser = user && user !== profile.data?.id ? user : null;
 
   const archive = useMemo(
     () => buildArchive((myPosts.data ?? []).map((post) => post.created_at)),
@@ -55,7 +58,9 @@ export default function ProfileSectionScreen() {
   const title = section === "posts" ? "Daily posts" : `${section[0].toUpperCase()}${section.slice(1)}`;
   const sub =
     section === "trophies"
-      ? "Your trophy case"
+      ? otherUser
+        ? `${name ? `${name}'s` : "Their"} trophy case`
+        : "Your trophy case"
       : section === "videos"
         ? "Videos — coming soon"
         : "Your archive, month by month";
@@ -64,7 +69,7 @@ export default function ProfileSectionScreen() {
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
         <PanelHeader title={title} sub={sub} />
-        {section === "trophies" ? <TrophyCase /> : null}
+        {section === "trophies" ? <TrophyCase userId={otherUser} /> : null}
         {section === "videos" ? (
           <ComingSoon
             icon={<Trophy size={22} color={colors.white} />}

@@ -3,14 +3,18 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { logger } from "@/lib/logger";
 import { supabase } from "@/lib/supabase";
 
-/** Feed images render at screen width — 1080px keeps them sharp on any phone. */
-const MAX_UPLOAD_WIDTH = 1080;
-const JPEG_QUALITY = 0.7;
+/**
+ * Feed images render near screen width; 1440px keeps them crisp on 3x displays
+ * without bloating uploads, and 0.9 JPEG preserves detail (the previous 1080px
+ * @ 0.7 was visibly soft).
+ */
+const MAX_UPLOAD_WIDTH = 1440;
+const JPEG_QUALITY = 0.9;
 
 /**
- * Downscale + re-encode the capture before upload (a raw iPhone capture is
- * several MB; this lands around 150-300 KB). Falls back to the original URI
- * if manipulation fails so posting never breaks over compression.
+ * Downscale (only if larger than the target) + re-encode before upload. A raw
+ * iPhone capture is several MB; this lands around 300-600 KB while staying
+ * sharp. Falls back to the original URI if manipulation fails.
  */
 async function compressPhoto(uri: string): Promise<string> {
   try {
@@ -63,6 +67,10 @@ export type PublishLiftVideoInput = {
   trimEnd: number | null;
   liftName: string;
   liftWeight: string;
+  /** Normalized lift for the trophy engine (null when no lift was logged). */
+  liftExercise: string | null;
+  liftValue: number | null;
+  liftUnit: string | null;
   caption: string;
   gymId: string | null;
   locationKind: "gym" | "home" | "other";
@@ -98,6 +106,9 @@ export async function publishLiftVideo(input: PublishLiftVideoInput): Promise<st
       location_kind: input.locationKind,
       lift_name: input.liftName,
       lift_weight: input.liftWeight,
+      lift_exercise: input.liftExercise,
+      lift_value: input.liftValue,
+      lift_unit: input.liftUnit,
       video_trim_start: input.trimStart,
       video_trim_end: input.trimEnd,
       is_daily_drop: false

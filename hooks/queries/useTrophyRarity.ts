@@ -1,18 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { makeRarity, SEED_RARITY, type Rarity } from "@/lib/trophyRarity";
+import { rarityPctFor } from "@/lib/trophyRaritySeeds";
 
 /**
  * App-wide trophy rarity. Calls the `trophy_rarity()` RPC, which returns, per
- * trophy id, the percent of ALL users who hold it. We merge those live numbers
- * over the seed estimates so every trophy has a rarity even before its first
- * real earn is recorded. If the RPC isn't available yet (migration unapplied),
- * we degrade silently to the seeds.
+ * trophy/tier key, the percent of ALL users who hold it. We expose the live map
+ * (merged over the seeds at read time by rarityPctFor). If the RPC isn't
+ * available yet, we degrade silently to the seed percentages.
  *
- * Returns a resolver `rarityFor(id)` plus the raw live map.
+ * Keys match the seed keys: standalone → id, stacked tier → `${id}:${value}`.
  */
-
 type RarityRow = { trophy_id: string; pct: number };
 
 export function useTrophyRarity() {
@@ -34,10 +32,11 @@ export function useTrophyRarity() {
   });
 
   const live = query.data ?? {};
-  const rarityFor = (id: string): Rarity => {
-    const pct = live[id] ?? SEED_RARITY[id] ?? 50;
-    return makeRarity(pct);
+  return {
+    live,
+    /** Exact percent of users for a rarity key, live preferred over seed. */
+    pctFor: (key: string) => rarityPctFor(key, live),
+    isSeeded: Object.keys(live).length === 0,
+    query
   };
-
-  return { rarityFor, live, isSeeded: Object.keys(live).length === 0, query };
 }

@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -56,6 +57,7 @@ export function CommentsSheet({
   loading?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const router = useRouter();
   const openProfile = (handle: string) => {
     onClose();
@@ -67,28 +69,33 @@ export function CommentsSheet({
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close comments" />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          {/* Fixed tall sheet (85% of screen) so it always fills like Instagram —
+              no content-sized gap, and the comment list flexes to fill. */}
           <View
             style={{
+              height: height * 0.85,
               backgroundColor: colors.ink,
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               borderWidth: 1,
               borderBottomWidth: 0,
               borderColor: colors.iron,
-              maxHeight: "80%",
               paddingBottom: insets.bottom + 10
             }}
           >
-            {/* Header */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 12 }}>
+            {/* Grabber + header */}
+            <View style={{ alignItems: "center", paddingTop: 10 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.slate }} />
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 12, paddingBottom: 12 }}>
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white }}>Comments</Text>
-              <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", right: 16, top: 12 }}>
+              <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", right: 16, top: 10 }}>
                 <X size={18} color={colors.fog} strokeWidth={2.4} />
               </Pressable>
             </View>
 
             <ScrollView
-              style={{ maxHeight: 360 }}
+              style={{ flex: 1 }}
               contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 12, gap: 12 }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}

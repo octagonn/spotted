@@ -1,53 +1,54 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  makeRarity,
-  rarityBlurb,
-  rarityForTrophy,
-  rarityLabelForPct,
-  SEED_RARITY
-} from "@/lib/trophyRarity";
+  formatRarity,
+  PREMIUM_RARITY_THRESHOLD,
+  rarityKey,
+  rarityPctFor,
+  TROPHY_RARITY_SEEDS
+} from "@/lib/trophyRaritySeeds";
 
-describe("rarity buckets", () => {
-  it("labels by the spec boundaries (Common >25, Uncommon 5–25, Rare 1–5, Legendary <1)", () => {
-    expect(rarityLabelForPct(0.5)).toBe("Legendary");
-    expect(rarityLabelForPct(0.99)).toBe("Legendary");
-    expect(rarityLabelForPct(1)).toBe("Rare");
-    expect(rarityLabelForPct(4.9)).toBe("Rare");
-    expect(rarityLabelForPct(5)).toBe("Uncommon");
-    expect(rarityLabelForPct(25)).toBe("Uncommon");
-    expect(rarityLabelForPct(25.1)).toBe("Common");
-    expect(rarityLabelForPct(80)).toBe("Common");
+describe("rarityKey", () => {
+  it("keys standalone by id and stacked tiers by id:value", () => {
+    expect(rarityKey("day-one")).toBe("day-one");
+    expect(rarityKey("bench", 225)).toBe("bench:225");
   });
 });
 
-describe("makeRarity", () => {
-  it("clamps out-of-range percentages", () => {
-    expect(makeRarity(-10).pct).toBe(0);
-    expect(makeRarity(250).pct).toBe(100);
-    expect(makeRarity(120).label).toBe("Common");
-  });
-});
-
-describe("rarityForTrophy", () => {
+describe("rarityPctFor", () => {
   it("prefers live app-wide data over the seed", () => {
-    const seeded = rarityForTrophy("nomad");
-    expect(seeded.pct).toBe(SEED_RARITY.nomad);
-    expect(seeded.label).toBe("Rare");
-
-    const live = rarityForTrophy("nomad", { nomad: 0.4 });
-    expect(live.pct).toBe(0.4);
-    expect(live.label).toBe("Legendary");
+    expect(rarityPctFor("nomad")).toBe(TROPHY_RARITY_SEEDS.nomad);
+    expect(rarityPctFor("nomad", { nomad: 0.4 })).toBe(0.4);
   });
 
-  it("falls back to 50% for unknown ids", () => {
-    expect(rarityForTrophy("does-not-exist").pct).toBe(50);
+  it("clamps out-of-range values", () => {
+    expect(rarityPctFor("x", { x: -5 })).toBe(0);
+    expect(rarityPctFor("x", { x: 250 })).toBe(100);
+  });
+
+  it("falls back to a conservative default for unseeded keys", () => {
+    expect(rarityPctFor("does-not-exist")).toBe(25);
+  });
+
+  it("uses strength-standard anchors (225 bench ~30%, 315 ~5%, 405 <1%, 500 <0.1%)", () => {
+    expect(rarityPctFor("bench:225")).toBe(30);
+    expect(rarityPctFor("bench:315")).toBe(5);
+    expect(rarityPctFor("bench:405")).toBeLessThan(1);
+    expect(rarityPctFor("bench:500")).toBeLessThan(0.1);
   });
 });
 
-describe("rarityBlurb", () => {
-  it("keeps one decimal for sub-1% and rounds otherwise", () => {
-    expect(rarityBlurb(0.4)).toBe("0.4% of lifters");
-    expect(rarityBlurb(12.6)).toBe("13% of lifters");
+describe("formatRarity", () => {
+  it("always shows a numeric % of users, one decimal under 10%", () => {
+    expect(formatRarity(0.4)).toBe("0.4% of users");
+    expect(formatRarity(4.8)).toBe("4.8% of users");
+    expect(formatRarity(32.4)).toBe("32% of users");
+  });
+});
+
+describe("premium threshold", () => {
+  it("marks sub-1% trophies as premium", () => {
+    expect(rarityPctFor("bench:500") < PREMIUM_RARITY_THRESHOLD).toBe(true);
+    expect(rarityPctFor("day-one") < PREMIUM_RARITY_THRESHOLD).toBe(false);
   });
 });

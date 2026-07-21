@@ -17,7 +17,9 @@ import { TypePill } from "@/components/ui/Chips";
 import { useMyCommunities, type CommunitySummary } from "@/hooks/queries/useCommunities";
 import { useMapGyms, type MapGym } from "@/hooks/queries/useMapGyms";
 import { useMyProfile } from "@/hooks/queries/useProfile";
+import { useWorkouts, type WorkoutRow } from "@/hooks/queries/useWorkouts";
 import { COMMUNITY_ICONS } from "@/lib/communityTypes";
+import { fmtClock } from "@/lib/workoutLibrary";
 import { logger } from "@/lib/logger";
 import { colors } from "@/theme/colors";
 
@@ -65,7 +67,10 @@ export default function MapTabScreen() {
   const homeGym = profile.data?.gym ?? null;
   const communities = useMyCommunities();
   const mapGyms = useMapGyms();
-  const [tab, setTab] = useState("Communities");
+  const myId = profile.data?.id ?? null;
+  const workouts = useWorkouts(myId);
+  // My Workouts is the default, far-left tab (the Dumbbell tab opens here).
+  const [tab, setTab] = useState("My Workouts");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationSettled, setLocationSettled] = useState(false);
 
@@ -119,8 +124,36 @@ export default function MapTabScreen() {
           {tab}
         </Text>
       </View>
-      <Segmented options={["Communities", "Map"]} value={tab} onChange={setTab} />
-      {tab === "Communities" ? (
+      <Segmented options={["My Workouts", "Communities", "Map"]} value={tab} onChange={setTab} />
+      {tab === "My Workouts" ? (
+        <ScrollView contentContainerStyle={{ paddingBottom: NAV_H + insets.bottom + 12 }}>
+          <View style={{ paddingHorizontal: 18, paddingTop: 4, paddingBottom: 6 }}>
+            <Button icon={<Plus size={16} color={colors.black} />} onPress={() => router.push("/workout" as Href)}>
+              Start a workout
+            </Button>
+          </View>
+          <SectionLabel>Recent</SectionLabel>
+          {workouts.isLoading ? (
+            <View style={{ paddingVertical: 20, alignItems: "center" }}>
+              <ActivityIndicator color={colors.mist} />
+            </View>
+          ) : (workouts.data ?? []).length === 0 ? (
+            <View style={{ alignItems: "center", paddingHorizontal: 30, paddingTop: 26 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 28, borderWidth: 1.5, borderColor: colors.gold, alignItems: "center", justifyContent: "center" }}>
+                <Dumbbell size={22} color={colors.gold} strokeWidth={1.9} />
+              </View>
+              <Text style={{ marginTop: 14, fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white, textAlign: "center" }}>
+                No workouts logged yet
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 12.5, lineHeight: 18, color: colors.fog, textAlign: "center" }}>
+                Start a workout to log your lifts and cardio. PRs earn trophies.
+              </Text>
+            </View>
+          ) : (
+            (workouts.data ?? []).map((w) => <WorkoutSummaryCard key={w.id} workout={w} />)
+          )}
+        </ScrollView>
+      ) : tab === "Communities" ? (
         <ScrollView contentContainerStyle={{ paddingBottom: NAV_H + insets.bottom + 12 }}>
           <SectionLabel style={{ paddingTop: 2 }}>Your gyms</SectionLabel>
           {homeGym ? (
@@ -191,6 +224,44 @@ export default function MapTabScreen() {
       )}
     </View>
   );
+
+  function WorkoutSummaryCard({ workout }: { workout: WorkoutRow }) {
+    const when = new Date(workout.startedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const stats: string[] = [];
+    if (workout.totalVolume > 0) stats.push(`${workout.totalVolume.toLocaleString()} lb`);
+    stats.push(`${workout.totalSets} sets`);
+    if (workout.cardioMinutes > 0) stats.push(`${workout.cardioMinutes} min cardio`);
+    stats.push(fmtClock(workout.durationSeconds));
+    return (
+      <View
+        style={{
+          marginHorizontal: 18,
+          marginBottom: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          borderWidth: 1,
+          borderColor: colors.iron,
+          borderRadius: 16,
+          backgroundColor: colors.graphite,
+          padding: 14
+        }}
+      >
+        <View style={{ width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
+          <Dumbbell size={18} color={colors.mist} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}>
+            {workout.name}
+          </Text>
+          <Text style={{ marginTop: 2, fontSize: 12, color: colors.fog }}>
+            {when} · {stats.join(" · ")}
+          </Text>
+        </View>
+        {workout.exerciseCount > 0 ? <TypePill>{`${workout.exerciseCount}`}</TypePill> : null}
+      </View>
+    );
+  }
 
   function CommunityCard({ community }: { community: CommunitySummary }) {
     const Icon = COMMUNITY_ICONS[community.type];

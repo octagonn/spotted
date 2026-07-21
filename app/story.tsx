@@ -2,7 +2,7 @@ import { useAudioPlayer } from "expo-audio";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Music, Send, X } from "lucide-react-native";
+import { Eye, Flag, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View
@@ -26,6 +28,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { useMarkStoryViewed, useStories, type StoryGroup } from "@/hooks/queries/useStories";
+import { REPORT_REASONS, useDeleteStory, useReportContent } from "@/hooks/queries/useContentModeration";
+import { useStoryViewers } from "@/hooks/queries/useStoryViewers";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
@@ -42,7 +46,7 @@ function timeAgo(iso: string): string {
 }
 
 /** Resolve (or lazily create) the DM conversation, then send a message. */
-async function replyToStory(userId: string, otherId: string, content: string): Promise<boolean> {
+async function replyToStory(userId: string, otherId: string, content: string, storyMedia?: string | null): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   const [a, b] = [userId, otherId].sort();
   const findConversation = async () => {
@@ -67,7 +71,8 @@ async function replyToStory(userId: string, otherId: string, content: string): P
   const { error } = await supabase.from("messages").insert({
     conversation_id: conversationId,
     sender_id: userId,
-    content
+    content,
+    reply_story_media: storyMedia ?? null
   });
   return !error;
 }
@@ -89,6 +94,13 @@ export default function StoryViewer() {
   const [held, setHeld] = useState(false);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
+  // Inline overlays (a fullScreenModal renders above the global sheet host, so
+  // options/viewers/report are local overlays rather than useSheet).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const deleteStory = useDeleteStory();
+  const reportContent = useReportContent();
 
   const barFill = useSharedValue(0);
   const elapsedRef = useRef(0);
@@ -113,6 +125,15 @@ export default function StoryViewer() {
 
   const group: StoryGroup | undefined = queue?.[gi];
   const story = group?.stories[si];
+  const viewers = useStoryViewers(story?.id, Boolean(group?.isMe) && viewersOpen);
+
+  // Any open overlay pauses the story; closing them all resumes it.
+  const closeOverlays = () => {
+    setMenuOpen(false);
+    setViewersOpen(false);
+    setReportOpen(false);
+    setHeld(false);
+  };
 
   const close = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -268,7 +289,7 @@ export default function StoryViewer() {
     if (!text || !group || group.isMe || !userId) return;
     setDraft("");
     Keyboard.dismiss();
-    const ok = await replyToStory(userId, group.userId, `↩︎ Replied to your story: ${text}`);
+    const ok = await replyToStory(userId, group.userId, text, story?.mediaPath ?? null);
     showToast(ok ? `Sent to ${group.name.split(" ")[0]}` : "Couldn't send reply");
   };
 
@@ -373,10 +394,58 @@ export default function StoryViewer() {
             {timeAgo(story.createdAt)}
           </Text>
           <View style={{ flex: 1 }} />
+          <Pressable
+            onPress={() => {
+              setHeld(true);
+              setMenuOpen(true);
+            }}
+            hitSlop={12}
+            accessibilityLabel="Story options"
+            style={{ paddingHorizontal: 4 }}
+          >
+            <MoreHorizontal color={colors.white} size={24} strokeWidth={2.2} />
+          </Pressable>
           <Pressable onPress={close} hitSlop={12} accessibilityLabel="Close stories">
             <X color={colors.white} size={24} strokeWidth={2.2} />
           </Pressable>
         </View>
+
+        {/* Tagged friends — tappable chips that open each profile (consistent with posts). */}
+        {story.tags.length ? (
+          <View
+            style={{
+              position: "absolute",
+              left: 14,
+              bottom: insets.bottom + (group.isMe ? 58 : 82) + (story.music ? 40 : 0),
+              flexDirection: "row",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 6,
+              maxWidth: "80%",
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              backgroundColor: "rgba(0,0,0,0.55)"
+            }}
+          >
+            <Users size={13} color={colors.white} strokeWidth={2} />
+            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.75)" }}>with</Text>
+            {story.tags.map((tag) => (
+              <Pressable
+                key={tag.userId}
+                onPress={() => {
+                  close();
+                  router.push(`/user/${tag.username}`);
+                }}
+                accessibilityLabel={`Open @${tag.username}'s profile`}
+              >
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12, color: colors.white }}>
+                  @{tag.username}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
 
         {/* Music chip — what's playing on this story. */}
         {story.music ? (
@@ -408,10 +477,33 @@ export default function StoryViewer() {
         ) : null}
 
         {group.isMe ? (
-          <View style={{ position: "absolute", bottom: insets.bottom + 24, left: 0, right: 0, alignItems: "center" }} pointerEvents="none">
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 1, color: "rgba(255,255,255,0.7)" }}>
-              YOUR STORY · VISIBLE TO FRIENDS FOR 24H
-            </Text>
+          <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 0, right: 0, alignItems: "center", gap: 12 }}>
+            <Pressable
+              onPress={() => {
+                setHeld(true);
+                setViewersOpen(true);
+              }}
+              accessibilityLabel="See who viewed your story"
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                <Eye size={16} color={colors.white} strokeWidth={2} />
+                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>
+                  Seen by
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                close();
+                router.push("/camera?mode=story");
+              }}
+              accessibilityLabel="Add another story"
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 44, paddingHorizontal: 22, borderRadius: 22, backgroundColor: colors.white }}>
+                <Plus size={17} color={colors.black} strokeWidth={2.6} />
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Add to story</Text>
+              </View>
+            </Pressable>
           </View>
         ) : (
           // Reply field — sends a DM to the poster referencing this story.
@@ -463,8 +555,146 @@ export default function StoryViewer() {
             ) : null}
           </View>
         )}
+
+        {/* Options menu (⋯) — Delete on your own story, Report on others'. */}
+        {menuOpen ? (
+          <Pressable onPress={closeOverlays} style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }]}>
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: colors.ink, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.iron, paddingBottom: insets.bottom + 12 }}>
+              <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 6 }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.slate }} />
+              </View>
+              {group.isMe ? (
+                <OverlayRow
+                  icon={<Trash2 size={18} color="#EF4444" strokeWidth={2} />}
+                  label="Delete story"
+                  destructive
+                  onPress={() => {
+                    setMenuOpen(false);
+                    deleteStory.mutate(
+                      { storyId: story.id, mediaPath: null },
+                      {
+                        onSuccess: () => {
+                          showToast("Story deleted");
+                          close();
+                        },
+                        onError: () => showToast("Couldn't delete — try again")
+                      }
+                    );
+                  }}
+                />
+              ) : (
+                <OverlayRow
+                  icon={<Flag size={18} color={colors.silver} strokeWidth={2} />}
+                  label="Report story"
+                  onPress={() => {
+                    setMenuOpen(false);
+                    setReportOpen(true);
+                  }}
+                />
+              )}
+              <OverlayRow icon={null} label="Cancel" onPress={closeOverlays} />
+            </Pressable>
+          </Pressable>
+        ) : null}
+
+        {/* Report reasons */}
+        {reportOpen ? (
+          <Pressable onPress={closeOverlays} style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }]}>
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: colors.ink, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.iron, paddingBottom: insets.bottom + 12 }}>
+              <Text style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 10, fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>
+                Report story
+              </Text>
+              {REPORT_REASONS.map((r) => (
+                <OverlayRow
+                  key={r}
+                  icon={null}
+                  label={r}
+                  onPress={() => {
+                    reportContent.mutate(
+                      { contentType: "story", contentId: story.id, reportedUserId: group.userId, reason: r },
+                      {
+                        onSuccess: () => {
+                          closeOverlays();
+                          showToast("Thanks — we'll review this.");
+                        },
+                        onError: () => showToast("Couldn't submit — try again")
+                      }
+                    );
+                  }}
+                />
+              ))}
+              <OverlayRow icon={null} label="Cancel" onPress={closeOverlays} />
+            </Pressable>
+          </Pressable>
+        ) : null}
+
+        {/* Seen-by viewers list (own story) */}
+        {viewersOpen ? (
+          <Pressable onPress={closeOverlays} style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }]}>
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ maxHeight: "70%", backgroundColor: colors.ink, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.iron, paddingBottom: insets.bottom + 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 }}>
+                <Eye size={17} color={colors.white} strokeWidth={2} />
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>
+                  {`Seen by ${viewers.data?.length ?? 0}`}
+                </Text>
+              </View>
+              <ScrollView style={{ maxHeight: 360 }}>
+                {viewers.isLoading ? (
+                  <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                    <ActivityIndicator color={colors.mist} />
+                  </View>
+                ) : (viewers.data ?? []).length === 0 ? (
+                  <Text style={{ paddingHorizontal: 20, paddingVertical: 16, fontSize: 12.5, color: colors.fog }}>
+                    No views yet.
+                  </Text>
+                ) : (
+                  (viewers.data ?? []).map((v) => (
+                    <Pressable
+                      key={v.id}
+                      onPress={() => {
+                        close();
+                        router.push(`/user/${v.username}`);
+                      }}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 9 }}
+                    >
+                      <Avatar name={v.display_name} uri={v.avatar_url} size={42} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>{v.display_name}</Text>
+                        <Text style={{ marginTop: 1, fontSize: 12, color: colors.fog }}>@{v.username}</Text>
+                      </View>
+                      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.fog }}>{timeAgo(v.viewedAt)}</Text>
+                    </Pressable>
+                  ))
+                )}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        ) : null}
       </KeyboardAvoidingView>
       </Animated.View>
     </GestureDetector>
+  );
+}
+
+function OverlayRow({
+  icon,
+  label,
+  destructive,
+  onPress
+}: {
+  icon: React.ReactNode;
+  label: string;
+  destructive?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} accessibilityLabel={label}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 15 }}>
+        {icon ? <View style={{ width: 20, alignItems: "center" }}>{icon}</View> : <View style={{ width: 20 }} />}
+        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: destructive ? "#EF4444" : label === "Cancel" ? colors.fog : colors.white }}>
+          {label}
+        </Text>
+      </View>
+    </Pressable>
   );
 }

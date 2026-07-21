@@ -38,7 +38,7 @@ import {
   useSendMessage
 } from "@/hooks/queries/useMessages";
 import { useProfileById } from "@/hooks/queries/useProfile";
-import { signedMessageUrl } from "@/lib/supabase";
+import { signedMessageUrl, signedPostUrl } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -103,6 +103,25 @@ function AudioBubble({ uri, mine }: { uri: string | null; mine: boolean }) {
 }
 
 /** Image or voice message — resolves the private-bucket signed URL. */
+/** Thumbnail of the story a DM is replying to (story media lives in the posts bucket). */
+function StoryReplyPreview({ path, mine }: { path: string; mine: boolean }) {
+  const media = useQuery({
+    queryKey: ["story-reply-thumb", path],
+    staleTime: 50 * 60_000,
+    queryFn: () => signedPostUrl(path)
+  });
+  return (
+    <View style={{ alignSelf: mine ? "flex-end" : "flex-start", alignItems: mine ? "flex-end" : "flex-start", marginBottom: -4 }}>
+      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, color: colors.fog, marginBottom: 4, marginHorizontal: 4 }}>
+        {mine ? "You replied to their story" : "Replied to your story"}
+      </Text>
+      <View style={{ width: 54, height: 84, borderRadius: 12, overflow: "hidden", backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
+        {media.data ? <Image source={{ uri: media.data }} style={{ width: 54, height: 84 }} contentFit="cover" /> : null}
+      </View>
+    </View>
+  );
+}
+
 function ChatMediaBubble({ path, mine }: { path: string; mine: boolean }) {
   const media = useQuery({
     queryKey: ["msg-media", path],
@@ -234,11 +253,12 @@ export default function ChatScreen() {
 
   const realItems = useMemo(() => messages.data ?? [], [messages.data]);
 
-  // Read receipt: my last sent message, and whether the other person opened it.
-  const lastMine = useMemo(
-    () => [...realItems].reverse().find((m) => m.sender_id === userId),
-    [realItems, userId]
-  );
+  // Read receipt: only when MY message is the last one in the thread. If the
+  // other person has replied since, my message is buried above theirs and no
+  // receipt should show (otherwise both people see a stale "Seen" on an older
+  // message they sent). The receipt renders pinned to the bottom of the list.
+  const lastItem = realItems.length ? realItems[realItems.length - 1] : undefined;
+  const lastMine = lastItem?.sender_id === userId ? lastItem : undefined;
   const lastMineRead = Boolean(lastMine?.read_at);
   const seenLabel = useMemo(() => {
     if (!lastMine?.read_at) return "";
@@ -331,13 +351,21 @@ export default function ChatScreen() {
           ) : realItems.length ? (
             <>
               <TimeSeparator label="Today" />
-              {realItems.map((message) =>
-                message.media_url ? (
-                  <ChatMediaBubble key={message.id} path={message.media_url} mine={message.sender_id === userId} />
-                ) : (
-                  <MessageBubble key={message.id} mine={message.sender_id === userId} text={message.content ?? ""} />
-                )
-              )}
+              {realItems.map((message) => {
+                const mine = message.sender_id === userId;
+                return (
+                  <View key={message.id}>
+                    {message.reply_story_media ? (
+                      <StoryReplyPreview path={message.reply_story_media} mine={mine} />
+                    ) : null}
+                    {message.media_url ? (
+                      <ChatMediaBubble path={message.media_url} mine={mine} />
+                    ) : (
+                      <MessageBubble mine={mine} text={message.content ?? ""} />
+                    )}
+                  </View>
+                );
+              })}
               {/* Read receipt under my most recent message once it's opened. */}
               {lastMineRead ? (
                 <Text style={{ alignSelf: "flex-end", paddingRight: 4, paddingTop: 2, fontFamily: "GeistMono_400Regular", fontSize: 9.5, color: colors.fog }}>

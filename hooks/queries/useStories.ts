@@ -12,12 +12,17 @@ export type StoryMusic = {
   clipStart: number;
 };
 
+export type StoryTag = { userId: string; username: string };
+
 export type StoryItem = {
   id: string;
   mediaUrl: string | null;
+  /** Raw storage path (for story-reply thumbnails). */
+  mediaPath: string | null;
   createdAt: string;
   seen: boolean;
   music: StoryMusic | null;
+  tags: StoryTag[];
 };
 
 export type StoryGroup = {
@@ -48,7 +53,7 @@ export function useStories() {
         supabase
           .from("stories")
           .select(
-            "id, user_id, media_url, created_at, music_title, music_artist, music_preview_url, music_artwork_url, music_clip_start, profiles:user_id(display_name, username, avatar_url)"
+            "id, user_id, media_url, created_at, music_title, music_artist, music_preview_url, music_artwork_url, music_clip_start, profiles:user_id(display_name, username, avatar_url), story_tags(profile:user_id(id, username))"
           )
           .gt("expires_at", nowIso)
           .order("created_at", { ascending: true }),
@@ -68,6 +73,7 @@ export function useStories() {
         music_artwork_url: string | null;
         music_clip_start: number;
         profiles: { display_name: string; username: string; avatar_url: string | null } | null;
+        story_tags: { profile: { id: string; username: string } | null }[] | null;
       }[];
 
       const byUser = new Map<string, StoryGroup>();
@@ -97,6 +103,7 @@ export function useStories() {
         group.stories.push({
           id: row.id,
           mediaUrl: media,
+          mediaPath: row.media_url,
           createdAt: row.created_at,
           seen: storySeen,
           music: row.music_title
@@ -107,7 +114,11 @@ export function useStories() {
                 previewUrl: row.music_preview_url,
                 clipStart: row.music_clip_start ?? 0
               }
-            : null
+            : null,
+          tags: (row.story_tags ?? [])
+            .map((t) => t.profile)
+            .filter((p): p is { id: string; username: string } => Boolean(p))
+            .map((p) => ({ userId: p.id, username: p.username }))
         });
         if (!storySeen && row.user_id !== userId) {
           group.hasUnseen = true;
@@ -126,6 +137,8 @@ export function useStories() {
 export type PostStoryInput = {
   photoUri: string;
   music?: StoryMusic | null;
+  /** Tagged friend ids — rendered as tappable chips when the story is viewed. */
+  tagUserIds?: string[];
 };
 
 /** Upload a story photo (reuses the posts bucket) and insert the story row. */
@@ -133,7 +146,7 @@ export function usePostStory() {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
   return useMutation({
-    mutationFn: async ({ photoUri, music }: PostStoryInput) => {
+    mutationFn: async ({ photoUri, music, tagUserIds }: PostStoryInput) => {
       if (!isSupabaseConfigured || !userId) return;
       const uploadUri = await compressStoryPhoto(photoUri);
       const response = await fetch(uploadUri);
@@ -153,10 +166,18 @@ export function usePostStory() {
         music_preview_url: music?.previewUrl ?? null,
         music_artwork_url: music?.artworkUrl ?? null,
         music_clip_start: music?.clipStart ?? 0
-      });
+      }).select("id").single();
       if (insert.error) {
         await supabase.storage.from("posts").remove([path]).catch(() => {});
         throw insert.error;
+      }
+      if (tagUserIds && tagUserIds.length > 0) {
+        const { error: tagError } = await supabase
+          .from("story_tags")
+          .insert(tagUserIds.map((id) => ({ story_id: insert.data.id, user_id: id })));
+        if (tagError) {
+          // Non-fatal — the story is live even if tags fail.
+        }
       }
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["stories"] })

@@ -17,9 +17,11 @@ export function StoriesRail() {
 
   const me = groups.find((g) => g.isMe) ?? null;
   const others = groups.filter((g) => !g.isMe);
-  // Always show the signed-in user's real avatar on "Your story", even with no
-  // active story — falling back to initials only when there's genuinely no pic.
-  const myName = myProfile.data?.display_name ?? me?.name ?? "You";
+  // Until the profile resolves we don't know the name OR the picture, so show a
+  // neutral skeleton instead of the "You" fallback initial (that was the "y"
+  // that flashed before the pfp loaded).
+  const profileReady = Boolean(myProfile.data);
+  const myName = myProfile.data?.display_name ?? me?.name ?? "";
   const myAvatar = me?.avatarUrl ?? myProfile.data?.avatar_url ?? null;
 
   return (
@@ -28,18 +30,27 @@ export function StoriesRail() {
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ gap: 14, paddingHorizontal: 18, paddingTop: 6, paddingBottom: 6 }}
     >
-      {/* Your story / add-story bubble */}
-      <Pressable
-        style={{ width: 62, alignItems: "center", gap: 4 }}
-        onPress={() =>
-          me ? router.push(`/story?user=${me.userId}`) : router.push("/camera?mode=story")
-        }
-      >
+      {/* Your story — tapping the avatar views your story (or opens the camera
+          if you have none); the "+" badge ALWAYS opens the camera so you can add
+          another story even after posting one. */}
+      <View style={{ width: 62, alignItems: "center", gap: 4 }}>
         <View style={{ width: 62, height: 62, alignItems: "center", justifyContent: "center" }}>
-          <Ring active={Boolean(me)} seen={false}>
-            <Avatar name={myName} uri={myAvatar} size={52} />
-          </Ring>
-          <View
+          <Pressable
+            onPress={() => (me ? router.push(`/story?user=${me.userId}`) : router.push("/camera?mode=story"))}
+            accessibilityLabel={me ? "View your story" : "Add to your story"}
+          >
+            <Ring active={Boolean(me)} seen={false}>
+              {profileReady ? (
+                <Avatar name={myName || "?"} uri={myAvatar} size={52} />
+              ) : (
+                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.graphite }} />
+              )}
+            </Ring>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/camera?mode=story")}
+            accessibilityLabel="Add to your story"
+            hitSlop={8}
             style={{
               position: "absolute",
               right: 2,
@@ -55,12 +66,12 @@ export function StoriesRail() {
             }}
           >
             <Plus size={12} color={colors.black} strokeWidth={3} />
-          </View>
+          </Pressable>
         </View>
         <Text numberOfLines={1} style={{ fontSize: 10, color: colors.mist, maxWidth: 62 }}>
           Your story
         </Text>
-      </Pressable>
+      </View>
 
       {others.map((group) => (
         <StoryBubble key={group.userId} group={group} onPress={() => router.push(`/story?user=${group.userId}`)} />

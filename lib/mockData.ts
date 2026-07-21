@@ -191,6 +191,9 @@ export const mockFeed: FeedPost[] = [
     media_urls: null,
     lift_name: null,
     lift_weight: null,
+    lift_exercise: null,
+    lift_value: null,
+    lift_unit: null,
     video_trim_start: null,
     video_trim_end: null,
     is_daily_drop: true,
@@ -222,6 +225,9 @@ export const mockFeed: FeedPost[] = [
     media_urls: null,
     lift_name: null,
     lift_weight: null,
+    lift_exercise: null,
+    lift_value: null,
+    lift_unit: null,
     video_trim_start: null,
     video_trim_end: null,
     is_daily_drop: true,
@@ -337,6 +343,7 @@ export const mockMessages = [
     sender_id: "mock-friend",
     content: "Pull day?",
     media_url: null,
+    reply_story_media: null,
     sent_at: now,
     read_at: now
   },
@@ -346,6 +353,7 @@ export const mockMessages = [
     sender_id: "mock-user",
     content: "Already there.",
     media_url: null,
+    reply_story_media: null,
     sent_at: now,
     read_at: now
   }

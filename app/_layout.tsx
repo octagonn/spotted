@@ -22,9 +22,11 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
 import { GrainOverlay } from "@/components/GrainOverlay";
+import { NotificationBanner } from "@/components/NotificationBanner";
 import { FlashOverlay } from "@/components/ui/Flash";
 import { SheetProvider } from "@/components/ui/Sheet";
 import { ToastHost } from "@/components/ui/Toast";
+import { useInAppBanners } from "@/hooks/useInAppBanners";
 import { usePresenceSync } from "@/hooks/useGeofence";
 import { useRealtime } from "@/hooks/useRealtime";
 import { usePushTokenSync } from "@/lib/notifications";
@@ -86,6 +88,7 @@ function AppServices() {
 
   useResetOnAccountChange();
   useRealtime(activeUserId);
+  useInAppBanners(activeUserId);
   usePushTokenSync(activeUserId);
   usePresenceSync();
   return null;
@@ -200,6 +203,7 @@ export default function RootLayout() {
                   name="camera"
                   options={{ animation: "slide_from_bottom", gestureEnabled: false }}
                 />
+                <Stack.Screen name="workout" options={{ animation: "slide_from_bottom" }} />
                 <Stack.Screen name="post/[id]" options={{ presentation: "modal" }} />
                 <Stack.Screen name="gym/[id]" options={{ presentation: "modal" }} />
                 <Stack.Screen name="user/[username]" />
@@ -218,6 +222,7 @@ export default function RootLayout() {
                 />
               </Stack>
               <ToastHost />
+              <NotificationBanner />
               <GrainOverlay />
               <FlashOverlay />
               <StatusBar style="light" />

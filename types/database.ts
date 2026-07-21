@@ -528,6 +528,7 @@ export type Database = {
           conversation_id: string
           id: string
           media_url: string | null
+          reply_story_media: string | null
           read_at: string | null
           sender_id: string
           sent_at: string
@@ -537,6 +538,7 @@ export type Database = {
           conversation_id: string
           id?: string
           media_url?: string | null
+          reply_story_media?: string | null
           read_at?: string | null
           sender_id: string
           sent_at?: string
@@ -546,6 +548,7 @@ export type Database = {
           conversation_id?: string
           id?: string
           media_url?: string | null
+          reply_story_media?: string | null
           read_at?: string | null
           sender_id?: string
           sent_at?: string
@@ -611,6 +614,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      reports: {
+        Row: {
+          id: string
+          reporter_id: string
+          content_type: string
+          content_id: string
+          reported_user_id: string | null
+          reason: string
+          note: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          reporter_id: string
+          content_type: string
+          content_id: string
+          reported_user_id?: string | null
+          reason: string
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          reporter_id?: string
+          content_type?: string
+          content_id?: string
+          reported_user_id?: string | null
+          reason?: string
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+        Relationships: []
       }
       post_comments: {
         Row: {
@@ -729,6 +768,93 @@ export type Database = {
           },
         ]
       }
+      user_lifts: {
+        Row: {
+          id: string
+          user_id: string
+          exercise: string
+          value: number
+          unit: string
+          post_id: string | null
+          performed_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          exercise: string
+          value: number
+          unit: string
+          post_id?: string | null
+          performed_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          exercise?: string
+          value?: number
+          unit?: string
+          post_id?: string | null
+          performed_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      story_tags: {
+        Row: { story_id: string; user_id: string }
+        Insert: { story_id: string; user_id: string }
+        Update: { story_id?: string; user_id?: string }
+        Relationships: []
+      }
+      workouts: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          started_at: string
+          ended_at: string | null
+          duration_seconds: number
+          total_volume: number
+          total_sets: number
+          cardio_minutes: number
+          exercise_count: number
+          data: Json
+          post_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name?: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number
+          total_volume?: number
+          total_sets?: number
+          cardio_minutes?: number
+          exercise_count?: number
+          data?: Json
+          post_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number
+          total_volume?: number
+          total_sets?: number
+          cardio_minutes?: number
+          exercise_count?: number
+          data?: Json
+          post_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       post_views: {
         Row: {
           post_id: string
@@ -803,6 +929,9 @@ export type Database = {
           is_verified_at_gym: boolean
           lift_name: string | null
           lift_weight: string | null
+          lift_exercise: string | null
+          lift_value: number | null
+          lift_unit: string | null
           location_kind: string
           media_type: string
           media_url: string
@@ -831,6 +960,9 @@ export type Database = {
           is_verified_at_gym?: boolean
           lift_name?: string | null
           lift_weight?: string | null
+          lift_exercise?: string | null
+          lift_value?: number | null
+          lift_unit?: string | null
           location_kind?: string
           media_type: string
           media_url: string
@@ -859,6 +991,9 @@ export type Database = {
           is_verified_at_gym?: boolean
           lift_name?: string | null
           lift_weight?: string | null
+          lift_exercise?: string | null
+          lift_value?: number | null
+          lift_unit?: string | null
           location_kind?: string
           media_type?: string
           media_url?: string

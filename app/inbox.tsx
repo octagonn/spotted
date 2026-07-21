@@ -14,7 +14,7 @@ import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { useMyCommunityInvite, useRespondCommunityInvite } from "@/hooks/queries/useCommunities";
 import { useIncomingRequests, useRespondToRequest } from "@/hooks/queries/useFriends";
 import { supabase } from "@/lib/supabase";
-import { showToast } from "@/stores/ui";
+import { localDateKey, showToast } from "@/stores/ui";
 import {
   useMarkNotificationsRead,
   useNotifications,
@@ -126,6 +126,30 @@ function InviteActions({ communityId }: { communityId: string }) {
   );
 }
 
+/** Bucket notifications by recency; drops anything older than a week. */
+function groupNotifications(activity: AppNotification[]) {
+  const now = new Date();
+  const todayKey = localDateKey(now);
+  const yesterdayKey = localDateKey(new Date(now.getTime() - 86_400_000));
+  const weekAgo = now.getTime() - 7 * 86_400_000;
+  const today: AppNotification[] = [];
+  const yesterday: AppNotification[] = [];
+  const lastWeek: AppNotification[] = [];
+  for (const n of activity) {
+    const t = new Date(n.createdAt);
+    if (t.getTime() < weekAgo) continue;
+    const key = localDateKey(t);
+    if (key === todayKey) today.push(n);
+    else if (key === yesterdayKey) yesterday.push(n);
+    else lastWeek.push(n);
+  }
+  return [
+    { label: "Today", rows: today },
+    { label: "Yesterday", rows: yesterday },
+    { label: "Last week", rows: lastWeek }
+  ];
+}
+
 export default function InboxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -144,7 +168,10 @@ export default function InboxScreen() {
 
   const requestRows = requests.data ?? [];
   const activity = notifications.data ?? [];
-  const empty = requestRows.length === 0 && activity.length === 0;
+  // Bucket into Today / Yesterday / Last week; anything older than 7 days is
+  // dropped (the server sweeps it too).
+  const groups = groupNotifications(activity);
+  const empty = requestRows.length === 0 && groups.every((g) => g.rows.length === 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
@@ -236,54 +263,56 @@ export default function InboxScreen() {
           </View>
         ) : null}
 
-        {activity.length > 0 ? (
-          <>
-            {requestRows.length > 0 ? <SectionLabel>Earlier</SectionLabel> : null}
-            {activity.map((n) => (
-              <Pressable
-                key={n.id}
-                onPress={() => {
-                  if (n.type === "dm" && n.actorId) router.push(`/chat/${n.actorId}`);
-                  else if (n.type === "community_invite" && n.payload?.community_id) {
-                    router.push(`/community/${String(n.payload.community_id)}`);
-                  } else if (n.actorUsername) router.push(`/user/${n.actorUsername}`);
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    paddingVertical: 12,
-                    paddingHorizontal: 18,
-                    backgroundColor: n.read ? "transparent" : "rgba(255,255,255,0.04)"
+        {groups.map((group) =>
+          group.rows.length > 0 ? (
+            <View key={group.label}>
+              <SectionLabel>{group.label}</SectionLabel>
+              {group.rows.map((n) => (
+                <Pressable
+                  key={n.id}
+                  onPress={() => {
+                    if (n.type === "dm" && n.actorId) router.push(`/chat/${n.actorId}`);
+                    else if (n.type === "community_invite" && n.payload?.community_id) {
+                      router.push(`/community/${String(n.payload.community_id)}`);
+                    } else if (n.actorUsername) router.push(`/user/${n.actorUsername}`);
                   }}
                 >
-                  <Avatar name={n.actorName} uri={n.actorAvatar} size={42} />
-                  <Text style={{ flex: 1, fontSize: 13.5, color: colors.mist, lineHeight: 13.5 * 1.4 }}>
-                    <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>{n.actorName}</Text>
-                    {n.type === "streak_break_friend" ? "" : " "}
-                    {notificationText(n)}
-                    <Text style={{ color: colors.fog }}>{`  ${timeAgo(n.createdAt)}`}</Text>
-                  </Text>
-                  {n.type === "community_invite" && n.payload?.community_id ? (
-                    <InviteActions communityId={String(n.payload.community_id)} />
-                  ) : null}
-                  {n.type === "streak_break_friend" && n.actorId ? (
-                    <RelButton
-                      label="Taunt 😈"
-                      kind="primary"
-                      onPress={() => sheet.open(<TauntSheet targetId={n.actorId as string} name={n.actorName} />)}
-                    />
-                  ) : null}
-                  {!n.read ? (
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white }} />
-                  ) : null}
-                </View>
-              </Pressable>
-            ))}
-          </>
-        ) : null}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      paddingVertical: 12,
+                      paddingHorizontal: 18,
+                      backgroundColor: n.read ? "transparent" : "rgba(255,255,255,0.04)"
+                    }}
+                  >
+                    <Avatar name={n.actorName} uri={n.actorAvatar} size={42} />
+                    <Text style={{ flex: 1, fontSize: 13.5, color: colors.mist, lineHeight: 13.5 * 1.4 }}>
+                      <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>{n.actorName}</Text>
+                      {n.type === "streak_break_friend" ? "" : " "}
+                      {notificationText(n)}
+                      <Text style={{ color: colors.fog }}>{`  ${timeAgo(n.createdAt)}`}</Text>
+                    </Text>
+                    {n.type === "community_invite" && n.payload?.community_id ? (
+                      <InviteActions communityId={String(n.payload.community_id)} />
+                    ) : null}
+                    {n.type === "streak_break_friend" && n.actorId ? (
+                      <RelButton
+                        label="Taunt 😈"
+                        kind="primary"
+                        onPress={() => sheet.open(<TauntSheet targetId={n.actorId as string} name={n.actorName} />)}
+                      />
+                    ) : null}
+                    {!n.read ? (
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white }} />
+                    ) : null}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null
+        )}
 
         {empty ? (
           <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>

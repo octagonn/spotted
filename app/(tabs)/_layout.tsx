@@ -1,13 +1,14 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { LinearGradient } from "expo-linear-gradient";
 import { Tabs, useRouter } from "expo-router";
-import { Camera, House, Map as MapIcon, User, Users } from "lucide-react-native";
+import { Camera, Dumbbell, House, User, Users } from "lucide-react-native";
 import { Pressable as RNPressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { usePostedState } from "@/hooks/queries/usePostedState";
 import { selectionHaptic } from "@/lib/haptics";
 import { colors } from "@/theme/colors";
+import { radius, tokens } from "@/theme/tokens";
 
 const NAV_H = 84;
 
@@ -18,11 +19,11 @@ const LEFT_TABS: TabName[] = ["feed", "friends"];
 const RIGHT_TABS: TabName[] = ["map", "profile"];
 
 function TabIcon({ name, focused }: { name: TabName; focused: boolean }) {
-  const color = focused ? colors.white : colors.ash;
-  const size = 24;
+  const color = focused ? tokens.text.primary : tokens.text.tertiary;
+  const size = 28;
   if (name === "feed") return <House color={color} size={size} strokeWidth={2} />;
   if (name === "friends") return <Users color={color} size={size} strokeWidth={2} />;
-  if (name === "map") return <MapIcon color={color} size={size} strokeWidth={2} />;
+  if (name === "map") return <Dumbbell color={color} size={size} strokeWidth={2} />;
   return <User color={color} size={size} strokeWidth={2} />;
 }
 
@@ -45,9 +46,11 @@ function TabSlot({
       accessibilityRole="button"
       accessibilityLabel={name}
       accessibilityState={{ selected: focused }}
+      hitSlop={8}
       style={({ pressed }) => ({
+        // ≥48×48 hit target per sizing spec.
         width: 52,
-        height: 44,
+        height: 48,
         alignItems: "center",
         justifyContent: "center",
         transform: [{ scale: pressed ? 0.9 : 1 }]
@@ -59,9 +62,9 @@ function TabSlot({
 }
 
 /**
- * Center camera button per spec §3: 64px circle raised 12px above the row,
- * 2.5px white border, ink bg, white 28px camera icon. Posted state: border
- * dims to slate + 14px white dot (3px black ring) at top-right. Pushes /camera
+ * Center camera button: 76px circle raised above the row, 1.5px border.strong
+ * ring, ink bg, white 28px camera icon. Posted state adds a gold dot (bg.base
+ * ring) at top-right so the "you've dropped today" cue survives. Pushes /camera
  * instead of switching tabs.
  */
 function CameraTabButton({ posted, onPress }: { posted: boolean; onPress: () => void }) {
@@ -83,11 +86,11 @@ function CameraTabButton({ posted, onPress }: { posted: boolean; onPress: () => 
     >
       <View
         style={{
-          width: 64,
-          height: 64,
-          borderRadius: 32,
-          borderWidth: 2.5,
-          borderColor: posted ? colors.slate : colors.white,
+          width: 76,
+          height: 76,
+          borderRadius: radius.pill,
+          borderWidth: 1.5,
+          borderColor: tokens.border.strong,
           backgroundColor: colors.ink,
           alignItems: "center",
           justifyContent: "center",
@@ -98,7 +101,22 @@ function CameraTabButton({ posted, onPress }: { posted: boolean; onPress: () => 
           elevation: 14
         }}
       >
-        <Camera color={colors.white} size={28} strokeWidth={2} />
+        <Camera color={tokens.text.primary} size={28} strokeWidth={2} />
+        {posted ? (
+          <View
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+              width: 14,
+              height: 14,
+              borderRadius: radius.pill,
+              backgroundColor: tokens.accent.gold,
+              borderWidth: 2,
+              borderColor: tokens.bg.base
+            }}
+          />
+        ) : null}
       </View>
     </RNPressable>
   );

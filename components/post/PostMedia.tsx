@@ -10,8 +10,10 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 
+import { MuteIndicator } from "@/components/post/MuteIndicator";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
 import { LiftTag, PlayBadge, VChip, VidDur } from "@/components/ui/Chips";
+import { useAudioStore } from "@/stores/audio";
 import type { FeedMockPost } from "@/lib/redesignData";
 import { colors } from "@/theme/colors";
 import { easing } from "@/theme/motion";
@@ -20,10 +22,18 @@ import { easing } from "@/theme/motion";
 const VIDEO_PROGRESS_MS = 4100;
 const VIDEO_RESET_MS = 4300;
 
+/** "0:07" clock from a seconds value (rounds up so it never shows 0:00 mid-play). */
+function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 type MediaProps = {
   post: FeedMockPost;
   /** Blur radius applied to real photos when the feed is locked. */
   blurRadius?: number;
+  /** True while this post is the active one in the viewport (video autoplay). */
+  active?: boolean;
 };
 
 /** Front-and-back photo (`.fb`, §4.3.1) — full-bleed 3/3.6 with optional 31% inset selfie. */
@@ -364,56 +374,80 @@ export function CompareMedia({ post, blurRadius }: MediaProps) {
   );
 }
 
-/** Real recorded lift clip — tap to play/pause, loops inside the trim window. */
-function RealVideoMedia({ post, blurRadius }: MediaProps) {
+/**
+ * Real recorded lift clip — Instagram-style: autoplays while it's the active
+ * post in the viewport and pauses when it scrolls away (never a manual play).
+ * There's no play button. Tapping toggles the GLOBAL feed mute (shared with all
+ * videos and music posts) and flashes a speaker indicator on this post.
+ */
+function RealVideoMedia({ post, blurRadius, active }: MediaProps) {
   const video = post.video as NonNullable<FeedMockPost["video"]>;
-  const [playing, setPlaying] = useState(false);
+  const muted = useAudioStore((s) => s.muted);
+  const nonce = useAudioStore((s) => s.nonce);
+  const toggleMuted = useAudioStore((s) => s.toggleMuted);
+  const [localNonce, setLocalNonce] = useState(0);
+  // Live countdown of time left in the current loop (seconds), or null before load.
+  const [remaining, setRemaining] = useState<number | null>(null);
   const player = useVideoPlayer(video.uri, (p) => {
-    p.loop = false;
-    p.timeUpdateEventInterval = 0.25;
+    // Native loop handles the natural end (untrimmed clips auto-replay); the
+    // timeUpdate listener loops earlier when there's a trim window.
+    p.loop = true;
+    p.muted = muted;
+    p.timeUpdateEventInterval = 0.2;
     p.pause();
   });
 
+  // Follow the global mute switch.
+  useEffect(() => {
+    try {
+      player.muted = muted;
+    } catch {
+      // Ignore — player not ready.
+    }
+  }, [muted, player]);
+
   useEffect(() => {
     const timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
-      const end = video.trimEnd > video.trimStart ? video.trimEnd : Number.POSITIVE_INFINITY;
-      if (currentTime >= end) {
+      const trimmed = video.trimEnd > video.trimStart;
+      const end = trimmed ? video.trimEnd : player.duration || 0;
+      // Loop within the trim window (before the natural end that native loop handles).
+      if (trimmed && currentTime >= video.trimEnd) {
         player.currentTime = video.trimStart;
-      }
-    });
-    const playSub = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
-    return () => {
-      timeSub.remove();
-      playSub.remove();
-    };
-  }, [player, video.trimStart, video.trimEnd]);
-
-  const toggle = () => {
-    try {
-      if (playing) {
-        player.pause();
+        setRemaining(Math.max(0, video.trimEnd - video.trimStart));
         return;
       }
-      if (player.currentTime < video.trimStart) {
-        player.currentTime = video.trimStart;
+      if (end > 0) setRemaining(Math.max(0, end - currentTime));
+    });
+    return () => timeSub.remove();
+  }, [player, video.trimStart, video.trimEnd]);
+
+  // Play only while this post is the active one; pause when it scrolls away.
+  useEffect(() => {
+    try {
+      if (active && blurRadius === undefined) {
+        if (player.currentTime < video.trimStart) player.currentTime = video.trimStart;
+        player.play();
+      } else {
+        player.pause();
       }
-      player.play();
     } catch {
-      // Player torn down — ignore.
+      // Player not ready / torn down — ignore.
     }
+  }, [active, blurRadius, player, video.trimStart]);
+
+  const onTapMute = () => {
+    toggleMuted();
+    // Record the nonce this tap will produce so only this post flashes.
+    setLocalNonce(nonce + 1);
   };
 
   if (blurRadius !== undefined) {
     // Locked feed: no playback, just the frosted placeholder tile.
-    return (
-      <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite, alignItems: "center", justifyContent: "center" }}>
-        <PlayBadge />
-      </View>
-    );
+    return <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }} />;
   }
 
   return (
-    <NativePressable onPress={toggle}>
+    <NativePressable onPress={onTapMute}>
       <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
         <VideoView
           player={player}
@@ -432,12 +466,12 @@ function RealVideoMedia({ post, blurRadius }: MediaProps) {
             {`🏆 ${post.lift.lift} · ${post.lift.weight}`}
           </LiftTag>
         ) : null}
-        {!playing ? (
-          <PlayBadge style={{ position: "absolute", top: "50%", left: "50%", marginTop: -28, marginLeft: -28, zIndex: 3 }} />
+        {remaining != null || post.duration ? (
+          <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>
+            {remaining != null ? formatClock(remaining) : (post.duration as string)}
+          </VidDur>
         ) : null}
-        {post.duration ? (
-          <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>{post.duration}</VidDur>
-        ) : null}
+        <MuteIndicator muted={muted} nonce={nonce} local={localNonce} />
       </View>
     </NativePressable>
   );
@@ -494,9 +528,9 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
 }
 
 /** Media router (§4.3) — picks the media kind for a post. */
-export function PostMedia({ post, blurRadius }: MediaProps) {
+export function PostMedia({ post, blurRadius, active }: MediaProps) {
   if (post.video) {
-    return <RealVideoMedia post={post} blurRadius={blurRadius} />;
+    return <RealVideoMedia post={post} blurRadius={blurRadius} active={active} />;
   }
   if ((post.mediaUris?.length ?? 0) > 1) {
     return <CarouselMedia post={post} blurRadius={blurRadius} />;

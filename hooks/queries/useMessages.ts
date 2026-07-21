@@ -112,6 +112,7 @@ export function useSendMessage(conversationId?: string | null) {
           sender_id: userId ?? "mock-user",
           content: trimmed,
           media_url: null,
+          reply_story_media: null,
           sent_at: new Date().toISOString(),
           read_at: null
         };

@@ -1,14 +1,18 @@
 /**
- * Trophy system — pure definitions + evaluation. No React/RN imports so it
- * stays unit-testable and cheap to reason about. UI (icons, colors) resolves
- * `iconKey` separately in components/trophies/TrophyIcon.
+ * Trophy system — definitions + the achievement data model. No React/RN imports
+ * so it stays unit-testable. UI resolves icons/colors separately.
  *
- * Two shapes:
- *  - stacked:    one card with a tier ladder; the card shows the highest tier
- *                earned, the detail sheet shows the whole ladder.
- *  - standalone: a single earn/locked badge (optionally progress-trackable,
- *                e.g. Nomad 0/24).
+ * Model (per spec):
+ *  - TrophyDefinition: a family (stacked) or a single badge (standalone).
+ *  - TrophyTier:       one rung of a stacked family, with its own rarityPct.
+ *  - TrophyAchievement: an earned record — every earned tier is its own record
+ *                       with its own earnedAt, so tiers keep separate dates.
+ *  - TrophyProgress:   current progress toward the next automatic target.
+ *
+ * The highest earned tier is DERIVED from achievements, never stored on the def.
  */
+
+import { rarityKey, rarityPctFor, TROPHY_RARITY_SEEDS } from "@/lib/trophyRaritySeeds";
 
 export type TrophyCategory =
   | "strength"
@@ -42,147 +46,200 @@ export const CATEGORY_LABELS: Record<TrophyCategory, string> = {
   firsts: "Firsts"
 };
 
-export type TierDef = { threshold: number; label: string };
+export type TrackingType = "automatic" | "progress" | "videoVerification" | "dateBased";
+export type VerificationType = "automatic" | "video" | "date";
 
-export type StackedTrophyDef = {
-  kind: "stacked";
+export type TrophyTier = {
+  id: string;
+  value: number;
+  name: string;
+  requirement: string;
+  rarityPct: number;
+};
+
+export type TrophyDefinition = {
   id: string;
   category: TrophyCategory;
   name: string;
-  iconKey: string;
-  /** Numeric stat that unlocks tiers (best-ever value). */
-  statKey: string;
-  /** Stat that drives "progress toward next" when it differs from statKey (e.g. current streak). */
+  description: string;
+  requirement: string;
+  icon: string;
+  type: "stacked" | "standalone";
+  trackingType: TrackingType;
+  /** Stat key this trophy reads from TrophyStats (progress + auto-earn). */
+  statKey?: string;
+  /** For "progress" trophies, the stat that drives the live bar (e.g. current streak). */
   progressStatKey?: string;
   unit?: string;
-  /** true when tier labels are names (Week One) rather than the threshold itself. */
-  named: boolean;
-  tiers: TierDef[];
-  /** Show a progress bar/count even while locked. */
-  trackable?: boolean;
-  /** "video" = tiers only count once a max-lift video is verified (no auto-earn, no progress bar). */
-  verify?: "video";
+  tiers?: TrophyTier[];
+  /** Standalone rarity (stacked rarity lives per-tier). */
+  rarityPct?: number;
 };
 
-export type StandaloneTrophyDef = {
-  kind: "standalone";
-  id: string;
-  category: TrophyCategory;
-  name: string;
-  iconKey: string;
-  /** Short locked-state copy. */
-  requirement: string;
-  /** Progress-trackable standalone (Nomad): earns when the stat hits target. */
-  progress?: { statKey: string; target: number; unit?: string };
+export type TrophyAchievement = {
+  achievementId: string;
+  trophyId: string;
+  /** Tier value for stacked; null for standalone. */
+  tierId: number | null;
+  earnedAt: string;
+  verificationType: VerificationType;
+  verificationReference: string | null;
 };
 
-export type TrophyDef = StackedTrophyDef | StandaloneTrophyDef;
+export type TrophyProgress = {
+  trophyId: string;
+  currentValue: number;
+  targetValue: number;
+  updatedAt: string;
+};
 
-// ─── Definitions ────────────────────────────────────────────────────────────
+// ─── Catalog builders ─────────────────────────────────────────────────────────
 
-function weightTiers(values: number[]): TierDef[] {
-  return values.map((v) => ({ threshold: v, label: String(v) }));
+/** Build named strength tiers ([value, name]) — all video-verified. */
+function tiers(trophyId: string, rows: [number, string][]): TrophyTier[] {
+  return rows.map(([value, name]) => ({
+    id: `${trophyId}-${value}`,
+    value,
+    name,
+    requirement: `Hit ${value}`,
+    rarityPct: rarityPctFor(rarityKey(trophyId, value))
+  }));
 }
 
-const STRENGTH: StackedTrophyDef[] = [
-  { kind: "stacked", id: "bench", category: "strength", name: "Bench", iconKey: "dumbbell", statKey: "benchMax", unit: "lb", named: false, verify: "video", tiers: weightTiers([135, 185, 205, 225, 275, 315, 365, 405, 500]) },
-  { kind: "stacked", id: "squat", category: "strength", name: "Squat", iconKey: "dumbbell", statKey: "squatMax", unit: "lb", named: false, verify: "video", tiers: weightTiers([135, 185, 225, 275, 315, 365, 405, 455, 500]) },
-  { kind: "stacked", id: "deadlift", category: "strength", name: "Deadlift", iconKey: "dumbbell", statKey: "deadliftMax", unit: "lb", named: false, verify: "video", tiers: weightTiers([135, 225, 275, 315, 365, 405, 455, 500, 585]) },
-  { kind: "stacked", id: "pullups", category: "strength", name: "Pull-ups", iconKey: "chevrons-up", statKey: "pullupMax", unit: "reps", named: false, verify: "video", tiers: weightTiers([5, 10, 15, 20, 25, 30, 40, 50]) },
-  { kind: "stacked", id: "pushups", category: "strength", name: "Push-ups", iconKey: "arrow-down-up", statKey: "pushupMax", unit: "reps", named: false, verify: "video", tiers: weightTiers([25, 50, 75, 100, 150, 200]) }
+/** Build tiers where the requirement is "N unit" (streaks, visits, weekends). */
+function countTiers(trophyId: string, unit: string, rows: [number, string][]): TrophyTier[] {
+  return rows.map(([value, name]) => ({
+    id: `${trophyId}-${value}`,
+    value,
+    name,
+    requirement: `${value} ${unit}`,
+    rarityPct: rarityPctFor(rarityKey(trophyId, value))
+  }));
+}
+
+const standaloneRarity = (id: string) => rarityPctFor(rarityKey(id));
+
+// ─── Strength (video-verified) ─────────────────────────────────────────────────
+
+const STRENGTH: TrophyDefinition[] = [
+  {
+    id: "bench", category: "strength", name: "Bench", icon: "dumbbell", type: "stacked",
+    trackingType: "videoVerification", statKey: "benchMax", unit: "lb",
+    description: "Your best verified bench press.", requirement: "Verify a bench press on video.",
+    tiers: tiers("bench", [
+      [135, "Warming Up"], [185, "Getting Serious"], [205, "Almost There"], [225, "In the Club"],
+      [275, "Heavy Hitter"], [315, "Lay of the Roids"], [365, "Freak Strength"], [405, "The 405 Club"], [500, "Titan"]
+    ])
+  },
+  {
+    id: "squat", category: "strength", name: "Squat", icon: "dumbbell", type: "stacked",
+    trackingType: "videoVerification", statKey: "squatMax", unit: "lb",
+    description: "Your best verified back squat.", requirement: "Verify a squat on video.",
+    tiers: tiers("squat", [
+      [135, "First Steps"], [185, "Chicken Legs"], [225, "Leg Day Believer"], [275, "Quadzilla Jr."],
+      [315, "Quads of Steel"], [365, "Squatzilla"], [405, "Four Wheel Drive"], [455, "Earthquake"], [500, "Five Hundred Deep"]
+    ])
+  },
+  {
+    id: "deadlift", category: "strength", name: "Deadlift", icon: "dumbbell", type: "stacked",
+    trackingType: "videoVerification", statKey: "deadliftMax", unit: "lb",
+    description: "Your best verified deadlift.", requirement: "Verify a deadlift on video.",
+    tiers: tiers("deadlift", [
+      [135, "Baby"], [225, "Picking Things Up"], [275, "Grip It & Rip It"], [315, "Dead Serious"],
+      [365, "Back Breaker"], [405, "Four Plate Pull"], [455, "Gravity's Enemy"], [500, "The Five Hundred"], [585, "Kratos"]
+    ])
+  },
+  {
+    id: "pullups", category: "strength", name: "Pull-ups", icon: "chevrons-up", type: "stacked",
+    trackingType: "videoVerification", statKey: "pullupMax", unit: "reps",
+    description: "Your best single verified set of pull-ups.", requirement: "Verify a pull-up set on video.",
+    tiers: tiers("pullups", [
+      [5, "Hang In There"], [10, "Double Digits"], [15, "Chin Up"], [20, "Bar Owner"],
+      [25, "GoArmy.com"], [30, "Anti-Gravity"], [40, "Bird of Prey"], [50, "Air Force One"]
+    ])
+  },
+  {
+    id: "pushups", category: "strength", name: "Push-ups", icon: "arrow-down-up", type: "stacked",
+    trackingType: "videoVerification", statKey: "pushupMax", unit: "reps",
+    description: "Your best single verified set of push-ups.", requirement: "Verify a push-up set on video.",
+    tiers: tiers("pushups", [
+      [25, "Floor Work"], [50, "Drop & Give Me 50"], [75, "Chest Day Every Day"],
+      [100, "Get a Hobby"], [150, "Machine"], [200, "Boot Camp Nightmare"]
+    ])
+  }
 ];
 
-const TIME_OF_DAY: StandaloneTrophyDef[] = [
-  { kind: "standalone", id: "tequila-sunrise", category: "time-of-day", name: "Tequila Sunrise", iconKey: "sunrise", requirement: "Check in before 5 AM" },
-  { kind: "standalone", id: "dark-night", category: "time-of-day", name: "Dark Night", iconKey: "moon", requirement: "Check in after 10 PM" },
-  { kind: "standalone", id: "rush-hour", category: "time-of-day", name: "Rush Hour", iconKey: "sunset", requirement: "Check in 5–7 PM" },
-  { kind: "standalone", id: "nomad", category: "time-of-day", name: "Nomad", iconKey: "globe", requirement: "Check in across all 24 hours", progress: { statKey: "nomadHours", target: 24, unit: "hrs" } }
+// ─── Time of Day ────────────────────────────────────────────────────────────────
+
+const TIME_OF_DAY: TrophyDefinition[] = [
+  { id: "tequila-sunrise", category: "time-of-day", name: "Tequila Sunrise", icon: "sunrise", type: "standalone", trackingType: "automatic", statKey: "checkedInBefore5am", description: "An early-morning gym check-in.", requirement: "Check in before 5 AM.", rarityPct: standaloneRarity("tequila-sunrise") },
+  { id: "dark-night", category: "time-of-day", name: "Dark Night", icon: "moon", type: "standalone", trackingType: "automatic", statKey: "checkedInAfter10pm", description: "A late-night gym check-in.", requirement: "Check in after 10 PM.", rarityPct: standaloneRarity("dark-night") },
+  { id: "rush-hour", category: "time-of-day", name: "Rush Hour", icon: "sunset", type: "standalone", trackingType: "automatic", statKey: "checkedInRushHour", description: "A peak-hours check-in.", requirement: "Check in between 5 PM and 7 PM.", rarityPct: standaloneRarity("rush-hour") },
+  { id: "nomad", category: "time-of-day", name: "Nomad", icon: "globe", type: "standalone", trackingType: "progress", statKey: "nomadHours", unit: "hours", description: "Check in during every hour of the day, over time.", requirement: "Check in across all 24 hours.", rarityPct: standaloneRarity("nomad") }
 ];
 
-const DEDICATION: StandaloneTrophyDef[] = [
-  { kind: "standalone", id: "dirty-doubles", category: "dedication", name: "Dirty Doubles", iconKey: "repeat", requirement: "Two visits in one day" },
-  { kind: "standalone", id: "two-gyms", category: "dedication", name: "Are You Cheating On Me?", iconKey: "split", requirement: "Two different gyms in one day" },
-  { kind: "standalone", id: "triple-threat", category: "dedication", name: "Triple Threat", iconKey: "layers", requirement: "Three gyms in one day" }
+// ─── Dedication ─────────────────────────────────────────────────────────────────
+
+const DEDICATION: TrophyDefinition[] = [
+  { id: "dirty-doubles", category: "dedication", name: "Dirty Doubles", icon: "repeat", type: "standalone", trackingType: "automatic", statKey: "twoVisitsOneDay", description: "Two gym visits in a single day.", requirement: "Complete two visits in one day.", rarityPct: standaloneRarity("dirty-doubles") },
+  { id: "two-gyms", category: "dedication", name: "Are You Cheating On Me?", icon: "split", type: "standalone", trackingType: "automatic", statKey: "twoGymsOneDay", description: "Two different gyms in one day.", requirement: "Check in at two different gyms in one day.", rarityPct: standaloneRarity("two-gyms") },
+  { id: "triple-threat", category: "dedication", name: "Triple Threat", icon: "layers", type: "standalone", trackingType: "automatic", statKey: "threeGymsOneDay", description: "Three different gyms in one day.", requirement: "Check in at three different gyms in one day.", rarityPct: standaloneRarity("triple-threat") }
 ];
 
-const STREAKS: StackedTrophyDef = {
-  kind: "stacked",
-  id: "streaks",
-  category: "streaks",
-  name: "Streak",
-  iconKey: "flame",
-  statKey: "streakBest",
-  progressStatKey: "streakCurrent",
-  unit: "days",
-  named: true,
-  trackable: true,
-  tiers: [
-    { threshold: 7, label: "Week One" },
-    { threshold: 14, label: "Two Weeks Deep" },
-    { threshold: 21, label: "Habit Formed" },
-    { threshold: 30, label: "The Month" },
-    { threshold: 60, label: "Sixty" },
-    { threshold: 100, label: "Century Club" },
-    { threshold: 365, label: "Year of Iron" }
-  ]
+// ─── Streaks ────────────────────────────────────────────────────────────────────
+
+const STREAKS: TrophyDefinition = {
+  id: "streaks", category: "streaks", name: "Streak", icon: "flame", type: "stacked",
+  trackingType: "progress", statKey: "streakBest", progressStatKey: "streakCurrent", unit: "days",
+  description: "Consecutive scheduled gym days.", requirement: "Keep your streak alive.",
+  tiers: countTiers("streaks", "days", [
+    [7, "Rookie"], [14, "Fortnight"], [21, "Shaken, Not Stirred"], [30, "30 for 30"],
+    [60, "Senior Citizen"], [100, "Century Club"], [365, "Year of Iron"]
+  ])
 };
 
-const WEEKEND_WARRIOR: StackedTrophyDef = {
-  kind: "stacked",
-  id: "weekend-warrior",
-  category: "weekend-warrior",
-  name: "Weekend Warrior",
-  iconKey: "swords",
-  statKey: "weekendStreak",
-  unit: "weekends",
-  named: true,
-  trackable: true,
-  tiers: [
-    { threshold: 4, label: "I" },
-    { threshold: 8, label: "II" },
-    { threshold: 16, label: "III" },
-    { threshold: 26, label: "IV" },
-    { threshold: 52, label: "V" }
-  ]
+const WEEKEND_WARRIOR: TrophyDefinition = {
+  id: "weekend-warrior", category: "weekend-warrior", name: "Weekend Warrior", icon: "swords", type: "stacked",
+  trackingType: "progress", statKey: "weekendStreak", unit: "weekends",
+  description: "Consecutive weekends with a Fri/Sat/Sun gym day.", requirement: "Hit the gym on the weekend.",
+  tiers: countTiers("weekend-warrior", "weekends", [
+    [4, "I"], [8, "II"], [16, "III"], [26, "IV"], [52, "V"]
+  ])
 };
 
-const HOLIDAYS: StandaloneTrophyDef[] = [
-  { kind: "standalone", id: "ny-same-me", category: "holidays", name: "New Year, Same Me", iconKey: "sparkles", requirement: "Check in Jan 1" },
-  { kind: "standalone", id: "cupids-pump", category: "holidays", name: "Cupid's Pump", iconKey: "heart", requirement: "Check in Feb 14" },
-  { kind: "standalone", id: "lucky-lifts", category: "holidays", name: "Lucky Lifts", iconKey: "clover", requirement: "Check in Mar 17" },
-  { kind: "standalone", id: "egg-day", category: "holidays", name: "Egg Day Gains", iconKey: "egg", requirement: "Check in on Easter" },
-  { kind: "standalone", id: "grill-grind", category: "holidays", name: "Grill & Grind", iconKey: "flame", requirement: "Check in Jul 4" },
-  { kind: "standalone", id: "spooky-squats", category: "holidays", name: "Spooky Scary Squats", iconKey: "ghost", requirement: "Check in Oct 31" },
-  { kind: "standalone", id: "turkey-day", category: "holidays", name: "Turkey Day Triumph", iconKey: "drumstick", requirement: "Check in on Thanksgiving" },
-  { kind: "standalone", id: "sleigh-all-day", category: "holidays", name: "Sleigh All Day", iconKey: "gift", requirement: "Check in Dec 25" },
-  { kind: "standalone", id: "repsolution", category: "holidays", name: "Repsolution", iconKey: "party-popper", requirement: "Check in Dec 31" }
+// ─── Holidays (dynamic dates) ────────────────────────────────────────────────────
+
+const HOLIDAYS: TrophyDefinition[] = [
+  { id: "new-year-same-me", category: "holidays", name: "New Year, Same Me", icon: "sparkles", type: "standalone", trackingType: "dateBased", statKey: "holiday-new-year-same-me", description: "A New Year's Day check-in.", requirement: "Check in on January 1.", rarityPct: standaloneRarity("new-year-same-me") },
+  { id: "heartbreaker", category: "holidays", name: "Heartbreaker", icon: "heart", type: "standalone", trackingType: "dateBased", statKey: "holiday-heartbreaker", description: "A Valentine's Day check-in.", requirement: "Check in on February 14.", rarityPct: standaloneRarity("heartbreaker") },
+  { id: "liftin-lucky", category: "holidays", name: "Liftin Lucky", icon: "clover", type: "standalone", trackingType: "dateBased", statKey: "holiday-liftin-lucky", description: "A St. Patrick's Day check-in.", requirement: "Check in on March 17.", rarityPct: standaloneRarity("liftin-lucky") },
+  { id: "weight-is-risen", category: "holidays", name: "Weight is Risen", icon: "egg", type: "standalone", trackingType: "dateBased", statKey: "holiday-weight-is-risen", description: "An Easter Sunday check-in.", requirement: "Check in on Easter.", rarityPct: standaloneRarity("weight-is-risen") },
+  { id: "american-made", category: "holidays", name: "American Made", icon: "flame", type: "standalone", trackingType: "dateBased", statKey: "holiday-american-made", description: "A Fourth of July check-in.", requirement: "Check in on July 4.", rarityPct: standaloneRarity("american-made") },
+  { id: "scary-strong", category: "holidays", name: "Scary Strong", icon: "ghost", type: "standalone", trackingType: "dateBased", statKey: "holiday-scary-strong", description: "A Halloween check-in.", requirement: "Check in on October 31.", rarityPct: standaloneRarity("scary-strong") },
+  { id: "turkey-bowl", category: "holidays", name: "Turkey Bowl", icon: "drumstick", type: "standalone", trackingType: "dateBased", statKey: "holiday-turkey-bowl", description: "A Thanksgiving check-in.", requirement: "Check in on Thanksgiving.", rarityPct: standaloneRarity("turkey-bowl") },
+  { id: "jingle-dumbells", category: "holidays", name: "Jingle Dumbells", icon: "gift", type: "standalone", trackingType: "dateBased", statKey: "holiday-jingle-dumbells", description: "A Christmas Day check-in.", requirement: "Check in on December 25.", rarityPct: standaloneRarity("jingle-dumbells") },
+  { id: "repsolution", category: "holidays", name: "Repsolution", icon: "party-popper", type: "standalone", trackingType: "dateBased", statKey: "holiday-repsolution", description: "A New Year's Eve check-in.", requirement: "Check in on December 31.", rarityPct: standaloneRarity("repsolution") }
 ];
 
-const HOME_TURF: StackedTrophyDef = {
-  kind: "stacked",
-  id: "home-turf",
-  category: "home-turf",
-  name: "Home Turf",
-  iconKey: "home",
-  statKey: "homeGymVisits",
-  unit: "visits",
-  named: true,
-  trackable: true,
-  tiers: [
-    { threshold: 25, label: "Regular" },
-    { threshold: 50, label: "Local" },
-    { threshold: 100, label: "Fixture" },
-    { threshold: 250, label: "Landmark" },
-    { threshold: 500, label: "They Named a Bench After You" }
-  ]
+// ─── Home Turf ──────────────────────────────────────────────────────────────────
+
+const HOME_TURF: TrophyDefinition = {
+  id: "home-turf", category: "home-turf", name: "Home Turf", icon: "home", type: "stacked",
+  trackingType: "progress", statKey: "homeGymVisits", unit: "visits",
+  description: "Visits at your selected home gym.", requirement: "Keep training at your home gym.",
+  tiers: countTiers("home-turf", "visits", [
+    [25, "Regular"], [50, "Homefield Advantage"], [100, "Locals Only"], [250, "Hometown Hero"], [500, "They Named a Bench After You"]
+  ])
 };
 
-const FIRSTS: StandaloneTrophyDef[] = [
-  { kind: "standalone", id: "day-one", category: "firsts", name: "Day One", iconKey: "flag", requirement: "Share your first post" },
-  { kind: "standalone", id: "first-crew", category: "firsts", name: "First Crew", iconKey: "users", requirement: "Join or create a crew" }
+// ─── Firsts ─────────────────────────────────────────────────────────────────────
+
+const FIRSTS: TrophyDefinition[] = [
+  { id: "day-one", category: "firsts", name: "Day One", icon: "flag", type: "standalone", trackingType: "automatic", statKey: "firstPost", description: "Your very first Spotted post.", requirement: "Publish your first valid post.", rarityPct: standaloneRarity("day-one") },
+  { id: "first-crew", category: "firsts", name: "First Crew", icon: "users", type: "standalone", trackingType: "automatic", statKey: "firstCrew", description: "Joined or created your first crew.", requirement: "Join or create a crew.", rarityPct: standaloneRarity("first-crew") }
 ];
 
-export const TROPHIES: TrophyDef[] = [
+export const TROPHIES: TrophyDefinition[] = [
   ...STRENGTH,
   ...TIME_OF_DAY,
   ...DEDICATION,
@@ -193,124 +250,14 @@ export const TROPHIES: TrophyDef[] = [
   ...FIRSTS
 ];
 
-// ─── Stats ───────────────────────────────────────────────────────────────────
+export const TROPHIES_BY_ID: Record<string, TrophyDefinition> = Object.fromEntries(
+  TROPHIES.map((t) => [t.id, t])
+);
 
-export type TrophyStats = {
-  /** statKey → best-ever numeric value (lifts, streaks, visit counts, nomad hours). */
-  numbers: Record<string, number>;
-  /** standalone trophy id → earned. */
-  flags: Record<string, boolean>;
-  /** trophy id (or `${id}:${threshold}` for a tier) → ISO earn date. */
-  dates: Record<string, string>;
-};
-
-/** Prototype state: Day One earned, streak at 1, everything else locked. */
-export const DEMO_TROPHY_STATS: TrophyStats = {
-  numbers: {
-    benchMax: 0,
-    squatMax: 0,
-    deadliftMax: 0,
-    pullupMax: 0,
-    pushupMax: 0,
-    streakBest: 1,
-    streakCurrent: 1,
-    weekendStreak: 0,
-    homeGymVisits: 0,
-    nomadHours: 0
-  },
-  flags: {
-    "day-one": true
-  },
-  dates: {}
-};
-
-// ─── Evaluation ──────────────────────────────────────────────────────────────
-
-export type EvaluatedTier = { tier: TierDef; earned: boolean; isNext: boolean; date?: string };
-
-export type EvaluatedTrophy = {
-  def: TrophyDef;
-  earned: boolean;
-  earnedCount: number;
-  total: number;
-  highestTier?: TierDef;
-  nextTier?: TierDef;
-  progress?: { current: number; target: number; unit?: string };
-  earnedDate?: string;
-  tiers?: EvaluatedTier[];
-};
-
-export type TrophyGroup = { category: TrophyCategory; label: string; trophies: EvaluatedTrophy[] };
-
-export function tierPrimary(def: StackedTrophyDef, tier: TierDef): string {
-  return def.named ? tier.label : `${tier.threshold}${def.unit ? ` ${def.unit}` : ""}`;
+/** Live rarity override for a trophy/tier, preferring backend numbers. */
+export function tierRarityPct(trophyId: string, tierValue: number | null, live?: Record<string, number>): number {
+  return rarityPctFor(rarityKey(trophyId, tierValue ?? undefined), live);
 }
 
-export function tierSecondary(def: StackedTrophyDef, tier: TierDef): string | undefined {
-  return def.named ? `${tier.threshold} ${def.unit ?? ""}`.trim() : undefined;
-}
-
-export function evaluateTrophy(def: TrophyDef, stats: TrophyStats): EvaluatedTrophy {
-  if (def.kind === "stacked") {
-    const value = stats.numbers[def.statKey] ?? 0;
-    const progressValue = stats.numbers[def.progressStatKey ?? def.statKey] ?? value;
-    let earnedCount = 0;
-    const tiers: EvaluatedTier[] = def.tiers.map((tier) => {
-      const earned = value >= tier.threshold;
-      if (earned) earnedCount += 1;
-      return { tier, earned, isNext: false, date: stats.dates[`${def.id}:${tier.threshold}`] };
-    });
-    const nextIndex = earnedCount < def.tiers.length ? earnedCount : -1;
-    if (nextIndex >= 0) tiers[nextIndex].isNext = true;
-    const highestTier = earnedCount > 0 ? def.tiers[earnedCount - 1] : undefined;
-    const nextTier = nextIndex >= 0 ? def.tiers[nextIndex] : undefined;
-    const target = nextTier ? nextTier.threshold : highestTier?.threshold ?? 0;
-    return {
-      def,
-      earned: earnedCount > 0,
-      earnedCount,
-      total: def.tiers.length,
-      highestTier,
-      nextTier,
-      progress: def.trackable || earnedCount > 0 ? { current: progressValue, target, unit: def.unit } : { current: progressValue, target, unit: def.unit },
-      earnedDate: highestTier ? stats.dates[`${def.id}:${highestTier.threshold}`] : undefined,
-      tiers
-    };
-  }
-
-  // standalone
-  if (def.progress) {
-    const current = stats.numbers[def.progress.statKey] ?? 0;
-    const earned = current >= def.progress.target;
-    return {
-      def,
-      earned,
-      earnedCount: earned ? 1 : 0,
-      total: 1,
-      progress: { current: Math.min(current, def.progress.target), target: def.progress.target, unit: def.progress.unit },
-      earnedDate: earned ? stats.dates[def.id] : undefined
-    };
-  }
-
-  const earned = stats.flags[def.id] === true;
-  return {
-    def,
-    earned,
-    earnedCount: earned ? 1 : 0,
-    total: 1,
-    earnedDate: earned ? stats.dates[def.id] : undefined
-  };
-}
-
-export function evaluateGroups(stats: TrophyStats): TrophyGroup[] {
-  return CATEGORY_ORDER.map((category) => ({
-    category,
-    label: CATEGORY_LABELS[category],
-    trophies: TROPHIES.filter((t) => t.category === category).map((t) => evaluateTrophy(t, stats))
-  }));
-}
-
-/** Count of top-level earned trophies (drives the profile "Trophies" stat). */
-export function earnedTrophyCount(stats: TrophyStats): number {
-  return TROPHIES.reduce((sum, def) => sum + (evaluateTrophy(def, stats).earned ? 1 : 0), 0);
-}
+/** Seed map re-exported so callers can inspect coverage without a second import. */
+export const RARITY_SEED_KEYS = Object.keys(TROPHY_RARITY_SEEDS);

@@ -695,7 +695,10 @@ export default function CameraScreen() {
   const videoTrimRef = useRef<VideoTrim | null>(null);
   const [editing, setEditing] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
-  const [zoom, setZoom] = useState(0);
+  // Camera zoom prop (0–1 within the active lens). Ultra-wide holds 0 (pure
+  // 0.5×); the recording ref pins the lens for the whole take (switching
+  // lenses mid-record would reconfigure the session).
+  const recordUltraRef = useRef(false);
   const zoomBaseRef = useRef(0);
   // Debounce the flip: rapid taps otherwise reconfigure the session faster than
   // it can keep up and stall the camera.
@@ -707,6 +710,20 @@ export default function CameraScreen() {
   const [recordLocked, setRecordLocked] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [flashOn, setFlashOn] = useState(false);
+  // Ultra-wide (0.5×): pinching out past 1× switches to the ultra-wide lens
+  // when the device has one. Virtual zoom < 0 = ultra-wide territory.
+  const [availableLenses, setAvailableLenses] = useState<string[]>([]);
+  const ultraLens = facing === "back" ? availableLenses.find((l) => /ultra.?wide/i.test(l)) ?? null : null;
+  const [virtualZoom, setVirtualZoom] = useState(0);
+  const ultraActive = Boolean(ultraLens) && (recording ? recordUltraRef.current : virtualZoom < -0.02);
+  const cameraZoom = ultraActive ? 0 : Math.max(0, Math.min(1, virtualZoom));
+  /** Keep virtual zoom in range; while recording, never cross the lens boundary. */
+  const clampVirtual = (next: number): number => {
+    if (recording) {
+      return recordUltraRef.current ? Math.max(-0.35, Math.min(-0.02, next)) : Math.max(0, Math.min(1, next));
+    }
+    return Math.max(ultraLens ? -0.35 : 0, Math.min(1, next));
+  };
   // Camera session config, DERIVED from the flow (never switched on hold — that
   // remount + wait was the recording lag). Daily is photo-only → "picture" for
   // full-sensor quality. Story/lift can record → "video" so holding starts
@@ -1008,7 +1025,7 @@ export default function CameraScreen() {
   const flipCamera = () => {
     if (flipLockRef.current) return;
     flipLockRef.current = true;
-    if (!recording) setZoom(0);
+    if (!recording) setVirtualZoom(0);
     setFacing((value) => (value === "back" ? "front" : "back"));
     setTimeout(() => {
       flipLockRef.current = false;
@@ -1026,15 +1043,15 @@ export default function CameraScreen() {
     }
   };
 
-  /** Pinch-to-zoom over the preview. expo-camera zoom is 0–1. */
+  /** Pinch-to-zoom over the preview. Pinching out past 1× drops into the
+   *  ultra-wide lens (0.5×) on devices that have one. */
   const pinchZoom = Gesture.Pinch()
     .onBegin(() => {
-      zoomBaseRef.current = zoom;
+      zoomBaseRef.current = virtualZoom;
     })
     .runOnJS(true)
     .onUpdate((e) => {
-      const next = zoomBaseRef.current + (e.scale - 1) * 0.35;
-      setZoom(Math.max(0, Math.min(1, next)));
+      setVirtualZoom(clampVirtual(zoomBaseRef.current + (e.scale - 1) * 0.35));
     });
 
   const shareStory = () => {
@@ -1162,6 +1179,8 @@ export default function CameraScreen() {
     }
     setRecordSeconds(0);
     setRecordLocked(false);
+    // Pin the current lens for the whole take.
+    recordUltraRef.current = Boolean(ultraLens) && virtualZoom < -0.02;
     setRecording(true);
     // Camera is ALREADY in video mode (camMode derived from the flow) — no mode
     // switch, no remount, no long wait. Recording starts immediately (#1); a
@@ -1417,7 +1436,10 @@ export default function CameraScreen() {
                 ref={cameraRef}
                 facing={facing}
                 mode={camMode}
-                zoom={zoom}
+                zoom={cameraZoom}
+                // Ultra-wide (0.5×) when pinched out past 1× — iOS devices with
+                // the lens only; elsewhere zoom bottoms out at 1×.
+                selectedLens={ultraActive && ultraLens ? ultraLens : undefined}
                 mute={!micPermission?.granted}
                 videoQuality="1080p"
                 animateShutter={false}
@@ -1426,6 +1448,11 @@ export default function CameraScreen() {
                 enableTorch={flashOn && camMode === "video" && recording}
                 onCameraReady={() => {
                   videoReadyRef.current = true;
+                  // Discover lenses (ultra-wide availability) for this facing.
+                  void cameraRef.current
+                    ?.getAvailableLensesAsync()
+                    .then(setAvailableLenses)
+                    .catch(() => setAvailableLenses([]));
                 }}
                 style={{ position: "absolute", inset: 0 }}
               />
@@ -1448,11 +1475,11 @@ export default function CameraScreen() {
             <View style={{ flex: 1 }} />
           </Pressable>
         )}
-        {/* Zoom readout while zoomed in. */}
-        {zoom > 0.01 ? (
+        {/* Zoom readout — "0.5×" in ultra-wide, "N.Nx" while zoomed in. */}
+        {ultraActive || cameraZoom > 0.01 ? (
           <View pointerEvents="none" style={{ position: "absolute", top: insets.top + 60, alignSelf: "center", paddingVertical: 4, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.55)" }}>
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.white }}>
-              {`${(1 + zoom * 4).toFixed(1)}x`}
+              {ultraActive ? "0.5×" : `${(1 + cameraZoom * 4).toFixed(1)}x`}
             </Text>
           </View>
         ) : null}
@@ -1583,7 +1610,7 @@ export default function CameraScreen() {
                 void impactHaptic(); // #12: haptic on lock
               }}
               // #6: slide up/down on the button while holding to zoom.
-              onZoomDelta={(dy) => setZoom((z) => Math.max(0, Math.min(1, z - dy / 240)))}
+              onZoomDelta={(dy) => setVirtualZoom((z) => clampVirtual(z - dy / 240))}
             />
             {/* Spacer to keep the shutter centered. */}
             <View style={{ width: 40 }} />

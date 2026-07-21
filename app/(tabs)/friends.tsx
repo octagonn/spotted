@@ -1,10 +1,17 @@
 import { useRouter } from "expo-router";
-import { Inbox, X } from "lucide-react-native";
+import { ChevronRight, FolderPlus, Inbox, Mail, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useInboxThreadActions, useInboxThreads } from "@/components/friends/useInboxThreads";
+import {
+  useCreateFolder,
+  useMessageFolders,
+  useMessageRequests,
+  useSetThreadFolder
+} from "@/hooks/queries/useMessagesExtras";
+import { tokens } from "@/theme/tokens";
 import { Avatar } from "@/components/ui/Avatar";
 import { ListRow } from "@/components/ui/ListRow";
 import { RelButton } from "@/components/ui/Button";
@@ -36,6 +43,13 @@ export default function FriendsScreen() {
   const [tab, setTab] = useState("Messages");
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
+  // Inbox filter (#1) + folder (#2) selection.
+  const [msgFilter, setMsgFilter] = useState<"all" | "unread" | "unanswered" | "story" | "verified">("all");
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const messageRequests = useMessageRequests();
+  const folders = useMessageFolders();
+  const createFolder = useCreateFolder();
+  const setThreadFolder = useSetThreadFolder();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const inbox = useInboxThreads();
   const inboxActions = useInboxThreadActions();
@@ -133,7 +147,25 @@ export default function FriendsScreen() {
 
   // DM list: active conversations first, then every other friend as a
   // "Tap to start conversation" row (empty threads + friends with no thread).
-  const dmThreads = useMemo(() => (inbox.data ?? []).filter((t) => !t.empty), [inbox.data]);
+  const dmThreads = useMemo(() => {
+    let list = (inbox.data ?? []).filter((t) => !t.empty);
+    if (folderId) list = list.filter((t) => t.folderId === folderId);
+    switch (msgFilter) {
+      case "unread":
+        list = list.filter((t) => t.unread);
+        break;
+      case "unanswered":
+        list = list.filter((t) => !t.answered);
+        break;
+      case "story":
+        list = list.filter((t) => t.storyReply);
+        break;
+      case "verified":
+        list = list.filter((t) => t.verified);
+        break;
+    }
+    return list;
+  }, [inbox.data, msgFilter, folderId]);
   const dmPlaceholders = useMemo(() => {
     const threaded = new Set(dmThreads.map((t) => t.profileId));
     const list: { profileId: string; name: string; avatarUrl: string | null }[] = [];
@@ -228,13 +260,75 @@ export default function FriendsScreen() {
 
         {tab === "Messages" ? (
           <View>
-            {/* Search friends to message — even without an existing thread. */}
+            {/* Search by display name OR username (#3). */}
             <SearchBar
               value={messageSearch}
               onChangeText={setMessageSearch}
-              placeholder="Search friends to message"
+              placeholder="Search messages"
               containerStyle={{ marginHorizontal: 18, marginTop: 2, marginBottom: 8 }}
             />
+
+            {!messageQuery ? (
+              <>
+                {/* Message requests entry (#15) */}
+                {(messageRequests.data ?? []).length > 0 ? (
+                  <Pressable onPress={() => router.push("/message-requests")}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 18 }}>
+                      <View style={{ width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
+                        <Mail size={20} color={tokens.accent.gold} strokeWidth={2} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}>Message requests</Text>
+                        <Text style={{ marginTop: 2, fontSize: 12.5, color: colors.fog }}>
+                          {`${messageRequests.data!.length} pending`}
+                        </Text>
+                      </View>
+                      <ChevronRight size={18} color={colors.fog} />
+                    </View>
+                  </Pressable>
+                ) : null}
+
+                {/* Filter chips (#1) */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 18, paddingBottom: 8 }}>
+                  {([
+                    ["all", "All"],
+                    ["unread", "Unread"],
+                    ["unanswered", "Unanswered"],
+                    ["story", "Story replies"],
+                    ["verified", "Verified"]
+                  ] as const).map(([key, label]) => {
+                    const on = msgFilter === key;
+                    return (
+                      <Pressable key={key} onPress={() => setMsgFilter(key)}>
+                        <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: on ? colors.white : colors.graphite, borderWidth: 1, borderColor: on ? colors.white : colors.iron }}>
+                          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: on ? colors.black : colors.silver }}>{label}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Folder chips (#2) */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 18, paddingBottom: 10, alignItems: "center" }}>
+                  <FolderChip label="Inbox" on={folderId === null} onPress={() => setFolderId(null)} />
+                  {(folders.data ?? []).map((f) => (
+                    <FolderChip key={f.id} label={f.name} on={folderId === f.id} onPress={() => setFolderId(f.id)} />
+                  ))}
+                  <Pressable
+                    accessibilityLabel="New folder"
+                    onPress={() =>
+                      Alert.prompt?.("New folder", "Name your folder", (name) => {
+                        if (name?.trim()) createFolder.mutate(name.trim());
+                      }) ?? createFolder.mutate("Folder")
+                    }
+                  >
+                    <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
+                      <FolderPlus size={15} color={colors.silver} strokeWidth={2} />
+                    </View>
+                  </Pressable>
+                </ScrollView>
+              </>
+            ) : null}
 
             {messageQuery ? (
               messageMatches.length ? (
@@ -259,12 +353,23 @@ export default function FriendsScreen() {
                   <ListRow
                     key={`real-${thread.profileId}`}
                     left={<Avatar name={thread.name} uri={thread.avatarUrl} size={46} />}
-                    name={thread.name}
+                    name={thread.muted ? `${thread.name} · muted` : thread.name}
                     sub={thread.preview}
                     subStrong={thread.unread}
                     time={thread.time}
                     unread={thread.unread}
                     onPress={() => openThread(thread.profileId)}
+                    onLongPress={() => {
+                      const opts = (folders.data ?? []).map((f) => ({
+                        text: thread.folderId === f.id ? `✓ ${f.name}` : f.name,
+                        onPress: () => setThreadFolder.mutate({ conversationId: thread.conversationId, folderId: f.id })
+                      }));
+                      Alert.alert("Move to folder", undefined, [
+                        { text: thread.folderId === null ? "✓ Inbox" : "Inbox", onPress: () => setThreadFolder.mutate({ conversationId: thread.conversationId, folderId: null }) },
+                        ...opts,
+                        { text: "Cancel", style: "cancel" }
+                      ]);
+                    }}
                   />
                 ))}
                 {/* Every other friend — tap to start a conversation. */}
@@ -469,6 +574,16 @@ function QuickAddRow({
 }
 
 /** Instagram-style activity button: heart icon + unread badge, top-right. */
+function FolderChip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress}>
+      <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: on ? colors.charcoal : "transparent", borderWidth: 1, borderColor: on ? colors.slate : colors.iron }}>
+        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: on ? colors.white : colors.fog }}>{label}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function InboxButton({ onPress }: { onPress: () => void }) {
   const unread = useActivityUnreadCount();
   return (

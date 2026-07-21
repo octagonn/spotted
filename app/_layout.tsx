@@ -209,6 +209,7 @@ export default function RootLayout() {
                 <Stack.Screen name="user/[username]" />
                 <Stack.Screen name="chat/[id]" />
                 <Stack.Screen name="inbox" />
+                <Stack.Screen name="message-requests" />
                 <Stack.Screen name="edit-profile" />
                 <Stack.Screen name="people/[type]" />
                 <Stack.Screen name="profile-posts/[postId]" />

@@ -238,6 +238,64 @@ export function useRespondMessageRequest() {
   });
 }
 
+/* ------------------------------ folders (#2) ------------------------------ */
+
+export type MessageFolder = { id: string; name: string };
+
+export function useMessageFolders() {
+  const userId = useAuthStore((state) => state.userId);
+  return useQuery({
+    queryKey: ["message-folders", userId],
+    enabled: isSupabaseConfigured && Boolean(userId),
+    staleTime: 60_000,
+    queryFn: async (): Promise<MessageFolder[]> => {
+      const { data, error } = await supabase
+        .from("message_folders")
+        .select("id, name")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
+}
+
+export function useCreateFolder() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (name: string): Promise<MessageFolder | null> => {
+      if (!isSupabaseConfigured || !userId) return null;
+      const { data, error } = await supabase
+        .from("message_folders")
+        .insert({ user_id: userId, name: name.trim().slice(0, 40) })
+        .select("id, name")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["message-folders", userId] })
+  });
+}
+
+/** Move a conversation into (or out of, with null) a folder — updates the
+ *  current user's participant row. */
+export function useSetThreadFolder() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async ({ conversationId, folderId }: { conversationId: string; folderId: string | null }) => {
+      if (!isSupabaseConfigured || !userId) return;
+      const { error } = await supabase
+        .from("conversation_participants")
+        .update({ folder_id: folderId })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
+  });
+}
+
 /* ------------------------- per-thread mute (#17) -------------------------- */
 
 export function useConversationMuted(conversationId?: string | null) {

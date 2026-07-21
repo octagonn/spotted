@@ -16,6 +16,7 @@ export type RealInboxThread = {
   profileId: string;
   conversationId: string;
   name: string;
+  username: string;
   avatarUrl: string | null;
   preview: string;
   /** Relative time, e.g. "12m", "2h". */
@@ -24,6 +25,12 @@ export type RealInboxThread = {
   lastSentAt: string;
   /** True when the conversation has no messages yet (a "tap to start" thread). */
   empty: boolean;
+  /** Filter signals (#1). */
+  answered: boolean;
+  storyReply: boolean;
+  verified: boolean;
+  muted: boolean;
+  folderId: string | null;
 };
 
 const INBOX_QUERY_KEY = ["inbox-threads"] as const;
@@ -39,12 +46,14 @@ export function useInboxThreads() {
       }
       const { data: conversations, error } = await supabase
         .from("conversations")
-        .select("id, participant_a, participant_b, last_message_at, updated_at")
+        .select("id, participant_a, participant_b, last_message_at, updated_at, status")
         .or(`participant_a.eq.${userId},participant_b.eq.${userId}`);
       if (error) {
         throw error;
       }
-      const convoList = conversations ?? [];
+      // Main inbox = active threads only. Request-state threads live in the
+      // Requests tab (#15).
+      const convoList = (conversations ?? []).filter((c) => (c as { status?: string }).status !== "request");
       if (convoList.length === 0) {
         return [];
       }
@@ -54,18 +63,25 @@ export function useInboxThreads() {
         convo.participant_a === userId ? convo.participant_b : convo.participant_a
       );
 
-      const [profilesResult, messagesResult] = await Promise.all([
+      const [profilesResult, messagesResult, participantResult] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, display_name, username, avatar_url")
+          .select("id, display_name, username, avatar_url, subscription_tier")
           .in("id", otherIds),
         supabase
           .from("messages")
-          .select("conversation_id, sender_id, content, sent_at, read_at")
+          .select("conversation_id, sender_id, content, sent_at, read_at, reply_story_media")
           .in("conversation_id", conversationIds)
           .order("sent_at", { ascending: false })
-          .limit(400)
+          .limit(400),
+        supabase
+          .from("conversation_participants")
+          .select("conversation_id, muted, folder_id")
+          .eq("user_id", userId)
       ]);
+      const partById = new Map(
+        (participantResult.data ?? []).map((p) => [p.conversation_id, p])
+      );
       if (profilesResult.error) {
         throw profilesResult.error;
       }
@@ -96,6 +112,10 @@ export function useInboxThreads() {
         if (!profile) {
           continue;
         }
+        const part = partById.get(convo.id);
+        const verified = (profile as { subscription_tier?: string }).subscription_tier
+          ? (profile as { subscription_tier?: string }).subscription_tier !== "free"
+          : false;
         const last = lastByConversation.get(convo.id);
         if (!last) {
           // New-friend thread with no messages yet — surface it so the handoff
@@ -105,12 +125,18 @@ export function useInboxThreads() {
             profileId: otherId,
             conversationId: convo.id,
             name: profile.display_name,
+            username: profile.username,
             avatarUrl: profile.avatar_url,
             preview: "Tap to start conversation",
             time: timeAgo(started),
             unread: false,
             lastSentAt: started,
-            empty: true
+            empty: true,
+            answered: true,
+            storyReply: false,
+            verified,
+            muted: part?.muted ?? false,
+            folderId: part?.folder_id ?? null
           });
           continue;
         }
@@ -119,12 +145,19 @@ export function useInboxThreads() {
           profileId: otherId,
           conversationId: convo.id,
           name: profile.display_name,
+          username: profile.username,
           avatarUrl: profile.avatar_url,
           preview: last.sender_id === userId ? `You: ${content}` : content,
           time: timeAgo(last.sent_at),
           unread: unreadConversations.has(convo.id),
           lastSentAt: last.sent_at,
-          empty: false
+          empty: false,
+          // Unanswered = the other person spoke last (needs your reply).
+          answered: last.sender_id === userId,
+          storyReply: Boolean((last as { reply_story_media?: string | null }).reply_story_media),
+          verified,
+          muted: part?.muted ?? false,
+          folderId: part?.folder_id ?? null
         });
       }
       threads.sort((a, b) => b.lastSentAt.localeCompare(a.lastSentAt));

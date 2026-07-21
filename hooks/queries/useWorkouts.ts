@@ -73,6 +73,39 @@ export function useWorkouts(userId?: string | null) {
   });
 }
 
+/** A single workout by id (self or friend, per RLS) for the detail view. */
+export function useWorkout(workoutId?: string | null) {
+  return useQuery({
+    queryKey: ["workout", workoutId],
+    enabled: isSupabaseConfigured && Boolean(workoutId),
+    staleTime: 60_000,
+    queryFn: async (): Promise<WorkoutRow | null> => {
+      const { data, error } = await supabase
+        .from("workouts")
+        .select(
+          "id, user_id, name, started_at, duration_seconds, total_volume, total_sets, cardio_minutes, exercise_count, data, post_id"
+        )
+        .eq("id", workoutId as string)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        startedAt: data.started_at,
+        durationSeconds: data.duration_seconds,
+        totalVolume: data.total_volume,
+        totalSets: data.total_sets,
+        cardioMinutes: data.cardio_minutes,
+        exerciseCount: data.exercise_count,
+        exercises: Array.isArray(data.data) ? (data.data as unknown as WorkoutExercise[]) : [],
+        postId: data.post_id
+      };
+    }
+  });
+}
+
 export type SaveWorkoutInput = {
   userId: string;
   name: string;

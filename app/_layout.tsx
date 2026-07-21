@@ -204,6 +204,7 @@ export default function RootLayout() {
                   options={{ animation: "slide_from_bottom", gestureEnabled: false }}
                 />
                 <Stack.Screen name="workout" options={{ animation: "slide_from_bottom" }} />
+                <Stack.Screen name="workout/[id]" />
                 <Stack.Screen name="post/[id]" options={{ presentation: "modal" }} />
                 <Stack.Screen name="gym/[id]" options={{ presentation: "modal" }} />
                 <Stack.Screen name="user/[username]" />

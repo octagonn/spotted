@@ -17,6 +17,7 @@ import {
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
@@ -55,6 +56,21 @@ type CustomState = { name: string; inc: boolean; muscle: Muscle } | null;
 
 let _id = 0;
 const uid = () => ++_id;
+
+/** The pulsing "Live" dot in the header (prototype .pulse-dot). */
+function PulseDot() {
+  const reduced = useReducedMotion();
+  const o = useSharedValue(1);
+  useEffect(() => {
+    if (reduced) {
+      o.value = 1;
+      return;
+    }
+    o.value = withRepeat(withTiming(0.35, { duration: 800, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, [reduced, o]);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: tokens.accent.gold }, style]} />;
+}
 
 /** Tiny uppercase section label (an allowed caps case). */
 function Micro({ children, style }: { children: React.ReactNode; style?: object }) {
@@ -394,9 +410,9 @@ export default function WorkoutScreen() {
           const cell = (label: React.ReactNode, field: FieldKey) => (
             <Pressable
               onPress={() => setSheet({ type: "editor", exId: ex.id, setId: s.id, field })}
-              style={{ flex: 1, marginHorizontal: 4, paddingVertical: 6, borderRadius: radius.sm, backgroundColor: tokens.bg.subtle, alignItems: "center" }}
+              style={{ flex: 1, marginHorizontal: 4, paddingVertical: 7, borderRadius: radius.sm, backgroundColor: tokens.bg.subtle, alignItems: "center" }}
             >
-              <Text style={{ fontFamily: NUM, fontSize: 18, color: valColor }}>{label}</Text>
+              <Text style={{ fontFamily: NUM, fontSize: inc ? 18 : 20, color: valColor }}>{label}</Text>
             </Pressable>
           );
           return (
@@ -505,11 +521,14 @@ export default function WorkoutScreen() {
             style={{ fontFamily: DISP, fontSize: 22, color: tokens.text.primary, padding: 0 }}
           />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-            <View style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: tokens.accent.gold }} />
+            <PulseDot />
             <Micro style={{ color: tokens.text.secondary }}>Live</Micro>
             <Micro>· {fmtClock(elapsed)}</Micro>
           </View>
         </View>
+        <Text allowFontScaling={false} style={{ fontFamily: "Boldonse_400Regular", fontSize: 12, letterSpacing: 0.5, color: tokens.text.primary }}>
+          SPOTTED
+        </Text>
       </View>
 
       {/* scroll */}
@@ -987,6 +1006,7 @@ function EditorSheet({
               value={draft}
               onChangeText={onType}
               keyboardType="decimal-pad"
+              selectTextOnFocus
               accessibilityLabel={label}
               style={{ fontFamily: NUM, fontSize: 64, textAlign: "center", marginTop: 4, color: tokens.text.primary, padding: 0 }}
             />

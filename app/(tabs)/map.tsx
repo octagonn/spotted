@@ -345,33 +345,33 @@ export default function MapTabScreen() {
     if (workout.cardioMinutes > 0) stats.push(`${workout.cardioMinutes} min cardio`);
     stats.push(fmtClock(workout.durationSeconds));
     return (
-      <View
-        style={{
-          marginHorizontal: 18,
-          marginBottom: 10,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          borderWidth: 1,
-          borderColor: colors.iron,
-          borderRadius: 16,
-          backgroundColor: colors.graphite,
-          padding: 14
-        }}
-      >
-        <View style={{ width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
-          <Dumbbell size={18} color={colors.mist} />
+      <Pressable onPress={() => router.push(`/workout/${workout.id}` as Href)} style={{ marginHorizontal: 18, marginBottom: 10 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            borderWidth: 1,
+            borderColor: colors.iron,
+            borderRadius: 16,
+            backgroundColor: colors.graphite,
+            padding: 14
+          }}
+        >
+          <View style={{ width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
+            <Dumbbell size={18} color={colors.mist} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}>
+              {workout.name}
+            </Text>
+            <Text style={{ marginTop: 2, fontSize: 12, color: colors.fog }}>
+              {when} · {stats.join(" · ")}
+            </Text>
+          </View>
+          {workout.exerciseCount > 0 ? <TypePill>{`${workout.exerciseCount}`}</TypePill> : null}
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}>
-            {workout.name}
-          </Text>
-          <Text style={{ marginTop: 2, fontSize: 12, color: colors.fog }}>
-            {when} · {stats.join(" · ")}
-          </Text>
-        </View>
-        {workout.exerciseCount > 0 ? <TypePill>{`${workout.exerciseCount}`}</TypePill> : null}
-      </View>
+      </Pressable>
     );
   }
 

@@ -23,6 +23,26 @@ export function useStoryLiked(storyId: string | null) {
   });
 }
 
+/**
+ * The set of user ids who liked a story — only the story owner can read this
+ * (RLS). Used to show a heart next to likers in the viewer list.
+ */
+export function useStoryLikers(storyId?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["story-likers", storyId],
+    enabled: isSupabaseConfigured && Boolean(storyId) && enabled,
+    staleTime: 15_000,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from("story_likes")
+        .select("user_id")
+        .eq("story_id", storyId as string);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.user_id));
+    }
+  });
+}
+
 /** Like / unlike a story — optimistic, private (no public counts). */
 export function useToggleStoryLike() {
   const queryClient = useQueryClient();

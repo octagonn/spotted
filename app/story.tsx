@@ -30,7 +30,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useMarkStoryViewed, useStories, type StoryGroup } from "@/hooks/queries/useStories";
 import { REPORT_REASONS, useDeleteStory, useReportContent } from "@/hooks/queries/useContentModeration";
 import { useStoryViewers } from "@/hooks/queries/useStoryViewers";
-import { useStoryLiked, useToggleStoryLike } from "@/hooks/queries/useStoryLikes";
+import { useStoryLiked, useStoryLikers, useToggleStoryLike } from "@/hooks/queries/useStoryLikes";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
@@ -128,6 +128,7 @@ export default function StoryViewer() {
   const group: StoryGroup | undefined = queue?.[gi];
   const story = group?.stories[si];
   const viewers = useStoryViewers(story?.id, Boolean(group?.isMe) && viewersOpen);
+  const likers = useStoryLikers(story?.id, Boolean(group?.isMe) && viewersOpen);
   const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
   const toggleLike = useToggleStoryLike();
 
@@ -747,6 +748,9 @@ export default function StoryViewer() {
                         <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>{v.display_name}</Text>
                         <Text style={{ marginTop: 1, fontSize: 12, color: colors.fog }}>@{v.username}</Text>
                       </View>
+                      {likers.data?.has(v.id) ? (
+                        <Heart size={16} color={tokens.accent.gold} fill={tokens.accent.gold} strokeWidth={2} />
+                      ) : null}
                       <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.fog }}>{timeAgo(v.viewedAt)}</Text>
                     </Pressable>
                   ))

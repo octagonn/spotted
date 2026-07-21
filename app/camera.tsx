@@ -987,6 +987,9 @@ export default function CameraScreen() {
     }
     setPhotoUri(uri);
     setDailyStep("review");
+    // Stories land directly in edit mode (2a) — no separate "Edit" step. When
+    // the editor is done, the review screen (music/tags/share) shows.
+    if (mode === "story" && uri) setEditing(true);
   }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission]);
 
   // Snapchat-style capture: tap = photo (capturePhoto), hold = video. Holding
@@ -1374,13 +1377,23 @@ export default function CameraScreen() {
   if ((mode === "daily" || mode === "story") && dailyStep === "review") {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
-        {/* Full-bleed shot \u2014 same framing the camera had. */}
-        <ScenePhoto
-          uri={photoUri}
-          scene="s2"
-          legibility={false}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-        />
+        {/* Full-bleed shot \u2014 tap it to (re)open the editor (2a). */}
+        {mode === "story" ? (
+          <Pressable
+            onPress={() => setEditing(true)}
+            accessibilityLabel="Tap photo to edit"
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          >
+            <ScenePhoto uri={photoUri} scene="s2" legibility={false} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+          </Pressable>
+        ) : (
+          <ScenePhoto
+            uri={photoUri}
+            scene="s2"
+            legibility={false}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+        )}
 
         <LinearGradient
           colors={["rgba(0,0,0,0.55)", "transparent"]}
@@ -1403,10 +1416,10 @@ export default function CameraScreen() {
           </CircleButton>
           <StepPill>{mode === "story" ? "STORY" : "YOUR SHOT"}</StepPill>
           {mode === "story" ? (
-            <Pressable onPress={() => setEditing(true)} accessibilityLabel="Edit story">
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 7, height: 48, paddingHorizontal: 22, borderRadius: 24, backgroundColor: colors.white, justifyContent: "center" }}>
-                <Pencil size={16} color={colors.black} strokeWidth={2.4} />
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.black }}>Edit</Text>
+            // Edit is tap-the-photo now (2a); this stays a lightweight affordance.
+            <Pressable onPress={() => setEditing(true)} accessibilityLabel="Edit story" hitSlop={8}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" }}>
+                <Pencil size={18} color={colors.white} strokeWidth={2.2} />
               </View>
             </Pressable>
           ) : extraPhotos.length + 1 < 4 ? (

@@ -9,8 +9,8 @@ import { useStories, type StoryGroup } from "@/hooks/queries/useStories";
 import { colors } from "@/theme/colors";
 import { radius, tokens } from "@/theme/tokens";
 
-const AVATAR = 84;
-// Photo (84) + 3px gap (ring padding) + 3px ring stroke, both sides.
+const AVATAR = 79;
+// Photo (79) + 3px gap (ring padding) + 3px ring stroke, both sides.
 const ITEM = AVATAR + 2 * 3 + 2 * 3;
 
 /** Instagram-style story rail at the top of the feed. */
@@ -60,8 +60,8 @@ export function StoriesRail() {
               position: "absolute",
               right: 2,
               bottom: 2,
-              width: 28,
-              height: 28,
+              width: 26,
+              height: 26,
               borderRadius: radius.pill,
               backgroundColor: tokens.accent.gold,
               borderWidth: 2,
@@ -70,7 +70,7 @@ export function StoriesRail() {
               justifyContent: "center"
             }}
           >
-            <Plus size={16} color={colors.black} strokeWidth={3} />
+            <Plus size={15} color={colors.black} strokeWidth={3} />
           </Pressable>
         </View>
         <Text numberOfLines={1} style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: tokens.text.secondary, maxWidth: ITEM }}>

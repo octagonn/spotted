@@ -26,23 +26,11 @@ import { captureRef } from "react-native-view-shot";
 import { FreeformCrop } from "@/components/camera/FreeformCrop";
 import { colors } from "@/theme/colors";
 
-type Tool = "none" | "draw" | "text" | "sticker" | "filter" | "crop";
+type Tool = "none" | "draw" | "text" | "sticker" | "crop";
 
 type Stroke = { id: string; d: string; color: string; width: number };
 type TextItem = { id: string; text: string; color: string; x: number; y: number };
 type StickerItem = { id: string; emoji: string; x: number; y: number };
-
-/** Stylistic overlay "looks". True per-pixel color grading needs a shader; these
- * are cross-platform tints that flatten reliably into the exported image.
- * Exported: the story review screen cycles these on horizontal swipes. */
-export const FILTERS: { key: string; label: string; overlay: string | null }[] = [
-  { key: "none", label: "Original", overlay: null },
-  { key: "warm", label: "Warm", overlay: "rgba(255,150,40,0.18)" },
-  { key: "cool", label: "Cool", overlay: "rgba(40,120,255,0.18)" },
-  { key: "fade", label: "Fade", overlay: "rgba(240,240,255,0.16)" },
-  { key: "noir", label: "Noir", overlay: "rgba(0,0,0,0.32)" },
-  { key: "dusk", label: "Dusk", overlay: "rgba(120,40,120,0.20)" }
-];
 
 const PEN_COLORS = ["#FAFAFA", "#000000", "#E8B44C", "#EF4444", "#3B82F6", "#22C55E", "#EC4899"];
 const PEN_WIDTHS = [4, 8, 14];
@@ -172,7 +160,6 @@ export function PhotoEditor({
   const captureViewRef = useRef<View>(null);
 
   const [tool, setTool] = useState<Tool>("none");
-  const [filter, setFilter] = useState<string>("none");
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
   const [penWidth, setPenWidth] = useState(PEN_WIDTHS[1]);
   // Rotate/crop write real pixels via expo-image-manipulator; the edited base
@@ -199,7 +186,6 @@ export function PhotoEditor({
 
   const ptsRef = useRef<string>("");
 
-  const overlayColor = FILTERS.find((f) => f.key === filter)?.overlay ?? null;
 
   // runOnJS(true): callbacks run on the JS thread, so touching the React ref
   // and calling setState directly is safe. The worklet version crashed in Expo
@@ -312,12 +298,9 @@ export function PhotoEditor({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      {/* Captured region: photo + filter + drawings + overlays */}
+      {/* Captured region: photo + drawings + overlays */}
       <View ref={captureViewRef} collapsable={false} style={StyleSheet.absoluteFill}>
         <Image source={{ uri: workingUri }} contentFit="cover" style={StyleSheet.absoluteFill} />
-        {overlayColor ? (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor }]} pointerEvents="none" />
-        ) : null}
 
         <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
           {strokes.map((s) => (
@@ -401,9 +384,6 @@ export function PhotoEditor({
         <RoundBtn active={tool === "sticker"} onPress={() => setTool(tool === "sticker" ? "none" : "sticker")} accessibilityLabel="Stickers">
           <Smile size={20} color={colors.white} strokeWidth={2.2} />
         </RoundBtn>
-        <RoundBtn active={tool === "filter"} onPress={() => setTool(tool === "filter" ? "none" : "filter")} accessibilityLabel="Filters">
-          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white }}>F</Text>
-        </RoundBtn>
         <RoundBtn active={tool === "crop"} onPress={() => setTool(tool === "crop" ? "none" : "crop")} accessibilityLabel="Crop">
           <Crop size={20} color={colors.white} strokeWidth={2.2} />
         </RoundBtn>
@@ -445,25 +425,6 @@ export function PhotoEditor({
           <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9, color: colors.white }}>…</Text>
           </View>
-        </View>
-      ) : null}
-
-      {/* Filters row */}
-      {tool === "filter" ? (
-        <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 0, right: 60 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 14 }}>
-            {FILTERS.map((f) => (
-              <Pressable key={f.key} onPress={() => setFilter(f.key)} accessibilityLabel={f.label}>
-                <View style={{ width: 58, height: 74, borderRadius: 10, overflow: "hidden", borderWidth: filter === f.key ? 2 : 1, borderColor: filter === f.key ? colors.white : colors.iron }}>
-                  <Image source={{ uri: workingUri }} contentFit="cover" style={StyleSheet.absoluteFill} />
-                  {f.overlay ? <View style={[StyleSheet.absoluteFill, { backgroundColor: f.overlay }]} /> : null}
-                  <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.5)", paddingVertical: 2 }}>
-                    <Text style={{ fontSize: 9, color: colors.white, textAlign: "center" }}>{f.label}</Text>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
         </View>
       ) : null}
 

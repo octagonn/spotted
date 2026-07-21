@@ -2,8 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 // Gesture-handler ScrollView: scrolls correctly inside the bottom sheet, where
 // BottomSheetScrollView only works as the sheet's direct child and RN's own
 // ScrollView loses the pan gesture to the sheet.
-import { Directions, Gesture, GestureDetector, ScrollView as SheetScrollView } from "react-native-gesture-handler";
-import { captureRef } from "react-native-view-shot";
+import { Gesture, GestureDetector, ScrollView as SheetScrollView } from "react-native-gesture-handler";
 import { CameraView, useCameraPermissions, useMicrophonePermissions, type CameraType } from "expo-camera";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
@@ -48,7 +47,7 @@ import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import { LIFT_OPTIONS, LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
 import { useLogLift, useUserLifts } from "@/hooks/queries/useUserLifts";
-import { FILTERS, PhotoEditor } from "@/components/camera/PhotoEditor";
+import { PhotoEditor } from "@/components/camera/PhotoEditor";
 import { EditorBoundary } from "@/components/EditorBoundary";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
 import { Avatar } from "@/components/ui/Avatar";
@@ -720,20 +719,8 @@ export default function CameraScreen() {
   const [publishing, setPublishing] = useState(false);
   // Story music — same picker as daily posts, played during story viewing.
   const [storyTrack, setStoryTrack] = useState<SelectedTrack | null>(null);
-  // Story review filter — cycled by horizontal swipes on the preview.
-  const [storyFilter, setStoryFilter] = useState(0);
   // Friends tagged on the story — rendered as tappable chips in the viewer.
   const [storyTags, setStoryTags] = useState<string[]>([]);
-  const [filterFlash, setFilterFlash] = useState(false);
-  const storyShotRef = useRef<View>(null);
-  const filterFlashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  const cycleFilter = (dir: 1 | -1) => {
-    setStoryFilter((i) => (i + dir + FILTERS.length) % FILTERS.length);
-    setFilterFlash(true);
-    clearTimeout(filterFlashTimer.current);
-    filterFlashTimer.current = setTimeout(() => setFilterFlash(false), 900);
-  };
 
   useEffect(() => {
     if (Platform.OS !== "web" && permission && !permission.granted && permission.canAskAgain && !permissionAsked.current) {
@@ -876,22 +863,8 @@ export default function CameraScreen() {
     }
     setPublishing(true);
     try {
-      // Bake the swiped-on filter into the story image (capture the tinted
-      // preview). Falls back to the raw photo if capture isn't available.
-      let uploadUri = photoUri;
-      if (FILTERS[storyFilter]?.overlay && storyShotRef.current) {
-        try {
-          const captured = await Promise.race([
-            captureRef(storyShotRef, { format: "jpg", quality: 0.9 }),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
-          ]);
-          if (captured) uploadUri = captured;
-        } catch {
-          // Keep the raw photo rather than fail the share.
-        }
-      }
       await postStory.mutateAsync({
-        photoUri: uploadUri,
+        photoUri,
         music: storyTrack
           ? {
               title: storyTrack.title,
@@ -1361,40 +1334,15 @@ export default function CameraScreen() {
   }
 
   if ((mode === "daily" || mode === "story") && dailyStep === "review") {
-    const filterOverlay = mode === "story" ? FILTERS[storyFilter]?.overlay : null;
-    const filterGesture = Gesture.Race(
-      Gesture.Fling().direction(Directions.LEFT).enabled(mode === "story").runOnJS(true).onEnd(() => cycleFilter(1)),
-      Gesture.Fling().direction(Directions.RIGHT).enabled(mode === "story").runOnJS(true).onEnd(() => cycleFilter(-1))
-    );
     return (
-      <GestureDetector gesture={filterGesture}>
       <View style={{ flex: 1, backgroundColor: colors.black }}>
-        {/* Full-bleed shot \u2014 same framing the camera had. The ref'd wrapper is
-            what gets captured when a filter needs baking into the story. */}
-        <View
-          ref={storyShotRef}
-          collapsable={false}
+        {/* Full-bleed shot \u2014 same framing the camera had. */}
+        <ScenePhoto
+          uri={photoUri}
+          scene="s2"
+          legibility={false}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-        >
-          <ScenePhoto
-            uri={photoUri}
-            scene="s2"
-            legibility={false}
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-          />
-          {filterOverlay ? (
-            <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: filterOverlay }} />
-          ) : null}
-        </View>
-        {mode === "story" && filterFlash ? (
-          <View pointerEvents="none" style={{ position: "absolute", top: "44%", left: 0, right: 0, alignItems: "center" }}>
-            <View style={{ paddingVertical: 8, paddingHorizontal: 18, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.55)" }}>
-              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 12, letterSpacing: 12 * 0.12, color: colors.white }}>
-                {FILTERS[storyFilter]?.label.toUpperCase()}
-              </Text>
-            </View>
-          </View>
-        ) : null}
+        />
 
         <LinearGradient
           colors={["rgba(0,0,0,0.55)", "transparent"]}
@@ -1514,9 +1462,6 @@ export default function CameraScreen() {
                   </Text>
                 </View>
               </Pressable>
-              <Text style={{ paddingBottom: 10, textAlign: "center", fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 1, color: "rgba(255,255,255,0.65)" }}>
-                SWIPE FOR FILTERS
-              </Text>
               <Button onPress={() => void shareStory()} loading={publishing} disabled={publishing}>
                 Share to story
               </Button>
@@ -1526,7 +1471,6 @@ export default function CameraScreen() {
           )}
         </View>
       </View>
-      </GestureDetector>
     );
   }
 

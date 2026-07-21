@@ -368,7 +368,7 @@ export default function StoryViewer() {
       <Animated.View style={[{ flex: 1, backgroundColor: colors.black, overflow: "hidden" }, dragStyle]}>
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: colors.black }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         {/* Spinner behind the media so opening a story never flashes blank. */}
         {story.mediaUrl && !mediaLoaded ? (

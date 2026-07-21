@@ -125,7 +125,7 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.black }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.black }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <PanelHeader title="Edit profile" />
       <ScrollView
         keyboardShouldPersistTaps="handled"

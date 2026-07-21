@@ -246,7 +246,7 @@ export default function EmailAuthScreen() {
           : continueWithEmail;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <Screen>
         <Pressable className="self-start" disabled={submitting} onPress={handleBack}>
           <View className="flex-row items-center gap-2 rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1.5">

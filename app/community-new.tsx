@@ -153,7 +153,7 @@ export default function CommunityWizard() {
       {/* KAV lifts the scroll area + footer CTA above the keyboard; iOS then
           scrolls the focused field into view. Drag or tapping blank space
           dismisses the keyboard. */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"

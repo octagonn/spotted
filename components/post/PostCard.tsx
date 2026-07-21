@@ -152,6 +152,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         contentId={post.id}
         reportLabel="post"
         reportedUserId={undefined}
+        share={{ kind: "post", id: post.id, label: `${post.user.handle}'s post` }}
         onDelete={
           isOwnPost
             ? () =>

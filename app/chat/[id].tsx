@@ -8,8 +8,9 @@ import {
 } from "expo-audio";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, CornerUpLeft, ImagePlus, Mic, MoreVertical, Pause, Play, Send, Square, X } from "lucide-react-native";
+import { ChevronLeft, CornerUpLeft, ImagePlus, Mic, MoreVertical, Pause, Play, Send, Share2, Square, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -25,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 
 import { MessageBubble, TimeSeparator } from "@/components/friends/ChatBubbles";
+import { ForwardSheet } from "@/components/friends/ForwardSheet";
 import { PresenceLine } from "@/components/friends/PresenceLine";
 import { useMockChatStore } from "@/components/friends/chatStore";
 import { isMockThreadId, MOCK_CONVERSATIONS } from "@/components/friends/mockConversations";
@@ -141,14 +143,71 @@ function StoryReplyPreview({ path, mine }: { path: string; mine: boolean }) {
   );
 }
 
+/** Video message bubble — inline looping player. */
+function VideoBubble({ uri, mine }: { uri: string | null; mine: boolean }) {
+  const player = useVideoPlayer(uri ? { uri } : null, (p) => {
+    p.loop = true;
+    p.muted = false;
+  });
+  return (
+    <View
+      style={{
+        alignSelf: mine ? "flex-end" : "flex-start",
+        borderRadius: 16,
+        overflow: "hidden",
+        backgroundColor: colors.graphite,
+        borderWidth: mine ? 0 : 1,
+        borderColor: colors.iron
+      }}
+    >
+      {uri ? (
+        <VideoView player={player} style={{ width: 210, height: 270 }} contentFit="cover" nativeControls />
+      ) : (
+        <View style={{ width: 210, height: 270 }} />
+      )}
+    </View>
+  );
+}
+
+/** In-app share card (#8) — a tappable preview of a shared post/check-in/stream. */
+function ShareCard({
+  mine,
+  label,
+  sharedKind,
+  onOpen
+}: {
+  mine: boolean;
+  label: string;
+  sharedKind: string;
+  sharedId: string | null;
+  onOpen: () => void;
+}) {
+  const heading = sharedKind === "post" ? "Post" : sharedKind === "workout" ? "Workout" : sharedKind === "stream" ? "Gym stream" : "Gym check-in";
+  return (
+    <RNPressable onPress={onOpen} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: 240 }}>
+      <View style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: colors.iron, backgroundColor: colors.graphite }}>
+        <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.iron, flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Share2 size={13} color={tokens.accent.gold} strokeWidth={2} />
+          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase", color: colors.fog }}>{heading}</Text>
+        </View>
+        <Text style={{ paddingHorizontal: 12, paddingVertical: 10, fontFamily: "Geist_500Medium", fontSize: 13.5, color: colors.bone }}>{label}</Text>
+      </View>
+    </RNPressable>
+  );
+}
+
 function ChatMediaBubble({ path, mine }: { path: string; mine: boolean }) {
   const media = useQuery({
     queryKey: ["msg-media", path],
     staleTime: 50 * 60_000,
     queryFn: () => signedMessageUrl(path)
   });
-  if (path.toLowerCase().endsWith(".m4a")) {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".m4a")) {
     return <AudioBubble uri={media.data ?? null} mine={mine} />;
+  }
+  if (lower.endsWith(".mp4") || lower.endsWith(".mov")) {
+    return <VideoBubble uri={media.data ?? null} mine={mine} />;
   }
   return (
     <View
@@ -266,11 +325,13 @@ export default function ChatScreen() {
 
   const pickImage = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 0.8, videoMaxDuration: 60 });
       if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      const isVideo = asset.type === "video";
       sendMedia.mutate(
-        { localUri: result.assets[0].uri, kind: "image" },
-        { onSuccess: inboxActions.invalidate, onError: () => showToast("Couldn't send the photo") }
+        { localUri: asset.uri, kind: isVideo ? "video" : "image" },
+        { onSuccess: inboxActions.invalidate, onError: () => showToast(isVideo ? "Couldn't send the video" : "Couldn't send the photo") }
       );
     } catch {
       showToast("Couldn't open your photo library");
@@ -348,6 +409,9 @@ export default function ChatScreen() {
       { text: "React 😂", onPress: () => react.mutate({ messageId: message.id, emoji: "😂" }) },
       { text: "Reply", onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine }) }
     ];
+    if (message.content) {
+      options.push({ text: "Forward", onPress: () => sheet.open(<ForwardSheet content={message.content ?? ""} />) });
+    }
     if (mine && withinWindow && message.media_url === null) {
       options.push({ text: "Unsend for everyone", style: "destructive", onPress: () => unsend.mutate(message.id) });
     }
@@ -493,7 +557,18 @@ export default function ChatScreen() {
                         {message.reply_story_media ? (
                           <StoryReplyPreview path={message.reply_story_media} mine={mine} />
                         ) : null}
-                        {message.media_url ? (
+                        {message.kind === "share" && message.shared_kind ? (
+                          <ShareCard
+                            mine={mine}
+                            label={message.content ?? "Shared"}
+                            sharedKind={message.shared_kind}
+                            sharedId={message.shared_id}
+                            onOpen={() => {
+                              if (message.shared_kind === "post" && message.shared_id) router.push(`/post/${message.shared_id}`);
+                              else if ((message.shared_kind === "checkin" || message.shared_kind === "stream") && message.shared_id) router.push(`/gym/${message.shared_id}`);
+                            }}
+                          />
+                        ) : message.media_url ? (
                           <ChatMediaBubble path={message.media_url} mine={mine} />
                         ) : (
                           <MessageBubble mine={mine} text={message.content ?? ""} />

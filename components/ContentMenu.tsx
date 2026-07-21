@@ -1,10 +1,12 @@
-import { Flag, Trash2 } from "lucide-react-native";
+import { Flag, Send, Trash2 } from "lucide-react-native";
 import { Text, View } from "react-native";
 
 import { ReportSheet } from "@/components/ReportSheet";
+import { ShareToFriendSheet } from "@/components/friends/ShareToFriendSheet";
 import { Pressable } from "@/components/ui/Pressable";
 import { SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { type ReportContentType } from "@/hooks/queries/useContentModeration";
+import { type ShareKind } from "@/hooks/queries/useMessagesExtras";
 import { colors } from "@/theme/colors";
 
 /**
@@ -17,7 +19,8 @@ export function ContentMenu({
   contentId,
   reportLabel,
   reportedUserId,
-  onDelete
+  onDelete,
+  share
 }: {
   contentType: ReportContentType;
   contentId: string;
@@ -25,6 +28,8 @@ export function ContentMenu({
   reportedUserId?: string | null;
   /** Provided only when the content is the viewer's own. */
   onDelete?: () => void;
+  /** When set, adds a "Send to a friend" row (#8 in-app share). */
+  share?: { kind: ShareKind; id: string; label: string };
 }) {
   const sheet = useSheet();
 
@@ -53,6 +58,13 @@ export function ContentMenu({
   return (
     <View>
       <SheetTitle>Options</SheetTitle>
+      {share ? (
+        <Row
+          icon={<Send size={18} color={colors.silver} strokeWidth={2} />}
+          label="Send to a friend"
+          onPress={() => sheet.open(<ShareToFriendSheet sharedKind={share.kind} sharedId={share.id} label={share.label} />)}
+        />
+      ) : null}
       {onDelete ? (
         <Row icon={<Trash2 size={18} color="#EF4444" strokeWidth={2} />} label="Delete" destructive onPress={confirmDelete} />
       ) : (

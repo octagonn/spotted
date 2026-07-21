@@ -238,6 +238,97 @@ export function useRespondMessageRequest() {
   });
 }
 
+/* --------------------- in-app content shares (#8) ------------------------- */
+
+export type ShareKind = "post" | "checkin" | "stream" | "workout";
+
+/** Share an in-app item (workout post, gym check-in, gym stream) into a DM. */
+export function useShareToMessage() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async ({
+      targetUserId,
+      sharedKind,
+      sharedId,
+      label
+    }: {
+      targetUserId: string;
+      sharedKind: ShareKind;
+      sharedId: string;
+      label: string;
+    }) => {
+      if (!isSupabaseConfigured || !userId) return;
+      const [a, b] = [userId, targetUserId].sort();
+      const found = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("participant_a", a)
+        .eq("participant_b", b)
+        .maybeSingle();
+      let conversationId = found.data?.id ?? null;
+      if (!conversationId) {
+        const inserted = await supabase
+          .from("conversations")
+          .insert({ participant_a: a, participant_b: b })
+          .select("id")
+          .single();
+        if (inserted.error) throw inserted.error;
+        conversationId = inserted.data.id;
+      }
+      const { error } = await supabase.from("messages").insert({
+        conversation_id: conversationId,
+        sender_id: userId,
+        content: label,
+        kind: "share",
+        shared_kind: sharedKind,
+        shared_id: sharedId
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
+  });
+}
+
+/* ------------------------------ forward (#14) ----------------------------- */
+
+/**
+ * Forward a message's content to another user. Only mutual friends are offered
+ * at the call site; the conversation gatekeeper also keeps non-friend targets
+ * as requests, so this can't be used to bypass the request flow.
+ */
+export function useForwardMessage() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async ({ targetUserId, content }: { targetUserId: string; content: string }) => {
+      if (!isSupabaseConfigured || !userId) return;
+      const [a, b] = [userId, targetUserId].sort();
+      const found = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("participant_a", a)
+        .eq("participant_b", b)
+        .maybeSingle();
+      let conversationId = found.data?.id ?? null;
+      if (!conversationId) {
+        const inserted = await supabase
+          .from("conversations")
+          .insert({ participant_a: a, participant_b: b })
+          .select("id")
+          .single();
+        if (inserted.error) throw inserted.error;
+        conversationId = inserted.data.id;
+      }
+      const { error } = await supabase
+        .from("messages")
+        .insert({ conversation_id: conversationId, sender_id: userId, content: `↪ ${content}` });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
+  });
+}
+
 /* ------------------------------ folders (#2) ------------------------------ */
 
 export type MessageFolder = { id: string; name: string };

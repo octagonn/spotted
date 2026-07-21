@@ -153,12 +153,18 @@ export function useSendMessage(conversationId?: string | null) {
 }
 
 export type MediaMessageInput = {
-  /** Local file URI (photo from the picker, or a recorded .m4a). */
+  /** Local file URI (photo, video, or a recorded .m4a). */
   localUri: string;
-  kind: "image" | "audio";
+  kind: "image" | "audio" | "video";
 };
 
-/** Upload chat media (photo / voice note) and insert the message row. */
+const MEDIA_CFG: Record<MediaMessageInput["kind"], { ext: string; type: string; label: string }> = {
+  image: { ext: "jpg", type: "image/jpeg", label: "📷 Photo" },
+  audio: { ext: "m4a", type: "audio/m4a", label: "🎤 Voice message" },
+  video: { ext: "mp4", type: "video/mp4", label: "🎥 Video" }
+};
+
+/** Upload chat media (photo / video / voice note) and insert the message row. */
 export function useSendMediaMessage(conversationId?: string | null) {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
@@ -167,16 +173,16 @@ export function useSendMediaMessage(conversationId?: string | null) {
       if (!isSupabaseConfigured || !conversationId || !userId) {
         throw new Error("Not ready to send");
       }
+      const cfg = MEDIA_CFG[kind];
       const uploadUri = kind === "image" ? await compressStoryPhoto(localUri) : localUri;
       const response = await fetch(uploadUri);
       const body = await response.arrayBuffer();
       if (!body || body.byteLength === 0) {
         throw new Error("The file could not be read.");
       }
-      const ext = kind === "image" ? "jpg" : "m4a";
-      const path = `${userId}/${conversationId}-${Date.now()}.${ext}`;
+      const path = `${userId}/${conversationId}-${Date.now()}.${cfg.ext}`;
       const upload = await supabase.storage.from("messages").upload(path, body, {
-        contentType: kind === "image" ? "image/jpeg" : "audio/m4a",
+        contentType: cfg.type,
         upsert: false
       });
       if (upload.error) {
@@ -186,7 +192,7 @@ export function useSendMediaMessage(conversationId?: string | null) {
         conversation_id: conversationId,
         sender_id: userId,
         // Placeholder text keeps inbox previews readable.
-        content: kind === "image" ? "📷 Photo" : "🎤 Voice message",
+        content: cfg.label,
         media_url: path
       });
       if (error) {

@@ -34,8 +34,8 @@ export function StreakFlame({ size = "md" }: { size?: FlameSize }) {
 
   return (
     <Animated.View style={animatedStyle}>
-      <View className={["items-center justify-center border border-iron bg-black", boxClasses[size]].join(" ")}>
-        <View className="absolute inset-1 border border-slate opacity-40" />
+      <View className={["items-center justify-center border border-hairline-strong bg-black", boxClasses[size]].join(" ")}>
+        <View className="absolute inset-1 border border-hairline-strong opacity-40" />
         <Flame color={colors.pure} size={iconSizes[size]} strokeWidth={1.7} />
       </View>
     </Animated.View>

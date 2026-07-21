@@ -5,7 +5,6 @@ export type Gym = Database["public"]["Tables"]["gyms"]["Row"];
 export type Post = Database["public"]["Tables"]["posts"]["Row"];
 export type Checkin = Database["public"]["Tables"]["checkins"]["Row"];
 export type Streak = Database["public"]["Tables"]["streaks"]["Row"];
-export type SubscriptionTier = Database["public"]["Enums"]["subscription_tier"];
 
 export type MuscleGroup =
   | "Chest"
@@ -23,12 +22,8 @@ export type FeedPost = Post & {
   profile: Pick<Profile, "id" | "username" | "display_name" | "avatar_url" | "avatar_blurred_url">;
   gym: Pick<Gym, "id" | "name" | "latitude" | "longitude"> | null;
   viewer_count: number;
-  replay_count: number;
-  reply_count: number;
-  music_title: string | null;
-  music_artist: string | null;
-  is_daily_drop: boolean;
-  permanent: boolean;
+  /** Usernames of tagged friends (post_tags join). */
+  tag_usernames?: string[];
 };
 
 export type FriendSuggestion = Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> & {
@@ -42,17 +37,10 @@ export type FriendPresence = {
   checked_in_at: string;
 };
 
-export type ViewerPreview =
-  | {
-      tier: "free";
-      total_count: number;
-      viewers: { avatar_blurred_url: string | null }[];
-    }
-  | {
-      tier: "plus";
-      total_count: number;
-      viewers: Pick<Profile, "id" | "username" | "display_name" | "avatar_url">[];
-    };
+export type ViewerPreview = {
+  total_count: number;
+  viewers: Pick<Profile, "id" | "username" | "display_name" | "avatar_url">[];
+};
 
 export type DailyPrompt = {
   title: string;

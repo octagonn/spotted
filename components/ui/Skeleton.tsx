@@ -8,7 +8,7 @@ type SkeletonProps = {
 
 export function Skeleton({ word = "LOADING" }: SkeletonProps) {
   return (
-    <View className="min-h-64 justify-end border border-iron bg-ink p-6">
+    <View className="min-h-64 justify-end border border-hairline-strong bg-ink p-6">
       <Text variant="title" className="text-slate">
         {word}
       </Text>

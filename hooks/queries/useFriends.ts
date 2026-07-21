@@ -2,35 +2,160 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { mockProfiles, mockSuggestions } from "@/lib/mockData";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/auth";
+import type { FriendSuggestion, Profile } from "@/types/domain";
 
 export function useFriends() {
+  const userId = useAuthStore((state) => state.userId);
   return useQuery({
-    queryKey: ["friends"],
-    queryFn: async () => {
+    // Keyed by userId so a different account can't read this one's cached list.
+    queryKey: ["friends", userId],
+    queryFn: async (): Promise<Profile[]> => {
       if (!isSupabaseConfigured) {
         return mockProfiles.slice(1);
       }
-      const { error } = await supabase.from("friendships").select("*").eq("status", "accepted");
+      const userResult = await supabase.auth.getUser();
+      const userId = userResult.data.user?.id;
+      if (!userId) {
+        return [];
+      }
+      const { data, error } = await supabase
+        .from("friendships")
+        .select(
+          "user_id, friend_id, status, friend:friend_id(id, username, display_name, avatar_url, avatar_blurred_url, bio, home_gym_id, created_at), inviter:user_id(id, username, display_name, avatar_url, avatar_blurred_url, bio, home_gym_id, created_at)"
+        )
+        .eq("status", "accepted")
+        .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
       if (error) {
         throw error;
       }
-      return mockProfiles.slice(1);
+      const profiles: Profile[] = [];
+      for (const row of data ?? []) {
+        const partner =
+          row.user_id === userId
+            ? (row as unknown as { friend: Profile | null }).friend
+            : (row as unknown as { inviter: Profile | null }).inviter;
+        if (partner) {
+          profiles.push(partner);
+        }
+      }
+      return profiles;
+    }
+  });
+}
+
+/** Live people search across all discoverable profiles (Find Friends search bar). */
+export function useSearchPeople(query: string) {
+  const cleaned = query.trim().replace(/[%,()]/g, "");
+  return useQuery({
+    queryKey: ["people-search", cleaned.toLowerCase()],
+    enabled: isSupabaseConfigured && cleaned.length >= 2,
+    staleTime: 30_000,
+    queryFn: async (): Promise<Pick<Profile, "id" | "username" | "display_name" | "avatar_url">[]> => {
+      const userResult = await supabase.auth.getUser();
+      const userId = userResult.data.user?.id;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url")
+        .eq("discoverable", true)
+        .or(`username.ilike.%${cleaned}%,display_name.ilike.%${cleaned}%`)
+        .limit(20);
+      if (error) {
+        throw error;
+      }
+      return (data ?? []).filter((profile) => profile.id !== userId);
     }
   });
 }
 
 export function useFriendSuggestions() {
+  const userId = useAuthStore((state) => state.userId);
   return useQuery({
-    queryKey: ["friend-suggestions"],
-    queryFn: async () => {
+    queryKey: ["friend-suggestions", userId],
+    queryFn: async (): Promise<FriendSuggestion[]> => {
       if (!isSupabaseConfigured) {
         return mockSuggestions;
       }
-      const { error } = await supabase.functions.invoke("get-friend-suggestions", { body: { limit: 8 } });
+      const { data, error } = await supabase.functions.invoke<{ suggestions: FriendSuggestion[] }>(
+        "get-friend-suggestions",
+        { body: { limit: 8 } }
+      );
       if (error) {
         throw error;
       }
-      return mockSuggestions;
+      return data?.suggestions ?? [];
+    }
+  });
+}
+
+export type IncomingRequest = {
+  requesterId: string;
+  profile: Pick<Profile, "id" | "username" | "display_name" | "avatar_url">;
+};
+
+export function useIncomingRequests() {
+  const userId = useAuthStore((state) => state.userId);
+  return useQuery({
+    queryKey: ["friend-requests", userId],
+    queryFn: async (): Promise<IncomingRequest[]> => {
+      if (!isSupabaseConfigured) {
+        return [];
+      }
+      const userResult = await supabase.auth.getUser();
+      const userId = userResult.data.user?.id;
+      if (!userId) {
+        return [];
+      }
+      const { data, error } = await supabase
+        .from("friendships")
+        .select("user_id, inviter:user_id(id, username, display_name, avatar_url)")
+        .eq("status", "pending")
+        .eq("friend_id", userId);
+      if (error) {
+        throw error;
+      }
+      return (data ?? [])
+        .map((row) => {
+          const profile = (row as unknown as { inviter: IncomingRequest["profile"] | null }).inviter;
+          return profile ? { requesterId: row.user_id, profile } : null;
+        })
+        .filter((request): request is IncomingRequest => request !== null);
+    }
+  });
+}
+
+export function useRespondToRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ requesterId, accept }: { requesterId: string; accept: boolean }) => {
+      if (!isSupabaseConfigured) {
+        return;
+      }
+      const user = await supabase.auth.getUser();
+      const userId = user.data.user?.id;
+      if (!userId) {
+        return;
+      }
+      const { error } = accept
+        ? await supabase
+            .from("friendships")
+            .update({ status: "accepted" })
+            .eq("user_id", requesterId)
+            .eq("friend_id", userId)
+            .eq("status", "pending")
+        : await supabase
+            .from("friendships")
+            .delete()
+            .eq("user_id", requesterId)
+            .eq("friend_id", userId)
+            .eq("status", "pending");
+      if (error) {
+        throw error;
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
+      await queryClient.invalidateQueries({ queryKey: ["friends"] });
     }
   });
 }
@@ -47,13 +172,16 @@ export function useSendFriendRequest() {
       if (!userId) {
         return;
       }
-      const { error } = await supabase.from("friendships").insert({ user_id: userId, friend_id: friendId });
+      const { error } = await supabase
+        .from("friendships")
+        .insert({ user_id: userId, friend_id: friendId, status: "pending" });
       if (error) {
         throw error;
       }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["friend-suggestions"] });
+      await queryClient.invalidateQueries({ queryKey: ["friends"] });
     }
   });
 }

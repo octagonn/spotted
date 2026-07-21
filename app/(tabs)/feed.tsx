@@ -1,175 +1,187 @@
+import { useIsFocused } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
-import { Image } from "expo-image";
-import { router } from "expo-router";
-import { Camera, Eye, MessageCircle, Repeat2 } from "lucide-react-native";
-import { ScrollView, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Bell } from "lucide-react-native";
+import { useMemo, useRef, useState } from "react";
+import { RefreshControl, Text as RNText, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EmptyState } from "@/components/EmptyState";
-import { PumpCard } from "@/components/PumpCard";
-import { Button } from "@/components/ui/Button";
+import { LockOverlay } from "@/components/post/LockOverlay";
+import { StoriesRail } from "@/components/post/StoriesRail";
+import { PostCard } from "@/components/post/PostCard";
+import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
 import { Pressable } from "@/components/ui/Pressable";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { Text } from "@/components/ui/Text";
-import { useFeed, useMarkPostViewed } from "@/hooks/queries/useFeed";
-import { useStreak } from "@/hooks/queries/useStreak";
-import { mockDailyPrompt, mockSkipSignals } from "@/lib/mockData";
+import { Segmented } from "@/components/ui/Segmented";
+import { useSheet } from "@/components/ui/Sheet";
+import { useActivityUnreadCount } from "@/hooks/queries/useNotifications";
+import { useFeed } from "@/hooks/queries/useFeed";
+import { useFriends } from "@/hooks/queries/useFriends";
+import { type FeedMockPost } from "@/lib/redesignData";
+import { usePostedState } from "@/hooks/queries/usePostedState";
+import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
 
-const storySignals = [
-  { label: "views", value: "23", icon: Eye },
-  { label: "replays", value: "6", icon: Repeat2 },
-  { label: "replies", value: "4", icon: MessageCircle }
-] as const;
+const NAV_H = 84;
 
-export default function FeedScreen() {
+/** Map a real Supabase post onto the redesign post card shape. */
+function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
+  const minutes = Math.max(1, Math.round((Date.now() - new Date(post.created_at).getTime()) / 60000));
+  const time =
+    minutes < 60
+      ? `${minutes}m`
+      : minutes < 60 * 24
+        ? `${Math.round(minutes / 60)}h`
+        : `${Math.round(minutes / (60 * 24))}d`;
+  const isVideo = post.media_type === "video";
+  const trimStart = post.video_trim_start ?? 0;
+  const trimEnd = post.video_trim_end ?? 0;
+  const clipSeconds = trimEnd > trimStart ? Math.round(trimEnd - trimStart) : 0;
+  return {
+    id: post.id,
+    kind: isVideo ? "lift" : "fb",
+    user: { name: post.profile.display_name, handle: post.profile.username, avatarUrl: post.profile.avatar_url },
+    gym: post.gym?.name,
+    altLoc: post.gym ? undefined : post.location_kind === "home" ? "Home Gym" : "Unlisted location",
+    time,
+    mediaUri: post.media_url,
+    mediaUris: !isVideo && (post.media_urls?.length ?? 0) > 1 ? (post.media_urls as string[]) : undefined,
+    video: isVideo && post.media_url ? { uri: post.media_url, trimStart, trimEnd } : undefined,
+    lift: isVideo ? { lift: post.lift_name ?? "Lift", weight: post.lift_weight ?? "" } : undefined,
+    duration: clipSeconds ? `0:${String(clipSeconds).padStart(2, "0")}` : undefined,
+    caption: post.caption ?? undefined,
+    music: post.music_title
+      ? {
+          title: post.music_title,
+          artist: post.music_artist ?? "",
+          artworkUrl: post.music_artwork_url,
+          previewUrl: post.music_preview_url,
+          clipStart: post.music_clip_start
+        }
+      : undefined,
+    taggedFriends: post.tag_usernames?.length
+      ? post.tag_usernames.map((u) => ({ handle: u, name: u }))
+      : undefined,
+    reactions: [],
+    comments: []
+  };
+}
+
+export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const [tab, setTab] = useState("Friends");
+  // Feed stays unlocked for a week after the last daily post (server-derived).
+  const { postedThisWeek } = usePostedState();
+  const sheet = useSheet();
   const feed = useFeed();
-  const streak = useStreak();
-  const markViewed = useMarkPostViewed();
-  const posts = feed.data ?? [];
+  const router = useRouter();
+  const unreadCount = useActivityUnreadCount();
+
+  const locked = !postedThisWeek;
+  const userId = useAuthStore((state) => state.userId);
+  const friends = useFriends();
+  const friendIds = useMemo(() => new Set((friends.data ?? []).map((f) => f.id)), [friends.data]);
+  // Friends tab: you + your crew. Public tab: every real post RLS lets you see
+  // (public-visibility profiles included). No fixtures anywhere.
+  const posts = useMemo(() => {
+    const rows = feed.data ?? [];
+    const scoped = tab === "Friends"
+      ? rows.filter((p) => p.user_id === userId || friendIds.has(p.user_id))
+      : rows;
+    return scoped.map(toMockShape);
+  }, [feed.data, tab, userId, friendIds]);
+
+  const openReactionCapture = (postId: string) => {
+    sheet.open(<ReactionCaptureSheet postId={postId} onClose={sheet.close} />);
+  };
+
+  // Which post's music is audible: the first mostly-visible post with a
+  // playable track — and only while this screen is focused, so opening a
+  // story (which renders on top of the mounted feed) silences the feed.
+  const isFocused = useIsFocused();
+  const [audiblePostId, setAudiblePostId] = useState<string | null>(null);
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 55 }).current;
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: { isViewable: boolean; item?: FeedMockPost }[] }) => {
+      const first = viewableItems.find((v) => v.isViewable && v.item?.music?.previewUrl);
+      setAudiblePostId(first?.item?.id ?? null);
+    }
+  ).current;
 
   return (
-    <View className="flex-1 bg-black" style={{ paddingTop: insets.top }}>
-      <View className="flex-row items-end justify-between border-b border-iron px-4 pb-4 pt-4">
-        <View className="max-w-[70%]">
-          <Text variant="display-sm">TODAY</Text>
-          <Text variant="display-md" className="mt-4">
-            14:37:52
-          </Text>
-          <Text variant="micro" className="mt-2">
-            LEFT TO DROP YOURS
-          </Text>
-        </View>
-        <Pressable
-          className="min-w-20 items-center border border-iron bg-ink px-3 py-2"
-          onPress={() => router.push("/streak")}
-        >
-          <Text variant="micro">STREAK</Text>
-          <Text variant="body-strong">{streak.data?.current_streak ?? 0}</Text>
-        </Pressable>
-      </View>
-
+    // Top inset lives on the container (not the scroll content) so the
+    // pull-to-refresh spinner appears below the notch where it's visible.
+    <View style={{ flex: 1, backgroundColor: colors.black, paddingTop: insets.top }}>
       <FlashList
         data={posts}
-        estimatedItemSize={620}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={feed.isRefetching}
+            onRefresh={() => void feed.refetch()}
+            tintColor={colors.white}
+          />
+        }
+        contentContainerStyle={{ paddingBottom: NAV_H + 12 }}
+        keyExtractor={(item: FeedMockPost) => item.id}
         ListHeaderComponent={
           <View>
-            <View className="border border-iron bg-ink p-5">
-              <View className="flex-row items-start justify-between gap-4">
-                <View className="flex-1">
-                  <Text variant="micro" className="text-mist">
-                    DAILY GYM DROP
-                  </Text>
-                  <Text variant="body-strong" className="mt-3">
-                    {mockDailyPrompt.title}
-                  </Text>
-                  <Text variant="caption" className="mt-2">
-                    {mockDailyPrompt.body}
-                  </Text>
+            {/* App head — brand (§2.4) */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8, paddingHorizontal: 18, paddingBottom: 4 }}>
+              <RNText
+                allowFontScaling={false}
+                style={{
+                  fontFamily: "Boldonse_400Regular",
+                  fontSize: 19,
+                  lineHeight: 19 * 1.4 + 8,
+                  letterSpacing: 19 * 0.01,
+                  color: colors.white,
+                  includeFontPadding: false
+                }}
+              >
+                SPOTTED
+              </RNText>
+              <Pressable onPress={() => router.push("/inbox")} accessibilityLabel="Notifications" hitSlop={8}>
+                <View>
+                  <Bell size={23} color={colors.white} strokeWidth={2} />
+                  {unreadCount > 0 ? (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: -1,
+                        right: -1,
+                        width: 9,
+                        height: 9,
+                        borderRadius: 5,
+                        backgroundColor: colors.gold,
+                        borderWidth: 1.5,
+                        borderColor: colors.black
+                      }}
+                    />
+                  ) : null}
                 </View>
-                <View className="h-12 w-12 items-center justify-center border border-white bg-white">
-                  <Camera color={colors.black} size={20} strokeWidth={2.2} />
-                </View>
-              </View>
-              <Button className="mt-5" onPress={() => router.push("/camera")}>
-                Post today's drop
-              </Button>
+              </Pressable>
             </View>
-
-            <View className="my-6 border-y border-iron py-4">
-              <View className="mb-4 flex-row items-center justify-between">
-                <Text variant="micro" className="text-white">
-                  FRIEND DROPS
-                </Text>
-                <Text variant="micro">24H / {posts.length} LIVE</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="h-40">
-                {posts.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    className="mr-3 w-28"
-                    onPress={() => markViewed.mutate(item.id)}
-                    onLongPress={() => router.push(`/post/${item.id}`)}
-                  >
-                    <View className="aspect-[3/4] overflow-hidden border border-iron bg-graphite">
-                      <Image source={{ uri: item.media_url }} contentFit="cover" className="h-full w-full" />
-                      <View className="absolute left-0 right-0 top-0 bg-black/60 p-2">
-                        <Text variant="micro" className="text-white">
-                          {item.profile.username}
-                        </Text>
-                        <Text variant="micro">18H</Text>
-                      </View>
-                      <View className="absolute bottom-0 left-0 right-0 flex-row items-center justify-between bg-black/70 p-2">
-                        <View className="flex-row items-center gap-1">
-                          <Eye color={colors.mist} size={12} />
-                          <Text variant="micro" className="text-mist">
-                            {item.viewer_count}
-                          </Text>
-                        </View>
-                        <View className="flex-row items-center gap-1">
-                          <Repeat2 color={colors.mist} size={12} />
-                          <Text variant="micro" className="text-mist">
-                            {item.replay_count}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View className="mb-6 border border-iron bg-graphite p-4">
-              <Text variant="micro" className="text-mist">
-                SKIP WATCH
-              </Text>
-              <Text variant="body-strong" className="mt-2">
-                {mockSkipSignals[0].body}
-              </Text>
-            </View>
-
-            <View className="mb-6 flex-row gap-3">
-              {storySignals.map((signal) => {
-                const Icon = signal.icon;
-                return (
-                  <View key={signal.label} className="flex-1 border border-iron bg-ink p-3">
-                    <Icon color={colors.mist} size={17} strokeWidth={1.8} />
-                    <Text variant="display-sm" className="mt-3">
-                      {signal.value}
-                    </Text>
-                    <Text variant="micro">{signal.label}</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            {feed.isLoading ? (
-              <View className="pb-6">
-                <Skeleton word="DROPS" />
-              </View>
-            ) : null}
+            {tab === "Friends" ? <StoriesRail /> : null}
+            <Segmented options={["Friends", "Public"]} value={tab} onChange={setTab} />
           </View>
         }
-        ListEmptyComponent={
-          feed.isLoading ? null : (
-            <EmptyState
-              title="NO ACTIVE DROPS."
-              body="Your friends are slacking. Or you have no friends yet. Either way, fix it."
-              action="Open camera"
-              onAction={() => router.push("/camera")}
-            />
-          )
-        }
-        renderItem={({ item }) => (
-          <PumpCard
-            post={item}
-            onView={() => markViewed.mutate(item.id)}
-            onViewers={() => router.push(`/post/${item.id}`)}
-          />
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        renderItem={({ item }: { item: FeedMockPost }) => (
+          <PostCard post={item} locked={locked} audible={isFocused && item.id === audiblePostId} onReact={openReactionCapture} />
         )}
+        ListEmptyComponent={
+          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
+            <RNText style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
+              {feed.isLoading
+                ? "Loading your feed…"
+                : tab === "Friends"
+                  ? "Nothing from your crew yet. Add friends or post today's SPOTTED."
+                  : "No public posts yet. Set your profile to Public and post to show up here."}
+            </RNText>
+          </View>
+        }
       />
+      {locked ? <LockOverlay /> : null}
     </View>
   );
 }

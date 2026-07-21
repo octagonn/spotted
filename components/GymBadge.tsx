@@ -13,7 +13,7 @@ export function GymBadge({ gymName, verified }: GymBadgeProps) {
   return (
     <View className="flex-row items-center gap-2">
       {verified ? (
-        <View className="h-4 w-4 items-center justify-center border border-white bg-white">
+        <View className="h-4 w-4 items-center justify-center rounded-full bg-white">
           <Check color={colors.black} size={11} strokeWidth={3} />
         </View>
       ) : null}

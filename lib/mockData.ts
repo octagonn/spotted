@@ -52,11 +52,14 @@ export const mockProfiles: Profile[] = [
     gym_score: 740,
     timezone: "America/Los_Angeles",
     arrival_notifs_enabled: true,
+    birth_date: null,
+    onboarding_stage: "complete",
     subscription_tier: "free",
     subscription_expires_at: null,
     premium_since: null,
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    social_links: {}
   },
   {
     id: "user-mia",
@@ -72,11 +75,14 @@ export const mockProfiles: Profile[] = [
     gym_score: 910,
     timezone: "America/Los_Angeles",
     arrival_notifs_enabled: true,
+    birth_date: null,
+    onboarding_stage: "complete",
     subscription_tier: "plus",
     subscription_expires_at: expires,
     premium_since: now,
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    social_links: {}
   },
   {
     id: "user-dre",
@@ -92,11 +98,14 @@ export const mockProfiles: Profile[] = [
     gym_score: 680,
     timezone: "America/Los_Angeles",
     arrival_notifs_enabled: true,
+    birth_date: null,
+    onboarding_stage: "complete",
     subscription_tier: "free",
     subscription_expires_at: null,
     premium_since: null,
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    social_links: {}
   },
   {
     id: "user-aria",
@@ -112,11 +121,14 @@ export const mockProfiles: Profile[] = [
     gym_score: 820,
     timezone: "America/Los_Angeles",
     arrival_notifs_enabled: true,
+    birth_date: null,
+    onboarding_stage: "complete",
     subscription_tier: "free",
     subscription_expires_at: null,
     premium_since: null,
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    social_links: {}
   },
   {
     id: "user-jules",
@@ -132,11 +144,14 @@ export const mockProfiles: Profile[] = [
     gym_score: 590,
     timezone: "America/Los_Angeles",
     arrival_notifs_enabled: true,
+    birth_date: null,
+    onboarding_stage: "complete",
     subscription_tier: "free",
     subscription_expires_at: null,
     premium_since: null,
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    social_links: {}
   }
 ];
 
@@ -169,6 +184,15 @@ export const mockFeed: FeedPost[] = [
     reply_count: 6,
     music_title: "No Hands",
     music_artist: "Waka Flocka Flame",
+    music_preview_url: null,
+    music_artwork_url: null,
+    music_clip_start: 0,
+    location_kind: "gym",
+    media_urls: null,
+    lift_name: null,
+    lift_weight: null,
+    video_trim_start: null,
+    video_trim_end: null,
     is_daily_drop: true,
     permanent: false
   },
@@ -191,6 +215,15 @@ export const mockFeed: FeedPost[] = [
     reply_count: 3,
     music_title: "Dreams and Nightmares",
     music_artist: "Meek Mill",
+    music_preview_url: null,
+    music_artwork_url: null,
+    music_clip_start: 0,
+    location_kind: "gym",
+    media_urls: null,
+    lift_name: null,
+    lift_weight: null,
+    video_trim_start: null,
+    video_trim_end: null,
     is_daily_drop: true,
     permanent: false
   }
@@ -247,7 +280,7 @@ export const mockRoutine: RoutineItem[] = [
 ];
 
 export const mockProfileSignals: ProfileSignal[] = [
-  { label: "PROFILE VIEWS", value: "12", detail: "3 new since your last drop" },
+  { label: "PROFILE VIEWS", value: "12", detail: "3 new since your last post" },
   { label: "STORY REPLAYS", value: "6", detail: "Mia replayed twice" },
   { label: "ROUTINE SAVES", value: "4", detail: "People studying the split" }
 ];
@@ -295,14 +328,30 @@ export const mockSkipSignals = [
   }
 ] as const;
 
-export const mockViewersFree: ViewerPreview = {
-  tier: "free",
-  total_count: 23,
-  viewers: mockProfiles.slice(0, 3).map((profile) => ({ avatar_blurred_url: profile.avatar_blurred_url }))
-};
+export const MOCK_CONVERSATION_ID = "mock-conversation";
 
-export const mockViewersPlus: ViewerPreview = {
-  tier: "plus",
+export const mockMessages = [
+  {
+    id: "msg-1",
+    conversation_id: MOCK_CONVERSATION_ID,
+    sender_id: "mock-friend",
+    content: "Pull day?",
+    media_url: null,
+    sent_at: now,
+    read_at: now
+  },
+  {
+    id: "msg-2",
+    conversation_id: MOCK_CONVERSATION_ID,
+    sender_id: "mock-user",
+    content: "Already there.",
+    media_url: null,
+    sent_at: now,
+    read_at: now
+  }
+];
+
+export const mockViewers: ViewerPreview = {
   total_count: 3,
   viewers: mockProfiles.slice(0, 3)
 };

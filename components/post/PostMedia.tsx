@@ -1,0 +1,514 @@
+import { LinearGradient } from "expo-linear-gradient";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { useEffect, useRef, useState } from "react";
+import { Pressable as NativePressable, ScrollView, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming
+} from "react-native-reanimated";
+
+import { ScenePhoto } from "@/components/post/ScenePhoto";
+import { LiftTag, PlayBadge, VChip, VidDur } from "@/components/ui/Chips";
+import type { FeedMockPost } from "@/lib/redesignData";
+import { colors } from "@/theme/colors";
+import { easing } from "@/theme/motion";
+
+/** Mock video playback length (§4.3): progress 0→100% over 4.1s, reset ~4.3s. */
+const VIDEO_PROGRESS_MS = 4100;
+const VIDEO_RESET_MS = 4300;
+
+type MediaProps = {
+  post: FeedMockPost;
+  /** Blur radius applied to real photos when the feed is locked. */
+  blurRadius?: number;
+};
+
+/** Front-and-back photo (`.fb`, §4.3.1) — full-bleed 3/3.6 with optional 31% inset selfie. */
+export function FbMedia({ post, blurRadius }: MediaProps) {
+  const hasInset = Boolean(post.inset || post.insetUri);
+  const isLift = post.kind === "lift";
+  return (
+    <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
+      <ScenePhoto uri={post.mediaUri} scene={post.main} blurRadius={blurRadius} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+      {isLift ? (
+        <LinearGradient
+          colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
+          locations={[0, 0.35, 1]}
+          pointerEvents="none"
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      ) : null}
+      {hasInset ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            width: "31%",
+            aspectRatio: 3 / 4,
+            borderRadius: 12,
+            borderWidth: 2,
+            borderColor: colors.black,
+            overflow: "hidden",
+            zIndex: 3,
+            shadowColor: "#000",
+            shadowOpacity: 0.55,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 6 },
+            elevation: 8
+          }}
+        >
+          <ScenePhoto uri={post.insetUri} scene={post.inset} blurRadius={blurRadius} legibility={false} />
+        </View>
+      ) : null}
+      {isLift && post.lift ? (
+        <LiftTag style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }}>
+          {`🏆 ${post.lift.lift} · ${post.lift.weight}`}
+        </LiftTag>
+      ) : null}
+      {isLift ? (
+        <>
+          <PlayBadge style={{ position: "absolute", top: "50%", left: "50%", marginTop: -28, marginLeft: -28, zIndex: 3 }} />
+          {post.duration ? (
+            <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>{post.duration}</VidDur>
+          ) : null}
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+/** Milestone plate (`.plate-card`, §4.3.2) — kinds pr / streak. */
+export function PlateCard({ post }: MediaProps) {
+  if (!post.plate) {
+    return null;
+  }
+  return (
+    <View
+      style={{
+        marginHorizontal: 18,
+        borderWidth: 1,
+        borderColor: colors.slate,
+        borderRadius: 16,
+        overflow: "hidden",
+        paddingTop: 24,
+        paddingHorizontal: 18,
+        paddingBottom: 22,
+        alignItems: "center"
+      }}
+    >
+      <LinearGradient
+        colors={[colors.graphite, colors.ink]}
+        start={{ x: 0.12, y: 0 }}
+        end={{ x: 0.88, y: 1 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+      {/* Decorative circles: 220px top −84 / right −70; 140px bottom −64 / left −52 */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          width: 220,
+          height: 220,
+          borderRadius: 110,
+          borderWidth: 1,
+          borderColor: colors.iron,
+          top: -84,
+          right: -70
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          width: 140,
+          height: 140,
+          borderRadius: 70,
+          borderWidth: 1,
+          borderColor: colors.iron,
+          bottom: -64,
+          left: -52
+        }}
+      />
+      <Text
+        style={{
+          fontFamily: "GeistMono_400Regular",
+          fontSize: 10.5,
+          letterSpacing: 10.5 * 0.24,
+          textTransform: "uppercase",
+          color: colors.silver,
+          marginBottom: 10
+        }}
+      >
+        {`◎ ${post.plate.tag}`}
+      </Text>
+      {/* Boldonse has very tall glyph metrics — iOS clips anything shorter
+          than ~1.6x lineHeight, so give it real headroom. */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Text
+          allowFontScaling={false}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          style={{
+            fontFamily: "Boldonse_400Regular",
+            fontSize: 44,
+            lineHeight: 44 * 1.6,
+            color: colors.white,
+            includeFontPadding: false
+          }}
+        >
+          {post.plate.big}
+        </Text>
+        <Text
+          style={{
+            fontSize: 18,
+            color: colors.fog,
+            letterSpacing: 18 * 0.08,
+            marginLeft: 9
+          }}
+        >
+          {post.plate.unit}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** Video media (`.fb.lift-video`, §4.3.3) — tap-to-play mock with 3px progress bar. */
+export function VideoMedia({ post, blurRadius }: MediaProps) {
+  const [playing, setPlaying] = useState(false);
+  const progress = useSharedValue(0);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current) {
+        clearTimeout(resetTimer.current);
+      }
+      cancelAnimation(progress);
+    };
+  }, [progress]);
+
+  const play = () => {
+    if (playing) {
+      return;
+    }
+    setPlaying(true);
+    progress.value = 0;
+    progress.value = withTiming(1, { duration: VIDEO_PROGRESS_MS, easing: easing.linear });
+    resetTimer.current = setTimeout(() => {
+      setPlaying(false);
+      progress.value = 0;
+    }, VIDEO_RESET_MS);
+  };
+
+  const progressStyle = useAnimatedStyle(() => ({
+    width: `${progress.value * 100}%`
+  }));
+
+  return (
+    <NativePressable onPress={play} disabled={blurRadius !== undefined}>
+      <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
+        <ScenePhoto uri={post.mediaUri} scene={post.main} blurRadius={blurRadius} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+        {/* Extra video scrim: rgba(0,0,0,0.3) → transparent 35% → rgba(0,0,0,0.55) */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
+          locations={[0, 0.35, 1]}
+          pointerEvents="none"
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        {post.chips?.length ? (
+          <View style={{ position: "absolute", top: 12, left: 12, zIndex: 3, flexDirection: "row", gap: 6 }}>
+            {post.chips.map((chip) => (
+              <VChip key={chip} hot={chip === "PR"}>
+                {chip === "PR" ? "◎ PR" : chip}
+              </VChip>
+            ))}
+          </View>
+        ) : null}
+        {!playing ? (
+          <PlayBadge style={{ position: "absolute", top: "50%", left: "50%", marginTop: -28, marginLeft: -28, zIndex: 3 }} />
+        ) : null}
+        {post.duration ? (
+          <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>{post.duration}</VidDur>
+        ) : null}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            { position: "absolute", bottom: 0, left: 0, height: 3, backgroundColor: colors.white, zIndex: 4 },
+            progressStyle
+          ]}
+        />
+      </View>
+    </NativePressable>
+  );
+}
+
+/** Compare tag (`.cmp-tag`): mono 10 700 ls 0.16em, radius 6. */
+function CmpTag({ label, right }: { label: string; right?: boolean }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 12,
+        left: right ? undefined : 12,
+        right: right ? 12 : undefined,
+        zIndex: 3,
+        backgroundColor: right ? colors.white : "rgba(0,0,0,0.6)",
+        paddingVertical: 4,
+        paddingHorizontal: 9,
+        borderRadius: 6
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: "GeistMono_500Medium",
+          fontSize: 10,
+          letterSpacing: 10 * 0.16,
+          color: right ? colors.black : colors.silver
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Before/after compare (`.cmp`, §4.3.4) — aspect 3/2.4, right image clipped from
+ * the divider, 2px white divider with 34px ↔ knob. A horizontal pan drags the
+ * divider live between 6% and 94%.
+ */
+export function CompareMedia({ post, blurRadius }: MediaProps) {
+  const [width, setWidth] = useState(0);
+  const pct = useSharedValue(50);
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-4, 4])
+    .failOffsetY([-12, 12])
+    .onUpdate((event) => {
+      if (width > 0) {
+        const next = (event.x / width) * 100;
+        pct.value = Math.min(94, Math.max(6, next));
+      }
+    });
+
+  const afterStyle = useAnimatedStyle(() => ({
+    width: `${100 - pct.value}%`
+  }));
+  const dividerStyle = useAnimatedStyle(() => ({
+    left: `${pct.value}%`
+  }));
+
+  if (!post.cmp) {
+    return null;
+  }
+
+  return (
+    <GestureDetector gesture={pan}>
+      <View
+        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        style={{ width: "100%", aspectRatio: 3 / 2.4, overflow: "hidden" }}
+      >
+        <ScenePhoto
+          uri={post.mediaUri}
+          scene={post.cmp.beforeScene}
+          blurRadius={blurRadius}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        {/* After half — anchored right, clipped at the divider */}
+        {width > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[{ position: "absolute", top: 0, right: 0, bottom: 0, overflow: "hidden" }, afterStyle]}
+          >
+            <View style={{ position: "absolute", top: 0, right: 0, bottom: 0, width }}>
+              <ScenePhoto uri={post.insetUri} scene={post.cmp.afterScene} blurRadius={blurRadius} />
+            </View>
+          </Animated.View>
+        ) : null}
+        <CmpTag label={post.cmp.left} />
+        <CmpTag label={post.cmp.right} right />
+        {/* Divider + knob */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            { position: "absolute", top: 0, bottom: 0, width: 2, marginLeft: -1, backgroundColor: colors.white, zIndex: 4 },
+            dividerStyle
+          ]}
+        >
+          <View
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              marginTop: -17,
+              marginLeft: -17,
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: colors.white,
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>↔</Text>
+          </View>
+        </Animated.View>
+      </View>
+    </GestureDetector>
+  );
+}
+
+/** Real recorded lift clip — tap to play/pause, loops inside the trim window. */
+function RealVideoMedia({ post, blurRadius }: MediaProps) {
+  const video = post.video as NonNullable<FeedMockPost["video"]>;
+  const [playing, setPlaying] = useState(false);
+  const player = useVideoPlayer(video.uri, (p) => {
+    p.loop = false;
+    p.timeUpdateEventInterval = 0.25;
+    p.pause();
+  });
+
+  useEffect(() => {
+    const timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
+      const end = video.trimEnd > video.trimStart ? video.trimEnd : Number.POSITIVE_INFINITY;
+      if (currentTime >= end) {
+        player.currentTime = video.trimStart;
+      }
+    });
+    const playSub = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
+    return () => {
+      timeSub.remove();
+      playSub.remove();
+    };
+  }, [player, video.trimStart, video.trimEnd]);
+
+  const toggle = () => {
+    try {
+      if (playing) {
+        player.pause();
+        return;
+      }
+      if (player.currentTime < video.trimStart) {
+        player.currentTime = video.trimStart;
+      }
+      player.play();
+    } catch {
+      // Player torn down — ignore.
+    }
+  };
+
+  if (blurRadius !== undefined) {
+    // Locked feed: no playback, just the frosted placeholder tile.
+    return (
+      <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite, alignItems: "center", justifyContent: "center" }}>
+        <PlayBadge />
+      </View>
+    );
+  }
+
+  return (
+    <NativePressable onPress={toggle}>
+      <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
+        <VideoView
+          player={player}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          contentFit="cover"
+          nativeControls={false}
+        />
+        <LinearGradient
+          colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
+          locations={[0, 0.35, 1]}
+          pointerEvents="none"
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        {post.lift ? (
+          <LiftTag style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }}>
+            {`🏆 ${post.lift.lift} · ${post.lift.weight}`}
+          </LiftTag>
+        ) : null}
+        {!playing ? (
+          <PlayBadge style={{ position: "absolute", top: "50%", left: "50%", marginTop: -28, marginLeft: -28, zIndex: 3 }} />
+        ) : null}
+        {post.duration ? (
+          <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>{post.duration}</VidDur>
+        ) : null}
+      </View>
+    </NativePressable>
+  );
+}
+
+/** Multi-photo carousel — swipeable pages with a dots indicator + counter. */
+function CarouselMedia({ post, blurRadius }: MediaProps) {
+  const uris = post.mediaUris as string[];
+  const [index, setIndex] = useState(0);
+  const [width, setWidth] = useState(0);
+  return (
+    <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      style={{ width: "100%", aspectRatio: 3 / 3.6 }}
+    >
+      {width > 0 ? (
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEnabled={blurRadius === undefined}
+          onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+          style={{ flex: 1 }}
+        >
+          {uris.map((uri) => (
+            <View key={uri} style={{ width, height: "100%" }}>
+              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} />
+            </View>
+          ))}
+        </ScrollView>
+      ) : null}
+      {/* Counter chip */}
+      <View pointerEvents="none" style={{ position: "absolute", top: 12, right: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.6)" }}>
+        <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 10.5, color: colors.white }}>
+          {`${index + 1}/${uris.length}`}
+        </Text>
+      </View>
+      {/* Dots */}
+      <View pointerEvents="none" style={{ position: "absolute", bottom: 10, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 }}>
+        {uris.map((uri, i) => (
+          <View
+            key={uri}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: i === index ? colors.white : "rgba(255,255,255,0.4)"
+            }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Media router (§4.3) — picks the media kind for a post. */
+export function PostMedia({ post, blurRadius }: MediaProps) {
+  if (post.video) {
+    return <RealVideoMedia post={post} blurRadius={blurRadius} />;
+  }
+  if ((post.mediaUris?.length ?? 0) > 1) {
+    return <CarouselMedia post={post} blurRadius={blurRadius} />;
+  }
+  if (post.kind === "pr" || post.kind === "streak") {
+    return <PlateCard post={post} />;
+  }
+  if (post.kind === "video") {
+    return <VideoMedia post={post} blurRadius={blurRadius} />;
+  }
+  if (post.kind === "compare") {
+    return <CompareMedia post={post} blurRadius={blurRadius} />;
+  }
+  return <FbMedia post={post} blurRadius={blurRadius} />;
+}

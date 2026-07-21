@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       },
       "android": {
         "buildType": "apk"
@@ -16,8 +17,14 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APNS_ENV": "development",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://nvywxqntsrlrmlrpfuub.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52eXd4cW50c3Jscm1scnBmdXViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MTY2NjcsImV4cCI6MjA5Mjk5MjY2N30.xTaKHGBjL4w_P8nORyS85r3gguETo8iZSORLEA6k4Bc"
+      },
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       },
       "android": {
         "buildType": "app-bundle"
@@ -25,8 +32,14 @@
     },
     "production": {
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APNS_ENV": "production",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://nvywxqntsrlrmlrpfuub.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52eXd4cW50c3Jscm1scnBmdXViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MTY2NjcsImV4cCI6MjA5Mjk5MjY2N30.xTaKHGBjL4w_P8nORyS85r3gguETo8iZSORLEA6k4Bc"
+      },
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       },
       "android": {
         "buildType": "app-bundle"
@@ -34,6 +47,8 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {}
+    }
   }
 }

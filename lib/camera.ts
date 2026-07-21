@@ -9,6 +9,6 @@ export function useSpottedCamera(position: "front" | "back") {
     device,
     cameraPermission,
     microphonePermission,
-    ready: Boolean(device && cameraPermission.hasPermission && microphonePermission.hasPermission)
+    ready: Boolean(device && cameraPermission.hasPermission)
   };
 }

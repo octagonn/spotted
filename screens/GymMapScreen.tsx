@@ -1,4 +1,4 @@
-import { LocateFixed, Search, UserPlus } from "lucide-react-native";
+﻿import { LocateFixed, Search, UserPlus } from "lucide-react-native";
 import { View } from "react-native";
 
 import { AvatarPin } from "@/components/AvatarPin";
@@ -26,14 +26,14 @@ export default function GymMapScreen() {
         The people you might actually run into.
       </Text>
 
-      <View className="mt-8 flex-row items-center gap-3 border border-iron bg-ink px-4 py-3">
+      <View className="mt-8 flex-row items-center gap-3 border border-hairline-strong bg-ink px-4 py-3">
         <Search color={colors.fog} size={18} />
         <Text variant="caption" className="flex-1 text-silver">
           Search usernames or gyms
         </Text>
       </View>
 
-      <View className="mt-6 border border-iron bg-ink p-5">
+      <View className="mt-6 border border-hairline-strong bg-ink p-5">
         <Text variant="micro" className="text-mist">
           MAIN GYM
         </Text>
@@ -43,7 +43,7 @@ export default function GymMapScreen() {
         <Text variant="caption" className="mt-3">
           Usually 5:00 PM. Arnold split. Discoverable at this gym.
         </Text>
-        <View className="mt-6 flex-row border-t border-iron pt-4">
+        <View className="mt-6 flex-row border-t border-hairline-strong pt-4">
           <View className="flex-1">
             <Text variant="display-sm">{data?.presence.length ?? 0}</Text>
             <Text variant="micro">FRIENDS HERE</Text>
@@ -55,14 +55,14 @@ export default function GymMapScreen() {
         </View>
       </View>
 
-      <View className="mt-6 overflow-hidden border border-iron bg-ink">
+      <View className="mt-6 overflow-hidden border border-hairline-strong bg-ink">
         <View className="relative h-80">
           <View className="absolute left-0 right-0 top-16 h-px bg-iron" />
           <View className="absolute left-0 right-0 top-40 h-px bg-iron" />
           <View className="absolute bottom-20 left-0 right-0 h-px bg-iron" />
           <View className="absolute bottom-0 left-12 top-0 w-px bg-iron" />
           <View className="absolute bottom-0 right-20 top-0 w-px bg-iron" />
-          <View className="absolute left-6 top-6 border border-iron bg-black px-3 py-2">
+          <View className="absolute left-6 top-6 border border-hairline-strong bg-black px-3 py-2">
             <Text variant="micro" className="text-white">
               GYM FLOOR
             </Text>
@@ -81,7 +81,7 @@ export default function GymMapScreen() {
             />
           </View>
         </View>
-        <View className="border-t border-iron p-4">
+        <View className="border-t border-hairline-strong p-4">
           <Button icon={<LocateFixed color={colors.black} size={18} />}>I'm here</Button>
         </View>
       </View>
@@ -93,13 +93,13 @@ export default function GymMapScreen() {
           </Text>
           <View className="mt-3 gap-3">
             {suggestionList.map((suggestion) => (
-              <Pressable key={suggestion.id} className="flex-row items-center gap-3 border border-iron bg-ink p-3">
+              <Pressable key={suggestion.id} className="flex-row items-center gap-3 border border-hairline-strong bg-ink p-3">
                 <Avatar uri={suggestion.avatar_url} />
                 <View className="flex-1">
                   <Text variant="body-strong">{suggestion.display_name}</Text>
                   <Text variant="micro">@{suggestion.username}</Text>
                 </View>
-                <View className="h-10 w-10 items-center justify-center border border-iron bg-white">
+                <View className="h-10 w-10 items-center justify-center border border-hairline-strong bg-white">
                   <UserPlus color={colors.black} size={17} />
                 </View>
               </Pressable>
@@ -108,13 +108,13 @@ export default function GymMapScreen() {
         </View>
       ) : null}
 
-      <View className="mt-8 border border-iron bg-ink p-5">
+      <View className="mt-8 border border-hairline-strong bg-ink p-5">
         <Text variant="micro" className="text-white">
           ROUTINES PEOPLE CAN STEAL
         </Text>
         <View className="mt-4 gap-3">
           {mockRoutine.slice(0, 4).map((item) => (
-            <View key={item.day} className="flex-row items-center border-t border-iron pt-3">
+            <View key={item.day} className="flex-row items-center border-t border-hairline-strong pt-3">
               <Text variant="micro" className="w-14 text-white">
                 {item.day}
               </Text>

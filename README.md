@@ -4,7 +4,7 @@ Spotted is an Expo + React Native gym social app with a Supabase backend. It use
 
 ## Stack
 
-- Expo SDK 52, React Native 0.76, Expo Router v4 typed routes
+- Expo SDK 54, React Native 0.81, Expo Router v6 typed routes
 - NativeWind v4, Reanimated 3, Gesture Handler
 - Supabase Auth, Postgres, RLS, Storage, Realtime, Edge Functions
 - Vision Camera, React Native Maps, Skia, MMKV, React Query, Zustand
@@ -37,12 +37,16 @@ The app boots without Supabase credentials using local mock data. Once credentia
 
 ## Supabase
 
-Apply migrations to a fresh Supabase project:
+Apply migrations to a fresh local Supabase project:
 
 ```bash
-supabase db push
-supabase db reset --linked
+supabase start
+supabase db reset
 ```
+
+Do not run `supabase db reset --linked`. The currently linked production project also
+has a known history mismatch for migrations `0006` through `0010`; read
+`design/HANDOFF.md` before applying or repairing linked migrations.
 
 Run pgTAP policy tests:
 
@@ -63,6 +67,7 @@ supabase functions deploy grant-consumable
 supabase functions deploy get-post-viewers
 supabase functions deploy get-friend-suggestions
 supabase functions deploy avatar-process
+supabase functions deploy email-auth-status
 ```
 
 Required Supabase secrets:
@@ -77,18 +82,24 @@ supabase secrets set APNS_ENV=development
 
 `APNS_PRIVATE_KEY` is the base64-encoded contents of the `.p8` key.
 
-## EAS Build From Windows
+## iOS-First EAS Build From Windows
 
-No local Mac is required. Use Expo's cloud builders:
+No local Mac is required. iOS is the launch target; use Expo's cloud builders:
 
 ```bash
-npx eas login
-npx eas build:configure
-npx eas build --platform ios --profile preview
-npx eas build --platform android --profile preview
+npx eas-cli@latest login
+npx eas-cli@latest build:configure
+npm run ios:build:development
+npm run ios:build:preview
+npm run ios:build:production
+npm run ios:submit
 ```
 
-An Apple Developer account is required for installable iOS builds. For day-to-day Windows development, use Android Studio's emulator for fast iteration and a real iPhone with an `expo-dev-client` build for iOS hardware features.
+An Apple Developer account is required for installable iOS builds. Use a real iPhone
+with the `development` profile for an `expo-dev-client` build connected to local Metro.
+Use `preview` for a standalone internal-distribution build, then `production` for the
+TestFlight candidate. Camera, location, contacts, Apple Sign In, push, and sandbox IAP
+must be exercised on the real device. Android remains a secondary development target.
 
 ## Checks
 

@@ -1,68 +1,327 @@
 import { Image } from "expo-image";
-import { useLocalSearchParams } from "expo-router";
-import { View } from "react-native";
+import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { Flame, Lock, MapPin } from "lucide-react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Linking, ScrollView, Share, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Screen } from "@/components/Screen";
+import { StreakCalendar } from "@/components/profile/StreakCalendar";
+import { StreakPopup } from "@/components/profile/StreakPopup";
 import { Avatar } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
-import { Text } from "@/components/ui/Text";
-import { mockGyms, mockPermanentDrops, mockProfiles, mockRoutine } from "@/lib/mockData";
+import { Button, RelButton } from "@/components/ui/Button";
+import { PanelHeader } from "@/components/ui/PanelHeader";
+import { Pressable } from "@/components/ui/Pressable";
+import { useMutualFriends } from "@/hooks/queries/useFollowing";
+import { useRespondToRequest, useSendFriendRequest } from "@/hooks/queries/useFriends";
+import { useFriendshipStatus, useProfileByUsername, useUserStreak } from "@/hooks/queries/useProfile";
+import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
+import { useStreakDays } from "@/hooks/queries/useStreakDays";
+import { useStories } from "@/hooks/queries/useStories";
+import { useUserCounts } from "@/hooks/queries/useUserCounts";
+import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
+import { computeGymStreak } from "@/lib/streak";
+import { useAuthStore } from "@/stores/auth";
+import { relationshipButton, useRelationships } from "@/stores/relationships";
+import { colors } from "@/theme/colors";
+import type { RelationshipState } from "@/types/redesign";
 
+function backendState(status: ReturnType<typeof useFriendshipStatus>["data"]): RelationshipState {
+  if (status === "accepted") return "friend";
+  if (status === "pending-outgoing") return "requested";
+  if (status === "pending-incoming") return "incoming";
+  return "none";
+}
+
+/**
+ * Read-only public profile — same layout as your own (avatar, stats, name, bio,
+ * gym, socials, streak calendar, posts), but with Add/Message/Share instead of
+ * editing. Private accounts show a locked state until you're friends.
+ */
 export default function UserProfileScreen() {
-  const params = useLocalSearchParams<{ username: string }>();
-  const profile = mockProfiles.find((item) => item.username === params.username) ?? mockProfiles[1];
+  const { username = "" } = useLocalSearchParams<{ username: string }>();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const profileQuery = useProfileByUsername(username);
+  const profile = profileQuery.data;
+  const ownUserId = useAuthStore((state) => state.userId);
+  const friendship = useFriendshipStatus(profile?.id);
+  const posts = useSignedUserPosts(profile?.id);
+  const counts = useUserCounts(profile?.id);
+  const streakDays = useStreakDays(profile?.id);
+  const userStreak = useUserStreak(profile?.id);
+  const mutuals = useMutualFriends(profile?.id);
+  const stories = useStories();
+  const sendRequest = useSendFriendRequest();
+  const respondRequest = useRespondToRequest();
+  const relationships = useRelationships();
+  const [streakOpen, setStreakOpen] = useState(false);
+
+  const key = profile?.id ?? username;
+  const initialState = backendState(friendship.data);
+  const friendshipResolved = friendship.isSuccess;
+  useEffect(() => {
+    if (friendshipResolved && profile) {
+      relationships.setRelationship(profile.id, backendState(friendship.data));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friendshipResolved, profile?.id]);
+
+  const state = relationships.stateFor(key, initialState);
+  const isFriend = state === "friend";
+  const button = relationshipButton(state);
+  const name = profile?.display_name ?? username.replace(/[._]/g, " ");
+  const handle = profile?.username ?? username;
+  const bio = profile?.bio ?? null;
+  const gym = profile?.gym?.name ?? null;
+  const socials = useMemo(() => socialEntries(parseSocialLinks(profile?.social_links)), [profile?.social_links]);
+  const hasActiveStory = Boolean(profile && stories.data?.some((g) => g.userId === profile.id));
+
+  // Public accounts are viewable by anyone; private ones unlock only for friends.
+  const isPublic = profile?.discoverable === true;
+  const canView = isFriend || isPublic;
+
+  const gymStreak = useMemo(
+    () => computeGymStreak(streakDays.data ? streakDays.data.keys() : []),
+    [streakDays.data]
+  );
+  const currentStreak = gymStreak.count;
+  const longestStreak = Math.max(userStreak.data?.longest_streak ?? 0, currentStreak);
+  const trophies = (posts.data ?? []).some((p) => p.media_url) ? 1 : 0;
+  const postCount = counts.data?.posts ?? (posts.data ?? []).filter((p) => p.media_url).length;
+  const gridPosts = (posts.data ?? []).filter((p) => p.media_url);
+
+  const advance = () => {
+    const from = state;
+    const transition = relationships.advance(key, name);
+    if (!transition || !profile) return;
+    if (from === "none" && transition.to === "requested") sendRequest.mutate(profile.id);
+    if (from === "incoming" && transition.to === "friend") {
+      respondRequest.mutate({ requesterId: profile.id, accept: true });
+    }
+  };
+
+  const shareProfile = () => {
+    void Share.share({ message: `Check out @${handle} on Spotted 💪` });
+  };
+
+  if (profile && ownUserId && profile.id === ownUserId) {
+    return <Redirect href="/(tabs)/profile" />;
+  }
 
   return (
-    <Screen>
-      <Avatar uri={profile.avatar_url} size="lg" />
-      <Text variant="display-sm" className="mt-8">
-        {profile.display_name.toUpperCase()}
-      </Text>
-      <Text variant="micro" className="mt-2">
-        @{profile.username} / {mockGyms[0].name} / usually 5:00 PM
-      </Text>
-      <View className="mt-8 border border-iron bg-ink p-4">
-        <Text variant="body">{profile.bio ?? "No bio. Probably lifting."}</Text>
-      </View>
-      <View className="mt-8 border border-iron bg-ink p-4">
-        <Text variant="micro" className="text-mist">
-          ROUTINE
-        </Text>
-        <Text variant="title" className="mt-1">
-          ARNOLD SPLIT
-        </Text>
-        <View className="mt-5 gap-2">
-          {mockRoutine.slice(0, 4).map((item) => (
-            <View key={item.day} className="flex-row items-center border-t border-iron pt-3">
-              <Text variant="micro" className="w-14 text-white">
-                {item.day}
-              </Text>
-              <Text variant="body" className="flex-1">
-                {item.muscle}
-              </Text>
-              <Text variant="micro">{item.time}</Text>
+    <View style={{ flex: 1, backgroundColor: colors.black }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+        <PanelHeader title={handle} />
+
+        {/* Avatar + stats */}
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingTop: 8 }}>
+          <Pressable disabled={!hasActiveStory} onPress={() => profile && router.push(`/story?user=${profile.id}`)}>
+            <View
+              style={{
+                width: 88,
+                height: 88,
+                borderRadius: 44,
+                borderWidth: hasActiveStory ? 2.5 : 0,
+                borderColor: colors.white,
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              <Avatar name={name} uri={profile?.avatar_url} size={hasActiveStory ? 78 : 84} />
             </View>
-          ))}
+          </Pressable>
+          <View style={{ flex: 1, flexDirection: "row", paddingLeft: 6 }}>
+            <StatCell value={postCount} label="posts" />
+            <StatCell
+              value={counts.data?.friends ?? 0}
+              label="friends"
+              onPress={() => profile && router.push(`/people/friends?user=${profile.id}` as Href)}
+            />
+          </View>
         </View>
-      </View>
-      <View className="mt-8">
-        <Text variant="title">SAVED DROPS</Text>
-        <View className="mt-4 flex-row gap-3">
-          {mockPermanentDrops.map((drop) => (
-            <View key={drop.id} className="flex-1 border border-iron bg-ink">
-              <View className="aspect-[4/5] bg-graphite">
-                <Image source={{ uri: drop.media_url }} contentFit="cover" className="h-full w-full" />
-              </View>
-              <View className="border-t border-iron p-3">
-                <Text variant="micro" className="text-white">
-                  {drop.label}
-                </Text>
+
+        {/* Name, bio, gym, socials */}
+        <View style={{ paddingHorizontal: 18, paddingTop: 14 }}>
+          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: colors.white }}>{name}</Text>
+          {bio ? (
+            <Text style={{ marginTop: 5, fontFamily: "Geist_400Regular", fontSize: 13.5, lineHeight: 13.5 * 1.45, color: colors.mist }}>
+              {bio}
+            </Text>
+          ) : null}
+          {gym ? (
+            <View style={{ marginTop: 7, flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <MapPin size={12} color={colors.fog} strokeWidth={2} />
+              <Text style={{ fontFamily: "Geist_400Regular", fontSize: 12, color: colors.fog }}>{gym}</Text>
+            </View>
+          ) : null}
+          {socials.length ? (
+            <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              {socials.map(({ meta, url }) => (
+                <Pressable key={meta.key} onPress={() => void Linking.openURL(url)} accessibilityLabel={meta.label} hitSlop={6}>
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      borderWidth: 1,
+                      borderColor: colors.iron,
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
+                    <meta.icon size={17} color={colors.silver} strokeWidth={2} />
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
+
+        {/* Add / Message / Share — one relationship model: friends. */}
+        <View style={{ paddingHorizontal: 18, paddingTop: 16, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <RelButton label={button.label} kind={button.kind} disabled={button.disabled} onPress={advance} />
+          {isFriend && profile ? (
+            <RelButton label="Message" kind="quiet" onPress={() => router.push(`/chat/${profile.id}`)} />
+          ) : null}
+          <RelButton label="Share" kind="quiet" onPress={shareProfile} />
+        </View>
+
+        {/* Mutual friends row */}
+        {mutuals.data && mutuals.data.length > 0 && profile ? (
+          <Pressable
+            onPress={() => router.push(`/people/mutuals?user=${profile.id}` as Href)}
+            style={{ paddingHorizontal: 18, paddingTop: 14, flexDirection: "row", alignItems: "center", gap: 8 }}
+          >
+            <View style={{ flexDirection: "row" }}>
+              {mutuals.data.slice(0, 3).map((m, i) => (
+                <View key={m.id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
+                  <Avatar name={m.display_name} uri={m.avatar_url} size={22} borderColor={colors.black} borderWidth={2} />
+                </View>
+              ))}
+            </View>
+            <Text style={{ flex: 1, fontFamily: "Geist_400Regular", fontSize: 12.5, color: colors.silver }} numberOfLines={1}>
+              <Text style={{ color: colors.mist }}>{mutuals.data.length} mutual {mutuals.data.length === 1 ? "friend" : "friends"}</Text>
+              {"  ·  "}
+              {mutuals.data.slice(0, 2).map((m) => m.display_name.split(" ")[0]).join(", ")}
+              {mutuals.data.length > 2 ? ` +${mutuals.data.length - 2}` : ""}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {canView ? (
+          <>
+            {/* Inline stats */}
+            <View style={{ paddingHorizontal: 18, paddingTop: 24, flexDirection: "row" }}>
+              <Pressable style={{ flex: 1, alignItems: "center" }} haptic={false} onPress={() => setStreakOpen(true)} accessibilityLabel="Gym streak">
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Flame size={13} color={colors.gold} strokeWidth={2.2} />
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
+                    <Text style={{ fontFamily: "Geist_700Bold", fontSize: 18, color: colors.white }}>{currentStreak}</Text>
+                    <Text style={{ fontFamily: "Geist_400Regular", fontSize: 10.5, color: colors.fog }}>days</Text>
+                  </View>
+                </View>
+                <Text style={{ marginTop: 5, fontFamily: "Geist_400Regular", fontSize: 11.5, color: colors.fog }}>Gym streak</Text>
+              </Pressable>
+              <StatCell value={longestStreak} unit="days" label="Longest" />
+              <StatCell value={trophies} label="Trophies" />
+            </View>
+
+            {/* Streak calendar */}
+            <View style={{ paddingTop: 24 }}>
+              <View
+                style={{
+                  marginHorizontal: 18,
+                  borderRadius: 16,
+                  backgroundColor: colors.ink,
+                  paddingVertical: 16,
+                  overflow: "hidden"
+                }}
+              >
+                <StreakCalendar
+                  days={streakDays.data ?? new Map()}
+                  createdAt={profile?.created_at}
+                  onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
+                />
               </View>
             </View>
-          ))}
-        </View>
-      </View>
-      <Button className="mt-8">Add friend</Button>
-    </Screen>
+
+            {/* Posts grid */}
+            {gridPosts.length ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 22 }}>
+                {gridPosts.map((post) => (
+                  <Pressable
+                    key={post.id}
+                    style={{ width: "33%", aspectRatio: 4 / 5 }}
+                    onPress={() => profile && router.push(`/profile-posts/${post.id}?user=${profile.id}` as Href)}
+                  >
+                    <View style={{ flex: 1, backgroundColor: colors.graphite }}>
+                      {post.media_url ? (
+                        <Image source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
+                <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center" }}>No posts yet.</Text>
+              </View>
+            )}
+          </>
+        ) : (
+          // Private account — locked state.
+          <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
+            <View
+              style={{
+                width: 58,
+                height: 58,
+                borderRadius: 29,
+                borderWidth: 1.5,
+                borderColor: colors.slate,
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              <Lock size={22} color={colors.silver} strokeWidth={2} />
+            </View>
+            <Text style={{ marginTop: 16, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white, textAlign: "center" }}>
+              This account is private
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 12.5, lineHeight: 18, color: colors.fog, textAlign: "center" }}>
+              Add {name.split(" ")[0]} to see their posts, streak, and progress.
+            </Text>
+            {state === "none" ? (
+              <View style={{ paddingTop: 18, alignSelf: "stretch", paddingHorizontal: 40 }}>
+                <Button onPress={advance}>Add {name.split(" ")[0]}</Button>
+              </View>
+            ) : null}
+          </View>
+        )}
+      </ScrollView>
+
+      <StreakPopup visible={streakOpen} name={name} streak={currentStreak} onClose={() => setStreakOpen(false)} />
+    </View>
   );
+}
+
+function StatCell({ value, unit, label, onPress }: { value: number; unit?: string; label: string; onPress?: () => void }) {
+  const body = (
+    <>
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
+        <Text style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white }}>{value}</Text>
+        {unit ? <Text style={{ fontFamily: "Geist_400Regular", fontSize: 10.5, color: colors.fog }}>{unit}</Text> : null}
+      </View>
+      <Text numberOfLines={1} style={{ marginTop: 4, fontFamily: "Geist_400Regular", fontSize: 11, color: colors.silver }}>
+        {label}
+      </Text>
+    </>
+  );
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingHorizontal: 1 }} haptic={false} accessibilityLabel={label}>
+        {body}
+      </Pressable>
+    );
+  }
+  return <View style={{ flex: 1, alignItems: "center" }}>{body}</View>;
 }

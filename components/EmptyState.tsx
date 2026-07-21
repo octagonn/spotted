@@ -12,7 +12,7 @@ type EmptyStateProps = {
 
 export function EmptyState({ title, body, action, onAction }: EmptyStateProps) {
   return (
-    <View className="min-h-[420px] justify-end border border-iron bg-ink p-6">
+    <View className="min-h-[420px] justify-end rounded-card border border-hairline-strong bg-glass-strong p-6">
       <Text variant="display-md">{title}</Text>
       <Text variant="italic" className="mt-5 max-w-[260px]">
         {body}

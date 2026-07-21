@@ -17,7 +17,11 @@ export default function PostDetailScreen() {
         No timestamps. That gets weird.
       </Text>
       <Sheet className="mt-8">
-        {viewers.data ? <ViewerList data={viewers.data} /> : <Text variant="caption">Loading viewers</Text>}
+        {viewers.data ? (
+          <ViewerList data={viewers.data} />
+        ) : (
+          <Text variant="caption">Loading viewers</Text>
+        )}
       </Sheet>
     </Screen>
   );

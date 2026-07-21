@@ -11,10 +11,10 @@ type AvatarPinProps = {
 export function AvatarPin({ uri, name }: AvatarPinProps) {
   return (
     <View className="items-center">
-      <View className="border border-white bg-black p-1">
-        <Avatar uri={uri} size="sm" />
+      <View className="rounded-full border-[1.5px] border-white bg-black p-[2px]">
+        <Avatar uri={uri} size="sm" rounded="circle" />
       </View>
-      <View className="mt-1 border border-iron bg-black px-2 py-1">
+      <View className="mt-1 rounded-pill border border-hairline-strong bg-black/80 px-3 py-1">
         <Text variant="micro" className="text-white">
           {name}
         </Text>

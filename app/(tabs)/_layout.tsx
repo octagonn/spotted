@@ -1,74 +1,160 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Tabs } from "expo-router";
-import { Camera, CircleDot, MapPin, MessageCircle, User } from "lucide-react-native";
-import { View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Tabs, useRouter } from "expo-router";
+import { Camera, House, Map as MapIcon, User, Users } from "lucide-react-native";
+import { Pressable as RNPressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { GrainOverlay } from "@/components/GrainOverlay";
-import { Pressable } from "@/components/ui/Pressable";
-import { Text } from "@/components/ui/Text";
-import { usePresenceStore } from "@/stores/presence";
+import { usePostedState } from "@/hooks/queries/usePostedState";
+import { selectionHaptic } from "@/lib/haptics";
 import { colors } from "@/theme/colors";
 
-function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const color = focused ? colors.white : colors.slate;
-  if (name === "feed") {
-    return <CircleDot color={color} size={23} strokeWidth={1.8} />;
-  }
-  if (name === "map") {
-    return <MapPin color={color} size={23} strokeWidth={1.8} />;
-  }
-  if (name === "friends") {
-    return <MessageCircle color={color} size={23} strokeWidth={1.8} />;
-  }
-  if (name === "profile") {
-    return <User color={color} size={23} strokeWidth={1.8} />;
-  }
-  return <Camera color={colors.black} size={28} strokeWidth={2.4} />;
+const NAV_H = 84;
+
+type TabName = "feed" | "friends" | "map" | "profile";
+
+/** Tab order per spec §3: Home · Friends · Camera (center) · Map · Profile. */
+const LEFT_TABS: TabName[] = ["feed", "friends"];
+const RIGHT_TABS: TabName[] = ["map", "profile"];
+
+function TabIcon({ name, focused }: { name: TabName; focused: boolean }) {
+  const color = focused ? colors.white : colors.ash;
+  const size = 24;
+  if (name === "feed") return <House color={color} size={size} strokeWidth={2} />;
+  if (name === "friends") return <Users color={color} size={size} strokeWidth={2} />;
+  if (name === "map") return <MapIcon color={color} size={size} strokeWidth={2} />;
+  return <User color={color} size={size} strokeWidth={2} />;
 }
 
-function SpottedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function TabSlot({
+  name,
+  focused,
+  onPress
+}: {
+  name: TabName;
+  focused: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <RNPressable
+      onPress={() => {
+        void selectionHaptic();
+        onPress();
+      }}
+      testID={`tab-${name}`}
+      accessibilityRole="button"
+      accessibilityLabel={name}
+      accessibilityState={{ selected: focused }}
+      style={({ pressed }) => ({
+        width: 52,
+        height: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        transform: [{ scale: pressed ? 0.9 : 1 }]
+      })}
+    >
+      <TabIcon name={name} focused={focused} />
+    </RNPressable>
+  );
+}
+
+/**
+ * Center camera button per spec §3: 64px circle raised 12px above the row,
+ * 2.5px white border, ink bg, white 28px camera icon. Posted state: border
+ * dims to slate + 14px white dot (3px black ring) at top-right. Pushes /camera
+ * instead of switching tabs.
+ */
+function CameraTabButton({ posted, onPress }: { posted: boolean; onPress: () => void }) {
+  return (
+    <RNPressable
+      onPress={() => {
+        void selectionHaptic();
+        onPress();
+      }}
+      testID="tab-camera"
+      accessibilityRole="button"
+      accessibilityLabel="Camera"
+      style={({ pressed }) => ({
+        // Negative margin drops the big circle below the side icons' baseline
+        // so its bottom hugs the home indicator like the rest of the bar.
+        marginBottom: -10,
+        transform: [{ scale: pressed ? 0.92 : 1 }]
+      })}
+    >
+      <View
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 32,
+          borderWidth: 2.5,
+          borderColor: posted ? colors.slate : colors.white,
+          backgroundColor: colors.ink,
+          alignItems: "center",
+          justifyContent: "center",
+          shadowColor: "#000000",
+          shadowOpacity: 0.9,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 14
+        }}
+      >
+        <Camera color={colors.white} size={28} strokeWidth={2} />
+      </View>
+    </RNPressable>
+  );
+}
+
+function RedesignTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const atGym = usePresenceStore((store) => store.atGym);
+  const router = useRouter();
+  const { postedToday: posted } = usePostedState();
+
+  const isFocused = (name: TabName) => state.routes[state.index]?.name === name;
+  const goTo = (name: TabName) => navigation.navigate(name);
 
   return (
     <View
-      className="absolute bottom-0 left-0 right-0 border-t border-iron bg-black px-3 pt-2"
-      style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      pointerEvents="box-none"
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: NAV_H + insets.bottom,
+        zIndex: 100,
+        elevation: 100
+      }}
     >
-      <GrainOverlay opacity={0.05} />
-      <View className="flex-row items-end justify-between">
-        {state.routes.map((route, index) => {
-          const focused = state.index === index;
-          const options = descriptors[route.key]?.options;
-          if (route.name === "index" || route.name === "explore") {
-            return null;
-          }
-          const isCamera = route.name === "camera";
-          return (
-            <Pressable
-              key={route.key}
-              className={
-                isCamera
-                  ? "-mt-8 h-16 w-16 items-center justify-center bg-white"
-                  : "h-14 flex-1 items-center justify-center gap-1"
-              }
-              pressedClassName={isCamera ? "scale-95" : "opacity-60"}
-              onPress={() => navigation.navigate(route.name)}
-              testID={`tab-${route.name}`}
-              accessibilityRole="button"
-              accessibilityLabel={String(options?.title ?? route.name)}
-            >
-              {isCamera && atGym ? <View className="absolute inset-[-5px] border border-mist opacity-60" /> : null}
-              <TabIcon name={route.name} focused={focused} />
-              {!isCamera ? (
-                <Text variant="micro" className={focused ? "text-white" : "text-slate"}>
-                  {String(options?.title ?? route.name).toUpperCase()}
-                </Text>
-              ) : null}
-            </Pressable>
-          );
-        })}
+      {/* linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.92) 34%, black 100%) */}
+      <LinearGradient
+        colors={["transparent", "rgba(0,0,0,0.92)", "#000000"]}
+        locations={[0, 0.34, 1]}
+        pointerEvents="none"
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+      <View
+        pointerEvents="box-none"
+        style={{
+          // Anchored to the bottom edge (previously top-aligned inside the
+          // 84px bar, which left ~46px of dead space under the icons).
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          flexDirection: "row",
+          alignItems: "flex-end",
+          justifyContent: "space-around",
+          paddingHorizontal: 18,
+          paddingBottom: insets.bottom > 0 ? insets.bottom - 2 : 14
+        }}
+      >
+        {LEFT_TABS.map((name) => (
+          <TabSlot key={name} name={name} focused={isFocused(name)} onPress={() => goTo(name)} />
+        ))}
+        <CameraTabButton posted={posted} onPress={() => router.push("/camera")} />
+        {RIGHT_TABS.map((name) => (
+          <TabSlot key={name} name={name} focused={isFocused(name)} onPress={() => goTo(name)} />
+        ))}
       </View>
     </View>
   );
@@ -76,13 +162,15 @@ function SpottedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
 export default function TabLayout() {
   return (
-    <Tabs tabBar={(props) => <SpottedTabBar {...props} />} screenOptions={{ headerShown: false, lazy: false }}>
+    <Tabs
+      tabBar={(props) => <RedesignTabBar {...props} />}
+      screenOptions={{ headerShown: false, lazy: false, sceneStyle: { backgroundColor: colors.black } }}
+    >
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="feed" options={{ title: "Today" }} />
-      <Tabs.Screen name="map" options={{ title: "Gym" }} />
-      <Tabs.Screen name="camera" options={{ title: "Check In" }} />
-      <Tabs.Screen name="friends" options={{ title: "Inbox" }} />
+      <Tabs.Screen name="feed" options={{ title: "Home" }} />
+      <Tabs.Screen name="friends" options={{ title: "Friends" }} />
+      <Tabs.Screen name="map" options={{ title: "Map" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );

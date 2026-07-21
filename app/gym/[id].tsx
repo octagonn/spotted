@@ -17,11 +17,11 @@ export default function GymDetailScreen() {
     <Screen>
       <Text variant="display-sm">{gym?.name.toUpperCase() ?? "GYM"}</Text>
       <Text variant="caption" className="mt-2 italic">
-        Friends here now. Recent drops you can already see.
+        Friends here now. Recent posts you can already see.
       </Text>
       <View className="mt-8 gap-3">
         {friends.map((friend) => (
-          <View key={friend.id} className="flex-row items-center gap-3 border border-iron bg-ink p-3">
+          <View key={friend.id} className="flex-row items-center gap-3 border border-hairline-strong bg-ink p-3">
             <Avatar uri={friend.profile.avatar_url} />
             <View>
               <Text variant="body-strong">{friend.profile.display_name}</Text>

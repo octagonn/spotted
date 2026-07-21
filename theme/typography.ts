@@ -10,7 +10,8 @@ export const textVariants = {
   caption: "font-sans text-[13px] leading-[19px] text-silver",
   micro: "font-sansMedium text-[11px] leading-[15px] uppercase tracking-[0.6px] text-fog",
   button: "font-sansStrong text-[15px] leading-[19px] text-black",
-  italic: "font-sans text-[17px] leading-[26px] italic text-silver"
+  italic: "font-sans text-[17px] leading-[26px] italic text-silver",
+  mono: "font-mono text-[12px] leading-[16px] text-fog"
 } as const;
 
 export type TextVariant = keyof typeof textVariants;

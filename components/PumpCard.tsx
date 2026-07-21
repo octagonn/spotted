@@ -18,10 +18,14 @@ type PumpCardProps = {
 
 export function PumpCard({ post, onView, onViewers }: PumpCardProps) {
   return (
-    <Pressable className="mb-8 border border-iron bg-ink" onLongPress={onViewers} onPress={onView}>
+    <Pressable
+      className="mb-6 overflow-hidden rounded-card border border-hairline-strong bg-glass-strong"
+      onLongPress={onViewers}
+      onPress={onView}
+    >
       <View className="relative aspect-[4/5] overflow-hidden bg-graphite">
         <Image source={{ uri: post.media_url }} contentFit="cover" className="h-full w-full" />
-        <View className="absolute left-0 right-0 top-0 flex-row items-center gap-3 bg-black/60 p-4">
+        <View className="absolute left-0 right-0 top-0 flex-row items-center gap-3 bg-black/55 p-4">
           <Avatar uri={post.profile.avatar_url} size="sm" />
           <View className="flex-1">
             <Text variant="caption" className="font-sansMedium text-bone">
@@ -36,10 +40,10 @@ export function PumpCard({ post, onView, onViewers }: PumpCardProps) {
             <Text variant="micro">@{post.profile.username}</Text>
           </View>
         </View>
-        <View className="absolute bottom-0 left-0 right-0 bg-black/70 p-4">
+        <View className="absolute bottom-0 left-0 right-0 bg-black/65 p-4">
           {post.music_title ? (
-            <View className="mb-3 flex-row items-center gap-2 self-start border border-iron bg-black px-3 py-2">
-              <Music2 color={colors.white} size={14} />
+            <View className="mb-3 flex-row items-center gap-2 self-start rounded-pill border border-hairline-strong bg-glass-soft px-3 py-1.5">
+              <Music2 color={colors.white} size={13} />
               <Text variant="micro" className="text-white">
                 {post.music_title} / {post.music_artist}
               </Text>

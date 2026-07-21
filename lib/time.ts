@@ -43,3 +43,25 @@ export function addDays(date: Date, days: number) {
   next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
+
+export function timeAgo(iso: string, now: Date = new Date()) {
+  const then = new Date(iso).getTime();
+  const diffMs = now.getTime() - then;
+  if (Number.isNaN(diffMs)) return "";
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+  if (diffSec < 60) return `${diffSec}s`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) return `${diffDay}d`;
+  const diffWeek = Math.floor(diffDay / 7);
+  return `${diffWeek}w`;
+}
+
+export function hoursLeft(expiresAtIso: string, now: Date = new Date()) {
+  const expires = new Date(expiresAtIso).getTime();
+  const remainingMs = Math.max(0, expires - now.getTime());
+  return Math.max(0, Math.floor(remainingMs / 3_600_000));
+}

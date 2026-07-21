@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Spotted — sign-in code</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Boldonse&family=Inter:wght@400;500;600;700&display=swap"
+    />
+    <style>
+      /* Email-client safe reset */
+      html,
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #000000 !important;
+        color: #fafafa;
+      }
+      table {
+        border-collapse: collapse;
+      }
+      img {
+        border: 0;
+        outline: none;
+        text-decoration: none;
+        display: block;
+      }
+      a {
+        color: #fafafa;
+        text-decoration: none;
+      }
+      .display {
+        font-family: "Boldonse", "Anton", "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+        font-weight: 400;
+        text-transform: uppercase;
+        letter-spacing: -0.02em;
+        line-height: 0.92;
+        color: #fafafa;
+      }
+      .body {
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+        color: #d4d4d8;
+      }
+      .micro {
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+        font-size: 11px;
+        line-height: 16px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: #71717a;
+      }
+      .hairline {
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .button {
+        background: #fafafa;
+        color: #000000 !important;
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: 0.2px;
+        padding: 16px 28px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .codebox {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 18px;
+        padding: 24px;
+        font-family: "Boldonse", "Anton", "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+        font-size: 44px;
+        line-height: 48px;
+        letter-spacing: 12px;
+        color: #fafafa;
+        text-align: center;
+      }
+      @media (max-width: 480px) {
+        .display-xl {
+          font-size: 56px !important;
+          line-height: 52px !important;
+        }
+        .display-md {
+          font-size: 36px !important;
+          line-height: 36px !important;
+        }
+        .pad {
+          padding-left: 20px !important;
+          padding-right: 20px !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background: #000000;">
+    <!-- Preheader (hidden in body) -->
+    <div
+      style="display: none; max-height: 0; overflow: hidden; mso-hide: all; font-size: 1px; line-height: 1px;"
+    >
+      Your one-time sign-in code for Spotted. Don't keep your friends waiting.
+    </div>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#000000">
+      <tr>
+        <td align="center" style="padding: 56px 16px 24px 16px;">
+          <table
+            role="presentation"
+            width="560"
+            cellspacing="0"
+            cellpadding="0"
+            border="0"
+            style="max-width: 560px; width: 100%;"
+          >
+            <!-- Logo -->
+            <tr>
+              <td class="pad" style="padding: 0 32px 32px 32px;" align="center">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td
+                      style="
+                        width: 80px;
+                        height: 80px;
+                        background: rgba(255,255,255,0.04);
+                        border: 2px solid #fafafa;
+                        border-radius: 22px;
+                      "
+                      align="center"
+                      valign="middle"
+                    >
+                      <span class="display" style="font-size: 44px; line-height: 44px;">S</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Hero -->
+            <tr>
+              <td class="pad" style="padding: 0 32px;">
+                <p class="micro" style="margin: 0 0 16px 0;">SIGN-IN · ONE-TIME CODE</p>
+                <h1 class="display display-xl" style="margin: 0; font-size: 72px; line-height: 66px;">
+                  STEP<br />INTO IT.
+                </h1>
+                <p class="body" style="margin: 24px 0 0 0; font-size: 17px; line-height: 26px; color: #d4d4d8;">
+                  The gym, but everyone's watching. Use the code below — or tap the button — and you're in.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Code -->
+            <tr>
+              <td class="pad" style="padding: 32px 32px 0 32px;">
+                <div class="codebox">{{ .Token }}</div>
+              </td>
+            </tr>
+
+            <!-- CTA -->
+            <tr>
+              <td class="pad" style="padding: 24px 32px 0 32px;" align="center">
+                <a class="button" href="{{ .ConfirmationURL }}" target="_blank" rel="noopener noreferrer">
+                  Confirm sign-in →
+                </a>
+              </td>
+            </tr>
+
+            <!-- Caption -->
+            <tr>
+              <td class="pad" style="padding: 24px 32px 0 32px;" align="center">
+                <p class="body" style="margin: 0; font-size: 13px; line-height: 19px; color: #a1a1aa;">
+                  Code expires in 60 minutes. If you didn't request this, ignore the email — your account stays
+                  closed.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Hairline -->
+            <tr>
+              <td class="pad" style="padding: 40px 32px 0 32px;">
+                <div class="hairline"></div>
+              </td>
+            </tr>
+
+            <!-- Footer pill / signature -->
+            <tr>
+              <td class="pad" style="padding: 24px 32px 0 32px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td align="left">
+                      <p class="micro" style="margin: 0;">SPOTTED · DAILY · GYM · STORIES</p>
+                    </td>
+                    <td align="right">
+                      <p class="micro" style="margin: 0; color: #52525b;">SENT FROM TODAY'S GYM</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Brand footer -->
+            <tr>
+              <td class="pad" style="padding: 56px 32px 32px 32px;" align="center">
+                <p
+                  class="display display-md"
+                  style="margin: 0; font-size: 56px; line-height: 52px; color: rgba(250,250,250,0.16);"
+                >
+                  SPOTTED
+                </p>
+              </td>
+            </tr>
+
+            <!-- Legal -->
+            <tr>
+              <td class="pad" style="padding: 0 32px 24px 32px;" align="center">
+                <p class="body" style="margin: 0; font-size: 11px; line-height: 16px; color: #52525b;">
+                  You're getting this because someone signed in to Spotted with this email address.
+                  <br />
+                  © Spotted. All rights reserved.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

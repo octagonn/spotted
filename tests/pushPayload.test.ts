@@ -6,7 +6,7 @@ describe("push payload formatting", () => {
   it("formats post views", () => {
     expect(formatPushPayload("post_view", { actorName: "Mia" })).toEqual({
       title: "Eyes on you",
-      body: "Mia viewed your pump drop"
+      body: "Mia viewed your post"
     });
   });
 

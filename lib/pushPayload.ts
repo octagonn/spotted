@@ -1,4 +1,4 @@
-import type { Database, Json } from "@/types/database";
+﻿import type { Database, Json } from "@/types/database";
 
 type NotificationType = Database["public"]["Enums"]["notification_type"];
 
@@ -20,10 +20,10 @@ export function formatPushPayload(type: NotificationType, context: PushContext) 
     return { title: "Friend added", body: `You and ${actorName} are now friends` };
   }
   if (type === "post_view") {
-    return { title: "Eyes on you", body: `${actorName} viewed your pump drop` };
+    return { title: "Eyes on you", body: `${actorName} viewed your post` };
   }
   if (type === "post_reaction") {
-    return { title: context.reaction ?? "Reaction", body: `${actorName} reacted to your drop` };
+    return { title: context.reaction ?? "Reaction", body: `${actorName} reacted to your post` };
   }
   if (type === "streak_break_friend") {
     return {

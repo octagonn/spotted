@@ -1,0 +1,3734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SPOTTED — Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Boldonse&family=Anton&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   SPOTTED — design tokens
+   ================================================================ */
+:root {
+  --black: #000000;
+  --ink: #0A0A0A;
+  --graphite: #131315;
+  --charcoal: #1C1C1F;
+  --iron: #27272A;
+  --slate: #3F3F46;
+  --ash: #52525B;
+  --fog: #71717A;
+  --silver: #A1A1AA;
+  --mist: #D4D4D8;
+  --bone: #E4E4E7;
+  --white: #FAFAFA;
+  --pure: #FFFFFF;
+
+  --font-display: 'Boldonse', 'Anton', sans-serif;
+  --font-body: 'Geist', -apple-system, 'Helvetica Neue', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  --ease-standard: cubic-bezier(0.32, 0.08, 0.24, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --nav-h: 84px;
+  --status-h: 54px;
+  --r-sheet: 20px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+button, .row-press { user-select: none; }
+
+html, body {
+  background: var(--black);
+  color: var(--bone);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* subtle global grain (kept, but quieter than before) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.03 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  pointer-events: none;
+  z-index: 2000;
+  mix-blend-mode: overlay;
+}
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; font-size: inherit; }
+input, textarea { font-family: inherit; }
+.mono { font-family: var(--font-mono); }
+
+.pressable { transition: transform 140ms var(--ease-standard), opacity 140ms var(--ease-standard); }
+.pressable:active { transform: scale(0.965); opacity: 0.85; }
+
+/* ================================================================
+   STAGE (desktop presentation)
+   ================================================================ */
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 32px 72px;
+  min-height: 100vh;
+  gap: 40px;
+}
+
+.stage-header {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  width: 100%;
+  max-width: 920px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--iron);
+}
+
+.stage-brand {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 5vw, 56px);
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+  color: var(--white);
+}
+
+.stage-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fog);
+  margin-left: auto;
+}
+
+/* ================================================================
+   DEVICE FRAME
+   ================================================================ */
+.device {
+  width: 393px;
+  height: 852px;
+  background: linear-gradient(135deg, #1F1F22 0%, #0A0A0A 50%, #1F1F22 100%);
+  border-radius: 56px;
+  padding: 12px;
+  position: relative;
+  box-shadow:
+    0 0 0 1px var(--charcoal),
+    0 24px 64px -16px rgba(0,0,0,0.8),
+    0 8px 24px -8px rgba(0,0,0,0.6);
+  flex: none;
+}
+
+.device::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 54px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent 30%);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.device-screen {
+  width: 100%;
+  height: 100%;
+  background: var(--black);
+  border-radius: 44px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* screen grain — subtle */
+.device-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  z-index: 900;
+  border-radius: 44px;
+}
+
+.device-island {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 124px;
+  height: 36px;
+  background: var(--black);
+  border-radius: 18px;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* ---- Status bar ---- */
+.status-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: var(--status-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 32px 0;
+  z-index: 55;
+  pointer-events: none;
+}
+.status-time { font-weight: 600; font-size: 15px; color: var(--white); letter-spacing: -0.01em; }
+.status-icons { display: flex; align-items: center; gap: 6px; color: var(--white); }
+.status-icons svg { display: block; }
+
+/* ================================================================
+   SCREEN STACK + TRANSITIONS
+   ================================================================ */
+.screen-stack {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: scale(1.015);
+  transition: opacity 280ms var(--ease-emphasized), transform 280ms var(--ease-emphasized);
+  pointer-events: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: var(--status-h);
+  padding-bottom: calc(var(--nav-h) + 12px);
+  scrollbar-width: none;
+}
+.screen::-webkit-scrollbar { display: none; }
+.screen.active { opacity: 1; transform: scale(1); pointer-events: auto; }
+
+/* ---- Panels (pushed pages: profiles, conversations, communities, posts) ---- */
+.panel-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+.panel {
+  position: absolute;
+  inset: 0;
+  background: var(--black);
+  transform: translateX(100%);
+  transition: transform 300ms var(--ease-emphasized);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: var(--status-h);
+  padding-bottom: calc(var(--nav-h) + 12px);
+  pointer-events: auto;
+  scrollbar-width: none;
+}
+.panel::-webkit-scrollbar { display: none; }
+.panel.in { transform: translateX(0); }
+.panel.full { padding-bottom: 24px; z-index: 45; }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 12px;
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, var(--black) 78%, transparent);
+  z-index: 10;
+}
+.panel-back {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--iron);
+  color: var(--mist);
+  flex: none;
+}
+.panel-title { font-weight: 600; font-size: 16px; color: var(--white); letter-spacing: -0.01em; min-width: 0; }
+.panel-sub { font-size: 12px; color: var(--fog); margin-top: 1px; }
+
+/* ---- Bottom sheets ---- */
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.62);
+  opacity: 0;
+  transition: opacity 240ms var(--ease-standard);
+  z-index: 85;
+  pointer-events: none;
+}
+.sheet-backdrop.on { opacity: 1; pointer-events: auto; }
+
+.sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: var(--graphite);
+  border-top: 1px solid var(--iron);
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  transform: translateY(105%);
+  transition: transform 320ms var(--ease-emphasized);
+  z-index: 88;
+  max-height: 78%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: 28px;
+}
+.sheet::-webkit-scrollbar { display: none; }
+.sheet.in { transform: translateY(0); }
+.sheet-handle {
+  width: 36px; height: 4px;
+  background: var(--slate);
+  border-radius: 2px;
+  margin: 10px auto 4px;
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--nav-h) + 22px);
+  transform: translate(-50%, 16px);
+  background: var(--white);
+  color: var(--black);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 220ms var(--ease-standard), transform 220ms var(--ease-standard);
+  z-index: 95;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---- Camera flash ---- */
+.flash {
+  position: absolute;
+  inset: 0;
+  background: var(--pure);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 96;
+  transition: opacity 90ms linear;
+}
+.flash.on { opacity: 0.9; }
+
+/* ================================================================
+   LIVE PRESENCE — "spot me" strip, here-now, live map pins
+   ================================================================ */
+.live-strip {
+  display: flex;
+  gap: 12px;
+  padding: 6px 18px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.live-strip::-webkit-scrollbar { display: none; }
+.live-item { flex: none; width: 62px; cursor: pointer; }
+.live-ring {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  border: 1.5px solid var(--iron);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  margin: 0 auto 7px;
+}
+.live-item.live .live-ring { border-color: var(--white); }
+.live-ring.big { width: 82px; height: 82px; margin: 0; border-color: var(--white); }
+.live-badge {
+  position: absolute;
+  bottom: -6px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--white);
+  color: var(--black);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.live-name {
+  font-size: 10px;
+  color: var(--fog);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-item.live .live-name { color: var(--mist); }
+
+.here-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 10px 20px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--slate);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.035);
+  cursor: pointer;
+}
+.here-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--white); flex: none; }
+.here-txt { flex: 1; min-width: 0; font-size: 12px; color: var(--silver); }
+.here-txt b { color: var(--white); font-weight: 600; }
+.here-caret { color: var(--fog); font-size: 13px; transition: transform 200ms var(--ease-standard); flex: none; }
+.here-list { display: none; margin: 8px 20px 0; border: 1px solid var(--iron); border-radius: 12px; overflow: hidden; }
+.here-list.show { display: block; }
+.here-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--graphite); }
+.here-item:last-child { border-bottom: none; }
+.here-quiet {
+  margin: 10px 20px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--slate);
+  border-radius: 12px;
+  font-size: 11.5px;
+  color: var(--fog);
+}
+.gym-marker.live { border-color: var(--white); }
+
+@keyframes ringpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); } 50% { box-shadow: 0 0 0 7px rgba(255,255,255,0); } }
+@keyframes dotpulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.5); } 70% { box-shadow: 0 0 0 7px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+@keyframes markerpulse {
+  0%   { box-shadow: 0 6px 18px rgba(0,0,0,0.65), 0 0 0 0 rgba(255,255,255,0.4); }
+  70%  { box-shadow: 0 6px 18px rgba(0,0,0,0.65), 0 0 0 11px rgba(255,255,255,0); }
+  100% { box-shadow: 0 6px 18px rgba(0,0,0,0.65), 0 0 0 0 rgba(255,255,255,0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .live-item.live .live-ring, .live-ring.big { animation: ringpulse 1.9s ease-in-out infinite; }
+  .here-dot { animation: dotpulse 1.8s ease-out infinite; }
+  .gym-marker.live { animation: markerpulse 2s ease-out infinite; }
+}
+
+/* ================================================================
+   FEED — PR plates, form-check video, drag-to-compare progress
+   ================================================================ */
+.plate-card {
+  position: relative;
+  margin: 0 18px;
+  border: 1px solid var(--slate);
+  border-radius: 16px;
+  background: linear-gradient(160deg, var(--graphite), var(--ink));
+  padding: 30px 18px 28px;
+  text-align: center;
+  overflow: hidden;
+}
+.plate-ring {
+  position: absolute;
+  width: 220px; height: 220px;
+  border: 1px solid var(--iron);
+  border-radius: 50%;
+  top: -84px; right: -70px;
+  pointer-events: none;
+}
+.plate-ring.r2 { width: 140px; height: 140px; top: auto; right: auto; bottom: -64px; left: -52px; }
+.plate-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--silver);
+  margin-bottom: 14px;
+}
+.plate-big { font-family: var(--font-display); font-size: 50px; line-height: 1.05; color: var(--white); }
+.plate-unit { font-size: 19px; color: var(--fog); margin-left: 9px; letter-spacing: 0.08em; }
+
+.vid-chips { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; gap: 6px; }
+.vchip {
+  background: rgba(0,0,0,0.7);
+  border: 1px solid var(--slate);
+  color: var(--mist);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.vchip.hot { background: var(--white); color: var(--black); border-color: var(--white); }
+.vid-progress { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--white); width: 0; z-index: 4; }
+.fb.playing .play-badge { display: none; }
+.fb.playing .vid-progress { transition: width 4.1s linear; width: 100%; }
+
+.cmp { position: relative; width: 100%; aspect-ratio: 3 / 2.4; overflow: hidden; }
+.cmp-half { position: absolute; inset: 0; }
+.cmp-half .ph { position: absolute; inset: 0; }
+.cmp-half.after { clip-path: inset(0 0 0 50%); }
+.cmp-tag {
+  position: absolute;
+  top: 12px;
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 4px 9px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+.cmp-tag.l { left: 12px; color: var(--silver); background: rgba(0,0,0,0.6); }
+.cmp-tag.r { right: 12px; background: var(--white); color: var(--black); }
+.cmp-div { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--white); z-index: 4; pointer-events: none; }
+.cmp-div .knob {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--black);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+.cmp-range { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; z-index: 5; margin: 0; -webkit-appearance: none; }
+
+/* ================================================================
+   PROFILE QUADRANT — click-through sections
+   ================================================================ */
+.quad-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 16px 18px 4px;
+}
+.quad {
+  aspect-ratio: 1;
+  border: 1px solid var(--iron);
+  border-radius: 18px;
+  background: linear-gradient(165deg, var(--graphite), var(--ink));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  cursor: pointer;
+  padding: 16px 14px;
+  position: relative;
+  overflow: hidden;
+}
+.quad::after {
+  content: '';
+  position: absolute;
+  width: 150px; height: 150px;
+  border: 1px solid var(--iron);
+  border-radius: 50%;
+  top: -70px; right: -60px;
+  pointer-events: none;
+}
+.quad:active { background: var(--charcoal); }
+.quad-icon {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  border: 1.5px solid var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  flex: none;
+}
+.quad-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--white);
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+}
+.quad-desc { font-size: 10.5px; color: var(--fog); line-height: 1.45; max-width: 130px; }
+
+/* community "posted today" counter */
+.today-pill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--black);
+  background: var(--white);
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+/* videos panel — grid layout for achievement cards */
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 18px 6px; }
+.ach-grid .ach-card { width: auto; }
+
+/* ================================================================
+   WEEKLY CHALLENGE — gym vs gym
+   ================================================================ */
+.chal-card {
+  margin: 0 18px 12px;
+  border: 1px solid var(--slate);
+  border-radius: 16px;
+  padding: 16px;
+  background: linear-gradient(160deg, var(--graphite), var(--ink));
+  cursor: pointer;
+}
+.chal-card:active { background: var(--charcoal); }
+.chal-tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--silver);
+  margin-bottom: 12px;
+}
+.chal-vs { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 8px; }
+.chal-team { font-family: var(--font-display); font-size: 14px; color: var(--white); letter-spacing: 0.03em; line-height: 1.4; }
+.chal-team.dim { color: var(--fog); }
+.chal-x { font-family: var(--font-mono); font-size: 10px; color: var(--ash); flex: none; }
+.chal-bar { height: 9px; border-radius: 999px; background: var(--iron); overflow: hidden; }
+.chal-fill { height: 100%; background: var(--white); border-radius: 999px; transition: width 400ms var(--ease-emphasized); }
+.chal-nums { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; color: var(--fog); margin-top: 8px; }
+.chal-nums b { color: var(--white); font-weight: 500; }
+
+/* ================================================================
+   BOTTOM NAVIGATION
+   ================================================================ */
+.bottom-nav {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--nav-h);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding: 12px 18px 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.92) 34%, var(--black) 100%);
+  z-index: 50;
+}
+.tab {
+  width: 52px; height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ash);
+  transition: color 180ms var(--ease-standard), transform 140ms var(--ease-standard);
+  position: relative;
+}
+.tab:active { transform: scale(0.9); }
+.tab.active { color: var(--white); }
+.tab svg { display: block; }
+
+/* center camera tab: larger, prominent */
+.tab-cam {
+  width: 64px; height: 64px;
+  margin-top: -12px;
+  border-radius: 50%;
+  border: 2.5px solid var(--white);
+  background: var(--ink);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 24px -6px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: transform 140ms var(--ease-standard), background 180ms var(--ease-standard);
+}
+.tab-cam:active { transform: scale(0.92); }
+.tab-cam.posted { border-color: var(--slate); }
+.tab-cam.posted::after {
+  content: '';
+  position: absolute;
+  top: 2px; right: 2px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 3px solid var(--black);
+}
+
+/* ================================================================
+   SHARED COMPONENTS
+   ================================================================ */
+.app-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px 4px;
+}
+.app-brand {
+  font-family: var(--font-display);
+  font-size: 19px;
+  color: var(--white);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+.app-head-title {
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--white);
+}
+
+/* segmented control */
+.seg {
+  display: flex;
+  margin: 10px 18px 14px;
+  border: 1px solid var(--iron);
+  border-radius: 10px;
+  padding: 3px;
+  background: var(--graphite);
+}
+.seg button {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--fog);
+  border-radius: 7px;
+  transition: color 180ms var(--ease-standard), background 180ms var(--ease-standard);
+}
+.seg button.on {
+  color: var(--black);
+  background: var(--white);
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fog);
+  padding: 18px 18px 10px;
+}
+
+.hairline { height: 1px; background: var(--iron); margin: 0 18px; }
+
+/* avatars — monochrome gradient + initial */
+.av {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--mist);
+  flex: none;
+  border: 1px solid var(--iron);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  position: relative;
+}
+.av::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(160deg, rgba(255,255,255,0.10), transparent 55%); }
+.av.sq { border-radius: 10px; }
+.av.sq::after { border-radius: 10px; }
+.g1 { background: linear-gradient(140deg, #3F3F46, #18181B); }
+.g2 { background: linear-gradient(140deg, #52525B, #27272A); }
+.g3 { background: linear-gradient(140deg, #2E2E33, #0F0F11); }
+.g4 { background: linear-gradient(140deg, #47474E, #1C1C1F); }
+.g5 { background: linear-gradient(140deg, #5A5A63, #2E2E33); }
+.g6 { background: linear-gradient(140deg, #39393F, #121214); }
+.g7 { background: linear-gradient(140deg, #6B6B74, #3F3F46); }
+.g8 { background: linear-gradient(140deg, #26262B, #0A0A0A); }
+
+/* simulated photos — abstract gym scenes */
+.ph {
+  position: relative;
+  overflow: hidden;
+  background: var(--charcoal);
+}
+.ph::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.08 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
+.ph::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.12), transparent 30%, transparent 62%, rgba(0,0,0,0.4));
+}
+.ph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.s1 { background: linear-gradient(155deg, #2E2E33 0%, #17171A 55%, #26262B 100%); }
+.s2 { background: linear-gradient(200deg, #3A3A41 0%, #1C1C1F 60%, #101012 100%); }
+.s3 { background: linear-gradient(120deg, #222227 0%, #35353C 45%, #131315 100%); }
+.s4 { background: linear-gradient(170deg, #17171A 0%, #2A2A30 50%, #1A1A1D 100%); }
+.s5 { background: linear-gradient(140deg, #40404A 0%, #202024 55%, #2C2C31 100%); }
+.s6 { background: linear-gradient(195deg, #26262B 0%, #111113 55%, #222227 100%); }
+
+/* generic list row */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
+}
+.row-press { cursor: pointer; transition: background 150ms var(--ease-standard); }
+.row-press:active { background: var(--graphite); }
+.row-main { flex: 1; min-width: 0; }
+.row-name { font-weight: 600; font-size: 14.5px; color: var(--bone); letter-spacing: -0.01em; }
+.row-sub { font-size: 12.5px; color: var(--fog); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--ash); flex: none; }
+
+/* relationship buttons */
+.rel-btn {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--slate);
+  color: var(--bone);
+  flex: none;
+  min-width: 78px;
+  text-align: center;
+  transition: all 180ms var(--ease-standard);
+}
+.rel-btn.primary { background: var(--white); color: var(--black); border-color: var(--white); }
+.rel-btn.quiet { color: var(--fog); border-color: var(--iron); }
+
+/* buttons */
+.btn-solid {
+  background: var(--white);
+  color: var(--black);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  border-radius: 12px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  transition: transform 140ms var(--ease-standard), opacity 140ms;
+}
+.btn-solid:active { transform: scale(0.98); opacity: 0.85; }
+.btn-solid:disabled { background: var(--iron); color: var(--ash); }
+.btn-ghost {
+  border: 1px solid var(--slate);
+  color: var(--bone);
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 12px;
+  padding: 13px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* unread dot */
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--white); flex: none; }
+
+/* ================================================================
+   HOME — feed
+   ================================================================ */
+.feed-body { position: relative; }
+
+.post {
+  padding: 14px 0 6px;
+  border-bottom: 1px solid var(--graphite);
+  position: relative;
+}
+.post-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px 10px;
+}
+.post-id { flex: 1; min-width: 0; cursor: pointer; }
+.post-user { font-weight: 700; font-size: 14px; color: var(--white); letter-spacing: -0.01em; }
+.post-loc {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--silver);
+  margin-top: 2px;
+}
+.post-loc svg { flex: none; }
+.post-loc.unmapped { color: var(--fog); font-style: italic; }
+.post-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--ash); flex: none; }
+
+/* front + back photo presentation */
+.fb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 3.6;
+  cursor: pointer;
+}
+.fb-main { position: absolute; inset: 0; }
+.fb-main .ph { position: absolute; inset: 0; }
+.fb-inset {
+  position: absolute;
+  top: 12px; left: 12px;
+  width: 31%;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  border: 2px solid var(--black);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+  overflow: hidden;
+  z-index: 3;
+}
+.fb-inset .ph { position: absolute; inset: 0; }
+
+/* achievement / max-lift post media */
+.fb.lift-video .fb-main::after { background: linear-gradient(180deg, rgba(0,0,0,0.3), transparent 35%, rgba(0,0,0,0.55)); }
+.lift-tag {
+  position: absolute;
+  top: 12px; left: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid var(--slate);
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.play-badge {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  border: 1.5px solid var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  z-index: 3;
+}
+.vid-dur {
+  position: absolute;
+  bottom: 12px; right: 12px;
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--white);
+  background: rgba(0,0,0,0.65);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.post-caption {
+  padding: 10px 18px 0;
+  font-size: 13.5px;
+  color: var(--mist);
+  line-height: 1.45;
+}
+.post-caption b { color: var(--white); font-weight: 700; margin-right: 6px; }
+
+/* public-feed context chips */
+.ctx-row { display: flex; gap: 6px; padding: 10px 18px 0; flex-wrap: wrap; }
+.ctx {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--silver);
+  border: 1px solid var(--iron);
+  padding: 4px 9px;
+  border-radius: 999px;
+}
+
+/* reactions — live photo reactions (BeReal style) */
+.react-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px 8px;
+}
+.react-stack { display: flex; align-items: center; }
+.react-chip {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--black);
+  margin-left: -9px;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+.react-chip:first-child { margin-left: 0; }
+.react-chip .ph { position: absolute; inset: 0; }
+.react-chip.you { border-color: var(--white); }
+.react-chip .face {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: var(--mist);
+}
+.react-count { font-family: var(--font-mono); font-size: 11px; color: var(--fog); }
+.react-add {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--slate);
+  color: var(--silver);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.comment-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fog);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* inline comments */
+.comments { max-height: 0; overflow: hidden; transition: max-height 320ms var(--ease-emphasized); }
+.comments.open { max-height: 420px; }
+.comment { display: flex; gap: 10px; padding: 8px 18px; }
+.comment-body { font-size: 13px; color: var(--mist); line-height: 1.4; min-width: 0; }
+.comment-body b { color: var(--white); margin-right: 6px; font-weight: 700; }
+.comment-body .c-time { font-family: var(--font-mono); font-size: 10px; color: var(--ash); margin-left: 8px; }
+.comment-input-row { display: flex; gap: 10px; align-items: center; padding: 8px 18px 12px; }
+.comment-input {
+  flex: 1;
+  background: var(--graphite);
+  border: 1px solid var(--iron);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 13px;
+  color: var(--bone);
+  outline: none;
+}
+.comment-input::placeholder { color: var(--ash); }
+.comment-send {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--black);
+  display: flex; align-items: center; justify-content: center;
+  flex: none;
+}
+.collapse-bar {
+  display: block;
+  margin: 2px auto 8px;
+  color: var(--ash);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 6px 16px;
+}
+
+/* ---- locked feed ---- */
+.feed-locked .post { pointer-events: none; }
+.feed-locked .fb, .feed-locked .plate-card, .feed-locked .cmp, .feed-locked .post-caption, .feed-locked .react-row, .feed-locked .ctx-row {
+  filter: blur(14px) saturate(0.8);
+}
+.feed-locked .post-user, .feed-locked .post-loc { filter: blur(6px); }
+
+.lock-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  padding: 32px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.15));
+}
+.lock-card {
+  position: sticky;
+  top: 120px;
+  margin: 60px auto 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 270px;
+}
+.lock-icon {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  border: 1.5px solid var(--slate);
+  background: rgba(10,10,10,0.85);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--white);
+}
+.lock-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--white);
+}
+.lock-sub { font-size: 13px; color: var(--silver); line-height: 1.5; }
+.lock-cta {
+  background: var(--white);
+  color: var(--black);
+  font-weight: 700;
+  font-size: 13.5px;
+  padding: 12px 26px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ================================================================
+   FRIENDS TAB — messages + find friends
+   ================================================================ */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 18px 8px;
+  background: var(--graphite);
+  border: 1px solid var(--iron);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--ash);
+}
+.search-box input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--bone);
+  font-size: 14px;
+}
+.search-box input::placeholder { color: var(--ash); }
+
+.group-av {
+  position: relative;
+  width: 46px; height: 46px;
+  flex: none;
+}
+.group-av .av { position: absolute; border: 2px solid var(--black); }
+.group-av .av:nth-child(1) { top: 0; left: 0; }
+.group-av .av:nth-child(2) { bottom: 0; right: 0; }
+
+/* conversation view */
+.convo-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px 16px;
+  min-height: 55%;
+}
+.msg { max-width: 76%; display: flex; flex-direction: column; gap: 2px; }
+.msg .bubble {
+  padding: 9px 13px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--bone);
+  background: var(--charcoal);
+  border: 1px solid var(--iron);
+  word-wrap: break-word;
+}
+.msg.me { align-self: flex-end; align-items: flex-end; }
+.msg.me .bubble { background: var(--white); color: var(--black); border-color: var(--white); }
+.msg .who { font-size: 10.5px; color: var(--fog); font-weight: 600; padding-left: 12px; margin-top: 6px; }
+.msg-time-sep {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ash);
+  padding: 12px 0 6px;
+  letter-spacing: 0.06em;
+}
+.convo-input-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px 14px;
+  background: linear-gradient(180deg, transparent, var(--black) 32%);
+}
+
+/* ================================================================
+   CAMERA
+   ================================================================ */
+.cam {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: var(--black);
+  transform: translateY(100%);
+  transition: transform 340ms var(--ease-emphasized);
+  display: flex;
+  flex-direction: column;
+}
+.cam.in { transform: translateY(0); }
+
+.cam-view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.cam-view .ph { position: absolute; inset: 0; }
+.cam-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 33.4% 33.4%;
+  pointer-events: none;
+}
+.cam-top {
+  position: absolute;
+  top: var(--status-h); left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  z-index: 5;
+}
+.cam-close, .cam-flip {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--slate);
+  color: var(--white);
+  display: flex; align-items: center; justify-content: center;
+}
+.cam-step {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--white);
+  background: rgba(0,0,0,0.55);
+  border: 1px solid var(--slate);
+  padding: 7px 14px;
+  border-radius: 999px;
+}
+.cam-bottom {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 20px 0 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 5;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.7));
+}
+.shutter {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  border: 4px solid var(--white);
+  background: transparent;
+  position: relative;
+  transition: transform 120ms var(--ease-standard);
+}
+.shutter::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--white);
+  transition: transform 120ms var(--ease-standard);
+}
+.shutter:active { transform: scale(0.94); }
+.shutter:active::after { transform: scale(0.88); }
+.shutter.rec::after { background: var(--mist); border-radius: 10px; inset: 22px; }
+.cam-mode-row { display: flex; gap: 10px; }
+.cam-mode {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fog);
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.cam-mode.on { color: var(--white); border-color: var(--slate); background: rgba(0,0,0,0.5); }
+.cam-mode:disabled { opacity: 0.35; }
+.cam-shot-thumb {
+  position: absolute;
+  top: calc(var(--status-h) + 62px);
+  left: 16px;
+  width: 84px;
+  aspect-ratio: 3/4;
+  border-radius: 12px;
+  border: 2px solid var(--white);
+  overflow: hidden;
+  z-index: 5;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.6);
+}
+.cam-shot-thumb .ph { position: absolute; inset: 0; }
+.cam-rec-timer {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--white);
+  background: rgba(0,0,0,0.6);
+  border: 1px solid var(--slate);
+  padding: 6px 14px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--white); animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: 0.2; } }
+
+/* ---- compose (edit) step ---- */
+.compose {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: var(--black);
+  overflow-y: auto;
+  padding: calc(var(--status-h) + 6px) 0 32px;
+  scrollbar-width: none;
+}
+.compose::-webkit-scrollbar { display: none; }
+.compose-fb {
+  width: 62%;
+  margin: 6px auto 4px;
+  position: relative;
+  aspect-ratio: 3/4;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--iron);
+}
+.compose-fb .fb-inset { width: 34%; }
+.compose-fb .ph { position: absolute; inset: 0; }
+
+.opt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 18px;
+  cursor: pointer;
+}
+.opt-row:active { background: var(--graphite); }
+.opt-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--iron);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--silver);
+  flex: none;
+}
+.opt-label { flex: 1; font-weight: 600; font-size: 14px; color: var(--bone); }
+.opt-value { font-size: 12.5px; color: var(--fog); max-width: 150px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opt-value.set { color: var(--white); font-weight: 600; }
+
+.caption-field {
+  margin: 4px 18px;
+  background: var(--graphite);
+  border: 1px solid var(--iron);
+  border-radius: 12px;
+  padding: 12px 14px;
+  width: calc(100% - 36px);
+  color: var(--bone);
+  font-size: 14px;
+  outline: none;
+  resize: none;
+  min-height: 64px;
+}
+.caption-field::placeholder { color: var(--ash); }
+
+/* choice sheets */
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 20px;
+  cursor: pointer;
+}
+.choice-row:active { background: var(--charcoal); }
+.choice-row.disabled { opacity: 0.38; pointer-events: none; }
+.choice-main { flex: 1; min-width: 0; }
+.choice-name { font-weight: 600; font-size: 14.5px; color: var(--bone); }
+.choice-sub { font-size: 12px; color: var(--fog); margin-top: 2px; }
+.check-ring {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--slate);
+  flex: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--black);
+  transition: all 160ms var(--ease-standard);
+}
+.check-ring.on { background: var(--white); border-color: var(--white); }
+.sheet-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--white);
+  padding: 10px 20px 2px;
+  letter-spacing: -0.01em;
+}
+.sheet-sub { font-size: 12.5px; color: var(--fog); padding: 2px 20px 8px; }
+
+/* preview step */
+.preview-wrap { padding: 4px 0 18px; }
+.preview-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fog);
+  text-align: center;
+  padding: 8px 0 10px;
+}
+.preview-card {
+  border: 1px solid var(--iron);
+  border-radius: 16px;
+  margin: 0 18px;
+  overflow: hidden;
+  background: var(--ink);
+}
+.preview-card .fb { aspect-ratio: 3/3.2; }
+.compose-actions { display: flex; gap: 10px; padding: 16px 18px 0; }
+
+/* ================================================================
+   MAP TAB — communities + map
+   ================================================================ */
+.comm-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 0 18px 10px;
+  padding: 13px 14px;
+  border: 1px solid var(--iron);
+  border-radius: 14px;
+  background: var(--graphite);
+  cursor: pointer;
+}
+.comm-card:active { background: var(--charcoal); }
+.comm-icon {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--mist);
+  flex: none;
+  border: 1px solid var(--slate);
+}
+.comm-main { flex: 1; min-width: 0; }
+.comm-name { font-weight: 700; font-size: 14.5px; color: var(--white); letter-spacing: -0.01em; }
+.comm-meta { font-size: 12px; color: var(--fog); margin-top: 2px; }
+.comm-activity { font-size: 12px; color: var(--silver); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comm-chat-entry {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--slate);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--silver);
+  flex: none;
+}
+
+.type-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--silver);
+  border: 1px solid var(--iron);
+  border-radius: 5px;
+  padding: 2px 6px;
+  vertical-align: 2px;
+  margin-left: 8px;
+}
+
+/* map view */
+.map-wrap {
+  position: relative;
+  height: calc(100% - 108px);
+  min-height: 480px;
+  margin: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 30% 20%, #17171A 0%, #0C0C0E 60%, #060607 100%);
+}
+.map-streets { position: absolute; inset: 0; opacity: 0.9; }
+.map-streets line { stroke: #222227; stroke-width: 2; }
+.map-streets line.major { stroke: #2C2C31; stroke-width: 4; }
+.map-streets path.park { fill: #121215; }
+.map-streets path.water { fill: #0A0A0D; }
+.map-label {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--slate);
+  pointer-events: none;
+}
+.gym-marker {
+  position: absolute;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 1.5px solid var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.65);
+  cursor: pointer;
+  transition: transform 160ms var(--ease-standard);
+  z-index: 4;
+}
+.gym-marker:active { transform: translate(-50%, -50%) scale(0.9); }
+.gym-marker .m-count {
+  position: absolute;
+  top: -6px; right: -8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--black);
+  background: var(--white);
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-weight: 700;
+}
+.map-self {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 3px solid var(--slate);
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+.map-self::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  animation: pulse 2.4s infinite var(--ease-standard);
+}
+@keyframes pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+
+/* gym preview sheet content */
+.gympv-head { display: flex; align-items: flex-start; gap: 13px; padding: 12px 20px 4px; }
+.gympv-icon {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  border: 1.5px solid var(--mist);
+  background: var(--ink);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--white);
+  flex: none;
+}
+.gympv-name { font-weight: 700; font-size: 17px; color: var(--white); letter-spacing: -0.01em; }
+.gympv-addr { font-size: 12.5px; color: var(--fog); margin-top: 2px; }
+.gympv-stats { display: flex; gap: 20px; padding: 12px 20px 4px; }
+.gympv-stat .n { font-weight: 700; font-size: 16px; color: var(--white); font-family: var(--font-mono); }
+.gympv-stat .l { font-size: 11px; color: var(--fog); margin-top: 1px; }
+.gympv-friends { display: flex; align-items: center; gap: 8px; padding: 8px 20px 4px; font-size: 12.5px; color: var(--silver); }
+.gympv-actions { display: flex; gap: 10px; padding: 14px 20px 4px; }
+
+/* community page */
+.comm-hero { padding: 4px 18px 6px; }
+.comm-hero-name { font-family: var(--font-display); font-size: 21px; color: var(--white); line-height: 1.5; }
+.comm-hero-meta { font-size: 12.5px; color: var(--fog); margin-top: 6px; }
+.comm-tabs {
+  display: flex;
+  gap: 22px;
+  padding: 12px 18px 0;
+  border-bottom: 1px solid var(--graphite);
+}
+.comm-tab {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--fog);
+  padding: 6px 0 11px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.comm-tab.on { color: var(--white); border-color: var(--white); }
+
+/* rankings */
+.rank-cats { display: flex; gap: 8px; padding: 14px 18px 4px; flex-wrap: wrap; }
+.rank-cat {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fog);
+  border: 1px solid var(--iron);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+.rank-cat.on { color: var(--black); background: var(--white); border-color: var(--white); }
+.lift-cats { display: flex; gap: 8px; padding: 8px 18px 4px; }
+.lift-cat {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fog);
+  border-bottom: 1.5px solid transparent;
+  padding: 6px 2px;
+  margin-right: 8px;
+}
+.lift-cat.on { color: var(--white); border-color: var(--white); }
+.rank-row { display: flex; align-items: center; gap: 12px; padding: 11px 18px; cursor: pointer; }
+.rank-row:active { background: var(--graphite); }
+.rank-pos {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--fog);
+  width: 24px;
+  text-align: center;
+  flex: none;
+}
+.rank-row:nth-child(1) .rank-pos, .rank-pos.top { color: var(--white); font-weight: 700; }
+.rank-val { font-family: var(--font-mono); font-size: 13px; color: var(--white); font-weight: 500; flex: none; }
+.rank-val small { color: var(--fog); font-size: 10px; margin-left: 3px; }
+
+/* community chat + posts grid */
+.cgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; padding: 12px 2px; }
+.cgrid .cell { position: relative; aspect-ratio: 3/4; overflow: hidden; cursor: pointer; }
+.cgrid .cell .ph { position: absolute; inset: 0; }
+.cell-user {
+  position: absolute;
+  bottom: 6px; left: 6px;
+  z-index: 3;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--white);
+  background: rgba(0,0,0,0.6);
+  padding: 3px 7px;
+  border-radius: 6px;
+}
+.cell-badge {
+  position: absolute;
+  top: 6px; right: 6px;
+  z-index: 3;
+  color: var(--white);
+  background: rgba(0,0,0,0.6);
+  border-radius: 6px;
+  padding: 3px;
+  display: flex;
+}
+
+/* ================================================================
+   PROFILE
+   ================================================================ */
+.prof-head { display: flex; align-items: center; gap: 16px; padding: 10px 18px 4px; }
+.prof-id { min-width: 0; }
+.prof-name { font-weight: 700; font-size: 19px; color: var(--white); letter-spacing: -0.02em; }
+.prof-handle { font-size: 13px; color: var(--fog); margin-top: 1px; }
+.prof-gym {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12.5px; color: var(--silver);
+  margin-top: 6px;
+}
+
+.pin-row { display: flex; gap: 8px; padding: 12px 18px 4px; flex-wrap: wrap; }
+.pin-trophy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--slate);
+  background: var(--graphite);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bone);
+}
+.pin-trophy:active { background: var(--charcoal); }
+.pin-trophy svg { color: var(--white); flex: none; }
+
+.count-row { display: flex; padding: 14px 18px 4px; gap: 8px; }
+.count-cell {
+  flex: 1;
+  border: 1px solid var(--iron);
+  border-radius: 12px;
+  padding: 11px 12px;
+  cursor: pointer;
+  background: var(--graphite);
+}
+.count-cell:active { background: var(--charcoal); }
+.count-n { font-family: var(--font-mono); font-weight: 500; font-size: 18px; color: var(--white); }
+.count-l { font-size: 11px; color: var(--fog); margin-top: 2px; font-weight: 600; letter-spacing: 0.02em; }
+
+/* stats strip */
+.stat-strip { display: flex; gap: 8px; padding: 6px 18px 2px; }
+.stat-cell { flex: 1; border: 1px solid var(--iron); border-radius: 12px; padding: 11px 12px; }
+.stat-n { font-family: var(--font-mono); font-size: 16px; color: var(--white); }
+.stat-n small { font-size: 10px; color: var(--fog); margin-left: 2px; }
+.stat-l { font-size: 10.5px; color: var(--fog); margin-top: 3px; }
+
+/* trophy grid */
+.trophy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px 18px 2px; }
+.trophy-card {
+  border: 1px solid var(--iron);
+  border-radius: 14px;
+  padding: 13px;
+  background: var(--graphite);
+  cursor: pointer;
+  position: relative;
+}
+.trophy-card:active { background: var(--charcoal); }
+.trophy-card svg { color: var(--white); }
+.trophy-name { font-weight: 700; font-size: 13px; color: var(--bone); margin-top: 9px; letter-spacing: -0.01em; }
+.trophy-meta { font-size: 11px; color: var(--fog); margin-top: 3px; line-height: 1.4; }
+.trophy-pinflag {
+  position: absolute;
+  top: 10px; right: 10px;
+  color: var(--fog);
+}
+
+/* achievements horizontal scroller */
+.ach-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 6px 18px 6px;
+  scrollbar-width: none;
+}
+.ach-scroll::-webkit-scrollbar { display: none; }
+.ach-card {
+  width: 128px;
+  flex: none;
+  border: 1px solid var(--slate);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 3/4;
+  cursor: pointer;
+}
+.ach-card .ph { position: absolute; inset: 0; }
+.ach-card .a-tag {
+  position: absolute;
+  top: 8px; left: 8px;
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--white);
+  background: rgba(0,0,0,0.7);
+  border: 1px solid var(--slate);
+  padding: 4px 7px;
+  border-radius: 6px;
+}
+.ach-card .a-play {
+  position: absolute;
+  bottom: 8px; right: 8px;
+  z-index: 3;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid var(--white);
+  color: var(--white);
+  display: flex; align-items: center; justify-content: center;
+}
+.ach-card .a-lift {
+  position: absolute;
+  bottom: 8px; left: 8px;
+  z-index: 3;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--white);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+
+/* daily calendar (reverse-chronological memories) */
+.cal-month {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fog);
+  padding: 16px 18px 8px;
+}
+.cal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 18px; }
+.cal-cell {
+  position: relative;
+  aspect-ratio: 3/4;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--graphite);
+  cursor: pointer;
+}
+.cal-cell .ph { position: absolute; inset: 0; }
+.cal-cell .mini-inset {
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 34%;
+  aspect-ratio: 3/4;
+  border-radius: 5px;
+  border: 1px solid var(--black);
+  overflow: hidden;
+  z-index: 3;
+}
+.cal-cell .mini-inset .ph { position: absolute; inset: 0; }
+.cal-date {
+  position: absolute;
+  bottom: 4px; left: 5px;
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--white);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+  font-weight: 500;
+}
+.cal-cell.missed { background: var(--graphite); }
+.cal-cell.missed .cal-x {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--slate);
+  font-size: 12px;
+}
+
+/* other user profile */
+.mutual-strip { display: flex; align-items: center; gap: 8px; padding: 10px 18px 2px; cursor: pointer; }
+.mutual-avs { display: flex; }
+.mutual-avs .av { border: 2px solid var(--black); margin-left: -8px; }
+.mutual-avs .av:first-child { margin-left: 0; }
+.mutual-text { font-size: 12px; color: var(--silver); }
+.mutual-text b { color: var(--bone); }
+
+/* post detail (opened from calendar / trophies) */
+.detail-linkback {
+  margin: 12px 18px 0;
+  border: 1px solid var(--iron);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--graphite);
+}
+.detail-linkback svg { color: var(--white); flex: none; }
+.detail-link-t { font-weight: 700; font-size: 13px; color: var(--bone); }
+.detail-link-s { font-size: 11.5px; color: var(--fog); margin-top: 1px; }
+
+/* reaction capture sheet */
+.selfie-cam {
+  width: 190px; height: 190px;
+  border-radius: 50%;
+  margin: 14px auto 6px;
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--slate);
+}
+.selfie-cam .ph { position: absolute; inset: 0; }
+.selfie-cam .scan {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 46%, rgba(255,255,255,0.12) 50%, transparent 54%);
+  animation: scan 2.2s infinite linear;
+}
+@keyframes scan { 0% { transform: translateY(-60%); } 100% { transform: translateY(60%); } }
+
+/* empty states */
+.empty {
+  text-align: center;
+  color: var(--fog);
+  font-size: 13px;
+  padding: 34px 40px;
+  line-height: 1.5;
+}
+
+/* ================================================================
+   RESPONSIVE — real mobile: device becomes the viewport
+   ================================================================ */
+@media (max-width: 560px) {
+  .stage { padding: 0; gap: 0; }
+  .stage-header { display: none; }
+  .device {
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    background: var(--black);
+  }
+  .device::before { display: none; }
+  .device-island { display: none; }
+  .device-screen { border-radius: 0; }
+  .device-screen::after { border-radius: 0; }
+  .status-bar { padding-top: max(10px, env(safe-area-inset-top)); height: calc(44px + env(safe-area-inset-top)); }
+  .screen, .panel { padding-top: calc(44px + env(safe-area-inset-top)); }
+  .bottom-nav { height: calc(var(--nav-h) + env(safe-area-inset-bottom) * 0.6); padding-bottom: env(safe-area-inset-bottom); }
+  .screen, .panel { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 8px); }
+  .sheet { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+  .cam-bottom { padding-bottom: calc(36px + env(safe-area-inset-bottom)); }
+}
+@media (max-height: 900px) and (min-width: 561px) {
+  .stage { padding: 32px 32px 48px; }
+  .device { transform: scale(0.92); transform-origin: top center; margin-bottom: -60px; }
+}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <!-- Desktop presentation header (hidden on mobile) -->
+  <header class="stage-header">
+    <div class="stage-brand">SPOTTED</div>
+    <div class="stage-meta">Interactive prototype · live presence · challenges</div>
+  </header>
+
+  <!-- ============ DEVICE ============ -->
+  <div class="device">
+    <div class="device-island"></div>
+    <div class="device-screen">
+
+      <!-- Status bar -->
+      <div class="status-bar">
+        <div class="status-time">9:41</div>
+        <div class="status-icons">
+          <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" opacity="0.35"/></svg>
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M8 9.5a1.6 1.6 0 100 3.2 1.6 1.6 0 000-3.2zM8 5.6c-1.7 0-3.3.7-4.4 1.8l1.5 1.5A4.2 4.2 0 018 7.7c1.1 0 2.1.4 2.9 1.2l1.5-1.5A6.2 6.2 0 008 5.6zM8 1.5A10.3 10.3 0 00.7 4.6l1.5 1.5A8.2 8.2 0 018 3.6c2.3 0 4.3.9 5.8 2.4l1.5-1.5A10.3 10.3 0 008 1.5z"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity="0.4"/><rect x="2" y="2" width="15" height="8" rx="1.6" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 000-4z" fill="currentColor" opacity="0.4"/></svg>
+        </div>
+      </div>
+
+      <!-- Main tab screens -->
+      <div class="screen-stack">
+        <div class="screen active" data-screen="home" id="screen-home"></div>
+        <div class="screen" data-screen="friends" id="screen-friends"></div>
+        <div class="screen" data-screen="map" id="screen-map"></div>
+        <div class="screen" data-screen="profile" id="screen-profile"></div>
+      </div>
+
+      <!-- Pushed panels (profiles, conversations, communities, post details) -->
+      <div class="panel-layer" id="panel-layer"></div>
+
+      <!-- Camera (full-screen) -->
+      <div class="cam" id="cam"></div>
+
+      <!-- Sheets -->
+      <div class="sheet-backdrop" id="sheet-backdrop" onclick="closeSheet()"></div>
+      <div class="sheet" id="sheet"></div>
+
+      <!-- Bottom navigation: Home · Friends · Camera · Map · Profile -->
+      <nav class="bottom-nav" id="bottom-nav">
+        <button class="tab active" data-tab="home" onclick="navTo('home')" aria-label="Home">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+        </button>
+        <button class="tab" data-tab="friends" onclick="navTo('friends')" aria-label="Friends">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c.7-3.4 3.2-5.2 6.2-5.2s5.5 1.8 6.2 5.2"/><path d="M16 5.2a3.4 3.4 0 010 5.9"/><path d="M17.6 14.9c2 .7 3.3 2.4 3.7 5.1"/></svg>
+        </button>
+        <button class="tab-cam pressable" id="tab-cam" onclick="openCamera()" aria-label="Camera">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.2c0-1 .8-1.8 1.8-1.8h1.5l1.3-2h6.8l1.3 2h1.5c1 0 1.8.8 1.8 1.8v9c0 1-.8 1.8-1.8 1.8H5.8c-1 0-1.8-.8-1.8-1.8v-9z"/><circle cx="12" cy="12.4" r="3.6"/></svg>
+        </button>
+        <button class="tab" data-tab="map" onclick="navTo('map')" aria-label="Map">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6.4v13.2L9 17.2l6 2.4 6-2.4V4l-6 2.4L9 4z"/><path d="M9 4v13.2"/><path d="M15 6.4v13.2"/></svg>
+        </button>
+        <button class="tab" data-tab="profile" onclick="navTo('profile')" aria-label="Profile">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.9-3.9 3.9-6 7.5-6s6.6 2.1 7.5 6"/></svg>
+        </button>
+      </nav>
+
+      <!-- Toast + flash -->
+      <div class="toast" id="toast"></div>
+      <div class="flash" id="flash"></div>
+
+    </div>
+  </div>
+</div>
+<script>
+/* ================================================================
+   ICONS — inline SVG helper
+   ================================================================ */
+const IC = {
+  pin: (s=12) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.4-6.5-10.3A6.5 6.5 0 0112 4a6.5 6.5 0 016.5 6.7C18.5 15.6 12 21 12 21z"/><circle cx="12" cy="10.6" r="2.2"/></svg>`,
+  home: (s=12) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>`,
+  dumbbell: (s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 8v8M4.5 9.5v5M19.5 9.5v5M16.5 8v8M7.5 12h9M2.5 12h2M19.5 12h2"/></svg>`,
+  check: (s=12) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"/></svg>`,
+  plus: (s=16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
+  x: (s=16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
+  back: (s=17) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>`,
+  chevR: (s=14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>`,
+  send: (s=15) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10.5 13.5M21 3l-6.8 18-3.7-7.5L3 9.8 21 3z"/></svg>`,
+  comment: (s=17) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.6c0 4.2-3.6 7.4-8 7.4-1 0-2-.2-2.9-.5L4 20l1.4-4A7 7 0 014 11.6c0-4.2 3.6-7.4 8-7.4s8 3.2 8 7.4z"/></svg>`,
+  search: (s=16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.3"/><path d="M15.5 15.5L21 21"/></svg>`,
+  music: (s=15) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.5V5.8l11-2v12.7"/><circle cx="6.5" cy="18.5" r="2.5"/><circle cx="17.5" cy="16.5" r="2.5"/></svg>`,
+  tag: (s=15) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-4.9 5.5-4.9s4.9 1.7 5.5 4.9"/><path d="M16 8h5M18.5 5.5v5"/></svg>`,
+  users: (s=15) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.2 3-4.9 6-4.9s5.4 1.7 6 4.9"/><path d="M15.8 5.4a3.2 3.2 0 010 5.5"/><path d="M17.4 15.3c1.9.7 3.1 2.2 3.5 4.7"/></svg>`,
+  trophy: (s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v6a4 4 0 01-8 0V4z"/><path d="M8 5H4.5c0 3.2 1.5 4.8 3.5 5M16 5h3.5c0 3.2-1.5 4.8-3.5 5"/><path d="M12 14v3.5M8.5 21h7M10 21c0-2 .8-3.5 2-3.5s2 1.5 2 3.5"/></svg>`,
+  play: (s=16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5L8 5.5z"/></svg>`,
+  flip: (s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A8.5 8.5 0 0119 6.2M20 15.5A8.5 8.5 0 015 17.8"/><path d="M19 2.5v4h-4M5 21.5v-4h4"/></svg>`,
+  lock: (s=22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/></svg>`,
+  camera: (s=15) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.2c0-1 .8-1.8 1.8-1.8h1.5l1.3-2h6.8l1.3 2h1.5c1 0 1.8.8 1.8 1.8v9c0 1-.8 1.8-1.8 1.8H5.8c-1 0-1.8-.8-1.8-1.8v-9z"/><circle cx="12" cy="12.4" r="3.6"/></svg>`,
+  flame: (s=14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-2.7 1.7-4.6 3-6.3C9.7 7.2 10.5 5.5 10.5 3c3 1.5 4 4.3 3.7 6.3 1.1-.3 1.8-1 2.3-2.3 1.6 1.8 2 3.9 2 5.9 0 3.5-2.6 6.1-6.5 6.1z"/></svg>`,
+  school: (s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L2 8.5l10 5.5 10-5.5L12 3z"/><path d="M6 11.5v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/></svg>`,
+  sun: (s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg>`,
+  chart: (s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>`,
+  calendar: (s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17M8 2.5V6M16 2.5V6"/></svg>`,
+};
+
+/* silhouettes for simulated photos */
+const SIL = {
+  lift: `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><g fill="rgba(0,0,0,0.34)"><rect x="24" y="34" width="52" height="4" rx="2"/><rect x="20" y="27" width="6" height="18" rx="2"/><rect x="74" y="27" width="6" height="18" rx="2"/><circle cx="50" cy="46" r="6"/><path d="M42 52h16l3 20-5 22h-4l2-20h-8l2 20h-4l-5-22z"/></g></svg>`,
+  mirror: `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><g fill="rgba(0,0,0,0.3)"><circle cx="38" cy="30" r="7"/><path d="M28 42c3-4 17-4 20 0l3 26h-6l-3 24h-8l-3-24h-6z"/><rect x="62" y="14" width="26" height="72" rx="2" fill="rgba(255,255,255,0.05)" stroke="rgba(0,0,0,0.3)" stroke-width="1.6"/></g></svg>`,
+  rack: `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><g stroke="rgba(0,0,0,0.32)" stroke-width="4" fill="none"><path d="M22 88V20M78 88V20M22 34h56M22 58h56"/><circle cx="50" cy="46" r="6" fill="rgba(0,0,0,0.32)" stroke="none"/><path d="M50 52v18M50 58l-9 9M50 58l9 9" stroke-width="4.5"/></g></svg>`,
+  face: `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><g fill="rgba(0,0,0,0.3)"><circle cx="50" cy="42" r="16"/><path d="M22 96c4-20 15-28 28-28s24 8 28 28z"/></g></svg>`,
+  bench: `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><g fill="rgba(0,0,0,0.32)"><rect x="18" y="56" width="64" height="6" rx="3"/><rect x="24" y="62" width="5" height="22"/><rect x="71" y="62" width="5" height="22"/><rect x="14" y="30" width="72" height="4" rx="2"/><rect x="10" y="24" width="6" height="16" rx="2"/><rect x="84" y="24" width="6" height="16" rx="2"/></g></svg>`,
+  run: `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><g fill="rgba(0,0,0,0.3)"><circle cx="56" cy="24" r="6"/><path d="M50 32l10 6-4 16 10 14-6 4-11-15 2-11-9 5-4 18-7-1 4-21 15-15z"/><rect x="12" y="82" width="76" height="4" rx="2" opacity="0.6"/></g></svg>`,
+  figBefore: `<svg viewBox='0 0 100 100' preserveAspectRatio='xMidYMid slice'><g fill='rgba(0,0,0,0.42)'><circle cx='50' cy='20' r='8.5'/><path d='M42 31h16l3.5 25h-6.5l-2 32h-6l-2-32h-6.5z'/><rect x='34.5' y='32' width='6.5' height='25' rx='3'/><rect x='59' y='32' width='6.5' height='25' rx='3'/></g></svg>`,
+  figAfter: `<svg viewBox='0 0 100 100' preserveAspectRatio='xMidYMid slice'><g fill='rgba(250,250,250,0.26)'><circle cx='50' cy='19' r='9'/><path d='M37 30h26l3 26h-8l-2.5 31h-11L42 56h-8z'/><rect x='27' y='31' width='8' height='27' rx='4'/><rect x='65' y='31' width='8' height='27' rx='4'/></g></svg>`,
+};
+function photo(scene, sil) {
+  return `<div class="ph ${scene}">${sil ? SIL[sil] : ''}</div>`;
+}
+
+/* ================================================================
+   MOCK DATA — kept consistent across every screen
+   ================================================================ */
+const ME = { id: 'me', name: 'Riley Park', handle: '@rileymax', av: 'g5', initial: 'R', gym: "Gold's Gym Chelsea", friends: 48, following: 112 };
+
+const USERS = {
+  mia:     { id:'mia',     name:'Mia Torres',    handle:'@mia.lifts',    av:'g1', initial:'M', gym:"Gold's Gym Chelsea",   friend:true,  mutuals:['alex','jordan','sam'] },
+  alex:    { id:'alex',    name:'Alex Chen',     handle:'@alex.gym',     av:'g2', initial:'A', gym:'Equinox Bryant Park',  friend:true,  mutuals:['mia','jordan'] },
+  jordan:  { id:'jordan',  name:'Jordan Price',  handle:'@jordan_p',     av:'g3', initial:'J', gym:"Gold's Gym Chelsea",   friend:true,  mutuals:['mia','sam','octavio'] },
+  sam:     { id:'sam',     name:'Sam Okafor',    handle:'@samxlifts',    av:'g4', initial:'S', gym:'Crunch Fulton',        friend:true,  mutuals:['mia','jordan'] },
+  octavio: { id:'octavio', name:'Octavio Reyes', handle:'@octavio',      av:'g6', initial:'O', gym:"Gold's Gym Chelsea",   friend:true,  mutuals:['jordan'] },
+  dana:    { id:'dana',    name:'Dana Whitfield',handle:'@dana.dl',      av:'g7', initial:'D', gym:"Gold's Gym Chelsea",   friend:false, mutuals:['mia','jordan','octavio'] },
+  marcus:  { id:'marcus',  name:'Marcus Hale',   handle:'@marc.presses', av:'g8', initial:'M', gym:'Blink Nostrand',       friend:false, mutuals:['sam'] },
+  lena:    { id:'lena',    name:'Lena Vogt',     handle:'@lena.lifts',   av:'g1', initial:'L', gym:'Equinox Bryant Park',  friend:false, mutuals:[] },
+  theo:    { id:'theo',    name:'Theo Marsh',    handle:'@theo.trains',  av:'g3', initial:'T', gym:'Crunch Fulton',        friend:false, mutuals:['alex'] },
+  priya:   { id:'priya',   name:'Priya Nair',    handle:'@priya.pr',     av:'g5', initial:'P', gym:"Gold's Gym Chelsea",   friend:false, mutuals:['mia'] },
+};
+
+const GYMS = [
+  { id:'golds',   name:"Gold's Gym Chelsea",  addr:'270 W 17th St · Chelsea',   members:284, friendsHere:['mia','jordan'], x:46, y:44, nearby:true,
+    liveNow:[ {u:'mia', note:'Push day · here 25 min'}, {u:'jordan', note:'Leg day · just checked in'} ] },
+  { id:'equinox', name:'Equinox Bryant Park', addr:'129 W 41st St · Midtown',   members:412, friendsHere:['alex'],         x:58, y:22,
+    liveNow:[ {u:'alex', note:'Pull day · here 40 min'} ] },
+  { id:'crunch',  name:'Crunch Fulton',       addr:'100 Fulton St · FiDi',      members:196, friendsHere:['sam'],          x:38, y:76, liveNow:[] },
+  { id:'blink',   name:'Blink Nostrand',      addr:'932 Nostrand Ave · Crown Heights', members:151, friendsHere:[],        x:78, y:64, liveNow:[] },
+];
+const gymById = id => GYMS.find(g => g.id === id);
+
+/* "Spot me" live presence strip — friends at the gym right now */
+const LIVE = [
+  { u:'mia',     live:true,  note:'Push day · 25 min in',  gymId:'golds' },
+  { u:'jordan',  live:true,  note:'Just checked in',       gymId:'golds' },
+  { u:'alex',    live:true,  note:'Pull day · 40 min in',  gymId:'equinox' },
+  { u:'sam',     live:false },
+  { u:'octavio', live:false },
+];
+let spotState = {};   // uid -> true once you send a spot
+
+/* Weekly gym-vs-gym challenge */
+const CHALLENGE = {
+  a: { name:"GOLD'S CHELSEA", gymId:'golds',   v:214 },
+  b: { name:'EQUINOX BP',     gymId:'equinox', v:158 },
+  ends:'2d 14h', mine:5,
+};
+
+/* Friends-feed posts — relatable milestones lead, aspirational video lives lower */
+const FRIEND_POSTS = [
+  { id:'fp0', user:'octavio', kind:'pr', gymId:'golds', time:'11m',
+    plate:{ tag:'New PR — Bench', big:'275', unit:'LB' },
+    caption:'Stuck at 265 for six weeks. Just kept showing up.',
+    reactions:[{u:'mia'},{u:'jordan'}],
+    comments:[ {u:'jordan', t:'Called it last week 👊', time:'6m'} ] },
+  { id:'fp1', user:'mia', gymId:'golds', time:'21m', main:['s2','lift'], inset:['s5','face'],
+    caption:'Pull day. Grip gave out before my back did.',
+    reactions:[{u:'jordan'},{u:'alex'},{u:'sam'}],
+    comments:[ {u:'jordan', t:'That bar speed tho', time:'18m'}, {u:'alex', t:'Straps exist for a reason 😤', time:'12m'} ] },
+  { id:'fp5', user:'sam', kind:'streak', gymId:'crunch', time:'48m',
+    plate:{ tag:'Streak milestone', big:'30', unit:'DAYS' },
+    caption:'30 days straight. No crazy numbers — just didn\'t miss.',
+    reactions:[{u:'mia'},{u:'alex'},{u:'jordan'}],
+    comments:[ {u:'alex', t:'This is the real flex', time:'30m'} ] },
+  { id:'fp2', user:'alex', gymId:'equinox', time:'1h', main:['s3','bench'], inset:['s6','face'],
+    caption:'Bench felt heavy. Showed up anyway.',
+    reactions:[{u:'mia'}],
+    comments:[ {u:'sam', t:'Showing up is the whole job', time:'44m'} ] },
+  { id:'fp3', user:'jordan', gymId:null, altLoc:'Home gym', time:'2h', main:['s4','rack'], inset:['s1','face'],
+    caption:'Garage session. Squat rack finally assembled.',
+    reactions:[{u:'mia'},{u:'octavio'}],
+    comments:[] },
+  { id:'fp4', user:'sam', gymId:'crunch', time:'4h', main:['s5','run'], inset:['s3','face'],
+    caption:'Zone 2 and a podcast. Recovery counts.',
+    reactions:[{u:'alex'},{u:'jordan'}],
+    comments:[ {u:'mia', t:'The discipline post', time:'3h'} ] },
+  { id:'fp6', user:'jordan', kind:'video', gymId:'golds', time:'5h', main:['s6','lift'],
+    dur:'0:42', chips:['PR','Form check'],
+    caption:'405 pull, third attempt angle. Lower back — tell me the truth.',
+    reactions:[{u:'mia'},{u:'sam'},{u:'octavio'}],
+    comments:[ {u:'sam', t:'Hips shot up a touch off the floor', time:'4h'}, {u:'octavio', t:'Lockout was clean tho', time:'3h'} ] },
+];
+
+/* Public-feed posts — ordering demonstrates proximity + mutuals + traction */
+const PUBLIC_POSTS = [
+  { id:'pp1', user:'dana', gymId:'golds', time:'34m', main:['s6','lift'], inset:['s2','face'],
+    caption:'Deadlift day at the usual spot.',
+    ctx:[ ['pin','0.4 mi · your gym'], ['users','3 mutual friends'], ['flame','38 reactions today'] ],
+    reactions:[{u:'mia'},{u:'jordan'},{u:'octavio'},{u:'priya'}], comments:[ {u:'priya', t:'Casual 315 warmup', time:'20m'} ] },
+  { id:'pp2', user:'marcus', kind:'video', gymId:'blink', time:'1h', main:['s1','bench'],
+    dur:'0:31', chips:['Form check'],
+    caption:'Paused reps only. No bounce, no ego. Notes welcome.',
+    ctx:[ ['users','1 mutual friend'], ['flame','Rising in Brooklyn'] ],
+    reactions:[{u:'sam'},{u:'theo'}], comments:[] },
+  { id:'pp3', user:'lena', kind:'compare', gymId:'equinox', time:'2h',
+    cmp:{ l:'JAN', r:'JUL' },
+    caption:'Six months between these two. Drag the slider.',
+    ctx:[ ['pin','1.8 mi away'], ['flame','112 reactions today'] ],
+    reactions:[{u:'alex'},{u:'dana'},{u:'marcus'}], comments:[ {u:'dana', t:'Consistency looks good on you', time:'1h'} ] },
+  { id:'pp4', user:'theo', gymId:null, altLoc:'Unlisted location', time:'3h', main:['s2','run'], inset:['s5','face'],
+    caption:'Hill sprints somewhere in Queens.',
+    ctx:[ ['users','1 mutual friend'], ['pin','Nearby'] ],
+    reactions:[{u:'alex'}], comments:[] },
+];
+
+/* Inbox + conversations */
+const INBOX = [
+  { id:'c-mia', kind:'dm', user:'mia', preview:'You hitting Gold’s at 6?', time:'12m', unread:true },
+  { id:'c-legday', kind:'group', name:'Leg Day Crew', avs:['jordan','sam'], preview:'Jordan: squats then we eat', time:'40m', unread:true },
+  { id:'c-alex', kind:'dm', user:'alex', preview:'That bench PR was clean', time:'2h', unread:false },
+  { id:'c-5am', kind:'group', name:'5AM Club', avs:['octavio','mia'], preview:'Octavio: doors at 4:55, no excuses', time:'6h', unread:false },
+  { id:'c-sam', kind:'dm', user:'sam', preview:'Sent you the deload plan', time:'1d', unread:false },
+];
+const CONVOS = {
+  'c-mia': { title:'Mia Torres', sub:'@mia.lifts', msgs:[
+    {sep:'Today 8:02 AM'}, {from:'mia', t:'You hitting Gold’s at 6?'}, {from:'me', t:'Yeah, pull day'}, {from:'mia', t:'Bet. Save me a rack'} ] },
+  'c-legday': { title:'Leg Day Crew', sub:'Jordan, Sam, You', group:true, msgs:[
+    {sep:'Today 7:44 AM'}, {from:'sam', t:'Thursday still on?'}, {from:'jordan', t:'squats then we eat'}, {from:'me', t:'I’m in. Front squats tho'}, {from:'sam', t:'Brave'} ] },
+  'c-alex': { title:'Alex Chen', sub:'@alex.gym', msgs:[
+    {sep:'Yesterday'}, {from:'alex', t:'That bench PR was clean'}, {from:'me', t:'Third attempt too 😮‍💨'}, {from:'alex', t:'Video did numbers in the community'} ] },
+  'c-5am': { title:'5AM Club', sub:'Octavio, Mia, +3', group:true, msgs:[
+    {sep:'Today 4:31 AM'}, {from:'octavio', t:'doors at 4:55, no excuses'}, {from:'mia', t:'already in the car'}, {from:'me', t:'omw'} ] },
+  'c-sam': { title:'Sam Okafor', sub:'@samxlifts', msgs:[
+    {sep:'Monday'}, {from:'sam', t:'Sent you the deload plan'}, {from:'me', t:'Got it, starting next week'} ] },
+};
+
+/* Find Friends sections + relationship states
+   states: friend | following | requested (Added) | incoming (Add Back) | none (Add) */
+const FIND = {
+  mutuals:  [ {u:'dana', note:'3 mutual friends', state:'none'}, {u:'priya', note:'1 mutual friend', state:'incoming'} ],
+  nearby:   [ {u:'lena', note:'1.8 mi · Equinox Bryant Park', state:'following'}, {u:'theo', note:'2.6 mi · Crunch Fulton', state:'none'} ],
+  suggested:[ {u:'marcus', note:'Popular near Brooklyn', state:'none'} ],
+  contacts: [ {u:'priya', note:'From your contacts', state:'incoming'} ],
+};
+let relState = { dana:'none', priya:'incoming', lena:'following', theo:'none', marcus:'none' };
+
+/* Communities */
+const COMMUNITIES = [
+  { id:'golds', type:'Gym', gymId:'golds', name:"Gold's Gym Chelsea", members:284, today:9, activity:'Dana posted a deadlift PR · 34m', icon:'dumbbell', joined:true },
+  { id:'legday', type:'Friends', name:'Leg Day Crew', members:6, today:3, activity:'Jordan: squats then we eat · 40m', icon:'users', joined:true },
+  { id:'nyu', type:'College', name:'NYU Lifters', members:512, today:12, activity:'Fresh posts rolling in', icon:'school', joined:true },
+  { id:'5am', type:'Custom', name:'5AM Club', members:38, today:2, activity:'Octavio opened the chat · 6h', icon:'sun', joined:true },
+];
+const commById = id => COMMUNITIES.find(c => c.id === id);
+
+/* Community posts (gym communities: location-verified; custom: selected at publish) */
+const COMM_POSTS = {
+  golds: [ {user:'dana', scene:'s6', sil:'lift'}, {user:'mia', scene:'s2', sil:'lift'}, {user:'jordan', scene:'s4', sil:'rack'}, {user:'priya', scene:'s3', sil:'mirror'}, {user:'octavio', scene:'s5', sil:'bench'}, {user:'me', scene:'s1', sil:'face', video:true} ],
+  legday: [ {user:'jordan', scene:'s3', sil:'rack'}, {user:'sam', scene:'s5', sil:'lift'}, {user:'me', scene:'s2', sil:'mirror'} ],
+  nyu:    [ {user:'lena', scene:'s1', sil:'run'}, {user:'theo', scene:'s6', sil:'bench'}, {user:'marcus', scene:'s4', sil:'lift'} ],
+  '5am':  [ {user:'octavio', scene:'s2', sil:'run'}, {user:'mia', scene:'s5', sil:'face'} ],
+};
+const COMM_CHAT = {
+  golds:  [ {sep:'Today'}, {from:'dana', t:'Platform 2 is open if anyone needs it'}, {from:'jordan', t:'Chalk restocked by the racks 🙏'}, {from:'mia', t:'6pm crew where you at'} ],
+  legday: [ {sep:'Today'}, {from:'sam', t:'Thursday still on?'}, {from:'jordan', t:'squats then we eat'} ],
+  nyu:    [ {sep:'Today'}, {from:'lena', t:'Palladium gym floor is dead rn, go now'}, {from:'theo', t:'legend'} ],
+  '5am':  [ {sep:'4:31 AM'}, {from:'octavio', t:'doors at 4:55, no excuses'}, {from:'mia', t:'already in the car'} ],
+};
+
+/* Rankings — max lifts separated by lift */
+const RANKINGS = {
+  lifts: {
+    bench:    [ {u:'marcus', v:'315', unit:'lb'}, {u:'jordan', v:'285', unit:'lb'}, {u:'me', v:'245', unit:'lb'}, {u:'alex', v:'235', unit:'lb'}, {u:'priya', v:'165', unit:'lb'} ],
+    squat:    [ {u:'dana', v:'365', unit:'lb'}, {u:'jordan', v:'345', unit:'lb'}, {u:'octavio', v:'325', unit:'lb'}, {u:'me', v:'315', unit:'lb'}, {u:'mia', v:'275', unit:'lb'} ],
+    deadlift: [ {u:'dana', v:'425', unit:'lb'}, {u:'me', v:'405', unit:'lb'}, {u:'jordan', v:'395', unit:'lb'}, {u:'sam', v:'385', unit:'lb'}, {u:'mia', v:'335', unit:'lb'} ],
+  },
+  streaks:  [ {u:'octavio', v:'61', unit:'days'}, {u:'mia', v:'34', unit:'days'}, {u:'me', v:'23', unit:'days'}, {u:'dana', v:'19', unit:'days'}, {u:'jordan', v:'12', unit:'days'} ],
+  friends:  [ {u:'mia', v:'112', unit:''}, {u:'dana', v:'96', unit:''}, {u:'jordan', v:'74', unit:''}, {u:'me', v:'48', unit:''}, {u:'priya', v:'41', unit:''} ],
+  trophies: [ {u:'dana', v:'9', unit:''}, {u:'octavio', v:'7', unit:''}, {u:'me', v:'4', unit:''}, {u:'mia', v:'4', unit:''}, {u:'sam', v:'3', unit:''} ],
+};
+
+/* Achievement posts / max-lift videos (mine) */
+const ACHIEVEMENTS = [
+  { id:'a1', kind:'video', lift:'Deadlift', weight:'405 lb', scene:'s6', sil:'lift', dur:'0:14', date:'Jun 28' },
+  { id:'a2', kind:'video', lift:'Bench press', weight:'245 lb', scene:'s3', sil:'bench', dur:'0:09', date:'Jun 12' },
+  { id:'a3', kind:'post',  lift:'30-day streak', weight:'', scene:'s2', sil:'mirror', dur:'', date:'May 30' },
+  { id:'a4', kind:'video', lift:'Squat', weight:'315 lb', scene:'s4', sil:'rack', dur:'0:11', date:'May 18' },
+];
+const achById = id => ACHIEVEMENTS.find(a => a.id === id);
+
+/* Trophies — lifting / streak / friends / community only. Each links to a confirming post or video. */
+const TROPHIES = [
+  { id:'t1', name:'405 Club — Deadlift', cat:'Lifting', meta:'Verified by max-lift video', proof:'a1', pinned:true },
+  { id:'t2', name:'30-Day Streak', cat:'Streak', meta:'30 daily posts in a row', proof:'a3', pinned:true },
+  { id:'t3', name:'225 Club — Bench', cat:'Lifting', meta:'Verified by max-lift video', proof:'a2', pinned:false },
+  { id:'t4', name:"Gold's Top 5 — Squat", cat:'Community', meta:"Ranked #4 at Gold's Chelsea", proof:'a4', pinned:false },
+  { id:'t5', name:'Squad of 25', cat:'Friends', meta:'25 mutual friends', proof:'d2', pinned:false },
+];
+
+/* My daily-post archive — reverse chronological */
+const DAILY_ARCHIVE = [
+  { month:'July 2026', days:[
+    { id:'d1', d:'13', main:['s2','lift'], inset:['s5','face'], gymId:'golds', caption:'Pull day, no straps.' },
+    { id:'d2', d:'12', main:['s4','mirror'], inset:['s1','face'], gymId:'golds', caption:'Check-in.' },
+    { id:'d3', d:'11', main:['s3','bench'], inset:['s6','face'], gymId:'equinox', caption:'Guest pass with Alex.' },
+    { id:'d4', d:'10', missed:true },
+    { id:'d5', d:'9',  main:['s5','run'], inset:['s2','face'], gymId:null, altLoc:'Unlisted location', caption:'River run.' },
+    { id:'d6', d:'8',  main:['s1','rack'], inset:['s4','face'], gymId:'golds', caption:'Front squats.' },
+    { id:'d7', d:'7',  main:['s6','lift'], inset:['s3','face'], gymId:'golds', caption:'Volume day.' },
+    { id:'d8', d:'6',  main:['s2','bench'], inset:['s5','face'], gymId:'crunch', caption:'Dropped in on Sam.' },
+  ]},
+  { month:'June 2026', days:[
+    { id:'d9',  d:'30', main:['s4','lift'], inset:['s6','face'], gymId:'golds', caption:'Last day of the block.' },
+    { id:'d10', d:'29', main:['s3','mirror'], inset:['s1','face'], gymId:null, altLoc:'Home gym', caption:'Garage day.' },
+    { id:'d11', d:'28', main:['s6','lift'], inset:['s2','face'], gymId:'golds', caption:'PR DAY. 405.' },
+    { id:'d12', d:'27', main:['s5','rack'], inset:['s4','face'], gymId:'golds', caption:'Primer session.' },
+  ]},
+];
+function dailyById(id) { for (const m of DAILY_ARCHIVE) { const f = m.days.find(x => x.id === id); if (f) return f; } return null; }
+
+/* ================================================================
+   STATE — daily lock resets at local midnight
+   ================================================================ */
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+const LS_KEY = 'spotted_last_post_date';
+let store = {};
+try { store.last = localStorage.getItem(LS_KEY); } catch(e) { store.last = null; }
+function hasPostedToday() { return store.last === todayKey(); }
+function markPostedToday() {
+  store.last = todayKey();
+  try { localStorage.setItem(LS_KEY, store.last); } catch(e) {}
+}
+
+const state = {
+  feedTab: 'friends',      // friends | public
+  friendsTab: 'messages',  // messages | find
+  mapTab: 'communities',   // communities | map
+  screen: 'home',
+  myReactions: {},         // postId -> true
+  extraComments: {},       // postId -> [{u,t,time}]
+  joinedGyms: { golds: true },
+  myDailyPost: null,       // today's published post
+  myLiftPost: null,        // today's max-lift post, if any
+};
+
+/* ================================================================
+   CORE HELPERS — nav, panels, sheets, toast
+   ================================================================ */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+function navTo(name) {
+  if (name === state.screen) { clearPanels(); return; }
+  clearPanels();
+  const out = $(`.screen[data-screen="${state.screen}"]`);
+  const inn = $(`.screen[data-screen="${name}"]`);
+  if (out) out.classList.remove('active');
+  if (inn) inn.classList.add('active');
+  $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  state.screen = name;
+}
+
+/* panel stack */
+function pushPanel(html, opts = {}) {
+  const layer = $('#panel-layer');
+  const p = document.createElement('div');
+  p.className = 'panel' + (opts.full ? ' full' : '');
+  p.innerHTML = html;
+  layer.appendChild(p);
+  requestAnimationFrame(() => requestAnimationFrame(() => p.classList.add('in')));
+  return p;
+}
+function popPanel() {
+  const layer = $('#panel-layer');
+  const p = layer.lastElementChild;
+  if (!p) return;
+  p.classList.remove('in');
+  setTimeout(() => p.remove(), 320);
+}
+function clearPanels() { $('#panel-layer').innerHTML = ''; }
+function panelHead(title, sub = '') {
+  return `<div class="panel-head">
+    <button class="panel-back pressable" onclick="popPanel()">${IC.back()}</button>
+    <div><div class="panel-title">${title}</div>${sub ? `<div class="panel-sub">${sub}</div>` : ''}</div>
+  </div>`;
+}
+
+/* sheets */
+function openSheet(html) {
+  $('#sheet').innerHTML = `<div class="sheet-handle"></div>` + html;
+  $('#sheet-backdrop').classList.add('on');
+  $('#sheet').classList.add('in');
+}
+function closeSheet() {
+  $('#sheet-backdrop').classList.remove('on');
+  $('#sheet').classList.remove('in');
+}
+
+let toastTimer;
+function toast(text) {
+  const t = $('#toast');
+  t.textContent = text;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 2100);
+}
+function flash(cb) {
+  const f = $('#flash');
+  f.classList.add('on');
+  setTimeout(() => { f.classList.remove('on'); if (cb) cb(); }, 150);
+}
+
+function av(user, size = 40, sq = false) {
+  const u = user === 'me' ? ME : USERS[user];
+  return `<div class="av ${u.av} ${sq ? 'sq' : ''}" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px">${u.initial}</div>`;
+}
+
+/* ================================================================
+   HOME — Friends / Public feed, lock, reactions, comments
+   ================================================================ */
+function gymLine(post) {
+  if (post.gymId) {
+    return `<div class="post-loc">${IC.pin()} ${gymById(post.gymId).name}</div>`;
+  }
+  return `<div class="post-loc unmapped">${IC.home()} ${post.altLoc || 'Not at a mapped gym'} · not a mapped gym</div>`;
+}
+
+function reactRow(post) {
+  const mine = state.myReactions[post.id];
+  const chips = post.reactions.map(r =>
+    `<div class="react-chip" title="${USERS[r.u].name}"><div class="ph ${USERS[r.u].av === 'g1' ? 's5' : 's3'}"></div><div class="face">${USERS[r.u].initial}</div></div>`).join('');
+  const mineChip = mine ? `<div class="react-chip you"><div class="ph s2"></div><div class="face">R</div></div>` : '';
+  const count = post.reactions.length + (mine ? 1 : 0);
+  const comments = (post.comments.length + (state.extraComments[post.id]?.length || 0));
+  return `<div class="react-row">
+    <button class="react-add pressable" onclick="openReactionCapture('${post.id}')" title="Add a live reaction">${mine ? IC.check(14) : IC.camera(15)}</button>
+    <div class="react-stack">${chips}${mineChip}</div>
+    <span class="react-count">${count} live reaction${count === 1 ? '' : 's'}</span>
+    <button class="comment-toggle pressable" onclick="toggleComments('${post.id}')">${IC.comment()} ${comments}</button>
+  </div>`;
+}
+
+function commentsBlock(post) {
+  const all = [...post.comments, ...(state.extraComments[post.id] || [])];
+  const rows = all.map(c => `<div class="comment">${av(c.u, 28)}<div class="comment-body"><b>${c.u === 'me' ? 'you' : USERS[c.u].handle.slice(1)}</b>${c.t}<span class="c-time">${c.time}</span></div></div>`).join('');
+  return `<div class="comments" id="cm-${post.id}">
+    ${rows || `<div class="empty" style="padding:14px">No comments yet. Say something.</div>`}
+    <div class="comment-input-row">
+      ${av('me', 30)}
+      <input class="comment-input" id="ci-${post.id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')sendComment('${post.id}')">
+      <button class="comment-send pressable" onclick="sendComment('${post.id}')">${IC.send(14)}</button>
+    </div>
+    <button class="collapse-bar" onclick="toggleComments('${post.id}')">HIDE COMMENTS</button>
+  </div>`;
+}
+
+function toggleComments(id) {
+  const el = document.getElementById('cm-' + id);
+  if (el) el.classList.toggle('open');
+}
+function sendComment(id) {
+  const input = document.getElementById('ci-' + id);
+  const t = input.value.trim();
+  if (!t) return;
+  (state.extraComments[id] = state.extraComments[id] || []).push({ u:'me', t, time:'now' });
+  input.value = '';
+  renderHome(true);
+  const el = document.getElementById('cm-' + id);
+  if (el) el.classList.add('open');
+  toast('Comment posted');
+}
+
+function fbMedia(post, liftBadge = false) {
+  return `<div class="fb ${liftBadge ? 'lift-video' : ''}">
+    <div class="fb-main">${photo(post.main[0], post.main[1])}</div>
+    <div class="fb-inset">${photo(post.inset[0], post.inset[1])}</div>
+    ${liftBadge ? `<div class="lift-tag">${IC.trophy(11)} ${post.lift} · ${post.weight}</div><div class="play-badge">${IC.play(20)}</div><div class="vid-dur">${post.dur}</div>` : ''}
+  </div>`;
+}
+
+/* media renderer — routes by post kind */
+function postMedia(post) {
+  if (post.kind === 'pr' || post.kind === 'streak') return plateHTML(post);
+  if (post.kind === 'video') return videoHTML(post);
+  if (post.kind === 'compare') return compareHTML(post);
+  return fbMedia(post, post.kind === 'lift');
+}
+
+/* big-number milestone plate (PRs, streaks) */
+function plateHTML(post) {
+  return `<div class="plate-card">
+    <div class="plate-ring"></div><div class="plate-ring r2"></div>
+    <div class="plate-tag">◎ ${post.plate.tag}</div>
+    <div class="plate-big">${post.plate.big}<span class="plate-unit">${post.plate.unit}</span></div>
+  </div>`;
+}
+
+/* form-check / PR video with tap-to-play progress */
+function videoHTML(post) {
+  return `<div class="fb lift-video" id="vf-${post.id}" onclick="playVideo('${post.id}')">
+    <div class="fb-main">${photo(post.main[0], post.main[1])}</div>
+    <div class="vid-chips">${post.chips.map(c => `<span class="vchip ${c === 'PR' ? 'hot' : ''}">${c === 'PR' ? '◎ PR' : c}</span>`).join('')}</div>
+    <div class="play-badge">${IC.play(20)}</div>
+    <div class="vid-dur">${post.dur}</div>
+    <div class="vid-progress"></div>
+  </div>`;
+}
+function playVideo(id) {
+  const el = document.getElementById('vf-' + id);
+  if (!el || el.classList.contains('playing')) return;
+  el.classList.add('playing');
+  setTimeout(() => {
+    const same = document.getElementById('vf-' + id);
+    if (!same) return;
+    same.classList.remove('playing');
+    const pr = same.querySelector('.vid-progress');
+    if (pr) { pr.style.transition = 'none'; pr.style.width = '0'; requestAnimationFrame(() => { pr.style.transition = ''; }); }
+  }, 4300);
+}
+
+/* before/after drag-to-compare */
+function compareHTML(post) {
+  return `<div class="cmp">
+    <div class="cmp-half">${photo('s4','figBefore')}</div>
+    <div class="cmp-half after" id="cmp-after-${post.id}">${photo('s5','figAfter')}</div>
+    <div class="cmp-tag l">${post.cmp.l}</div>
+    <div class="cmp-tag r">${post.cmp.r}</div>
+    <div class="cmp-div" id="cmp-div-${post.id}"><div class="knob">↔</div></div>
+    <input type="range" class="cmp-range" min="6" max="94" value="50" oninput="dragCompare('${post.id}', this.value)" aria-label="Drag to compare before and after">
+  </div>`;
+}
+function dragCompare(id, v) {
+  const a = document.getElementById('cmp-after-' + id);
+  const d = document.getElementById('cmp-div-' + id);
+  if (a) a.style.clipPath = `inset(0 0 0 ${v}%)`;
+  if (d) d.style.left = v + '%';
+}
+
+function postCard(post, opts = {}) {
+  const u = post.user === 'me' ? ME : USERS[post.user];
+  return `<article class="post">
+    <div class="post-top">
+      <div onclick="openUserProfile('${post.user}')" style="cursor:pointer">${av(post.user, 40)}</div>
+      <div class="post-id" onclick="openUserProfile('${post.user}')">
+        <div class="post-user">${u.handle.slice(1)}</div>
+        ${gymLine(post)}
+      </div>
+      <div class="post-time">${post.time}</div>
+    </div>
+    ${postMedia(post)}
+    ${opts.ctx && post.ctx ? `<div class="ctx-row">${post.ctx.map(c => `<span class="ctx">${IC[c[0]](11)} ${c[1]}</span>`).join('')}</div>` : ''}
+    ${post.caption ? `<div class="post-caption"><b>${u.handle.slice(1)}</b>${post.caption}</div>` : ''}
+    ${reactRow(post)}
+    ${commentsBlock(post)}
+  </article>`;
+}
+
+function myPostsAsFeed() {
+  const out = [];
+  if (state.myLiftPost) out.push(postCard(state.myLiftPost));
+  if (state.myDailyPost) out.push(postCard(state.myDailyPost));
+  return out.join('');
+}
+
+function renderHome(preserveScroll = false) {
+  const el = $('#screen-home');
+  const scrollY = preserveScroll ? el.scrollTop : 0;
+  const locked = !hasPostedToday();
+  const tab = state.feedTab;
+  const posts = tab === 'friends' ? FRIEND_POSTS : PUBLIC_POSTS;
+
+  el.innerHTML = `
+    <div class="app-head">
+      <div class="app-brand">SPOTTED</div>
+    </div>
+    ${tab === 'friends' ? liveStripHTML() : ''}
+    <div class="seg">
+      <button class="${tab === 'friends' ? 'on' : ''}" onclick="setFeedTab('friends')">Friends</button>
+      <button class="${tab === 'public' ? 'on' : ''}" onclick="setFeedTab('public')">Public</button>
+    </div>
+    <div class="feed-body ${locked ? 'feed-locked' : ''}">
+      ${!locked && tab === 'friends' ? myPostsAsFeed() : ''}
+      ${posts.map(p => postCard(p, { ctx: tab === 'public' })).join('')}
+      ${locked ? `
+        <div class="lock-overlay">
+          <div class="lock-card">
+            <div class="lock-icon">${IC.lock()}</div>
+            <div class="lock-title">Go to the gym to unlock today’s feed.</div>
+            <div class="lock-sub">Post today’s front-and-back to see what everyone else is doing.</div>
+            <button class="lock-cta pressable" onclick="openCamera()">${IC.camera(15)} Post today’s SPOTTED</button>
+          </div>
+        </div>` : ''}
+    </div>`;
+  el.scrollTop = scrollY;
+}
+function setFeedTab(t) { state.feedTab = t; renderHome(); }
+
+/* live photo reaction capture */
+function openReactionCapture(postId) {
+  if (!hasPostedToday()) { toast('Post today to react'); return; }
+  if (state.myReactions[postId]) { toast('Reaction already added'); return; }
+  openSheet(`
+    <div class="sheet-title" style="text-align:center">Live reaction</div>
+    <div class="sheet-sub" style="text-align:center">Front camera · one quick shot</div>
+    <div class="selfie-cam"><div class="ph s5">${SIL.face}</div><div class="scan"></div></div>
+    <div style="display:flex;justify-content:center;padding:14px 0 4px">
+      <button class="shutter" style="width:64px;height:64px" onclick="captureReaction('${postId}')"></button>
+    </div>`);
+}
+function captureReaction(postId) {
+  flash(() => {
+    state.myReactions[postId] = true;
+    closeSheet();
+    renderHome(true);
+    toast('Live reaction added');
+  });
+}
+
+/* ================================================================
+   LIVE "SPOT ME" STRIP — friends at the gym right now
+   ================================================================ */
+function liveStripHTML() {
+  return `<div class="live-strip">
+    ${LIVE.map(x => {
+      const u = USERS[x.u];
+      const done = spotState[x.u];
+      return `<div class="live-item ${x.live ? 'live' : ''} pressable" onclick="${x.live ? `openSpotSheet('${x.u}')` : `openUserProfile('${x.u}')`}">
+        <div class="live-ring">${av(x.u, 46)}</div>
+        <div class="live-name">${done ? '◎ spotted' : u.name.split(' ')[0]}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function openSpotSheet(uid) {
+  const x = LIVE.find(l => l.u === uid);
+  const u = USERS[uid];
+  const g = x.gymId ? gymById(x.gymId) : null;
+  openSheet(`
+    <div style="display:flex;flex-direction:column;align-items:center;padding:16px 20px 4px;text-align:center">
+      <div class="live-ring big">${av(uid, 66)}<div class="live-badge">LIVE</div></div>
+      <div style="font-weight:700;font-size:17px;color:var(--white);margin-top:14px;letter-spacing:-0.01em">${u.name} is at the gym</div>
+      <div style="font-size:12.5px;color:var(--fog);margin-top:4px">${x.note}${g ? ` · ${g.name}` : ''}</div>
+    </div>
+    <div class="gympv-actions">
+      <button class="btn-ghost pressable" style="flex:1" onclick="closeSheet();openUserProfile('${uid}')">Profile</button>
+      <button class="btn-solid pressable" style="flex:1.5" onclick="sendSpot('${uid}')">${spotState[uid] ? '◎ Spotted' : 'Send a spot 👊'}</button>
+    </div>
+    <div style="height:8px"></div>`);
+}
+function sendSpot(uid) {
+  if (spotState[uid]) { closeSheet(); return; }
+  spotState[uid] = true;
+  closeSheet();
+  renderHome(true);
+  toast(`You spotted ${USERS[uid].name.split(' ')[0]} 👊`);
+}
+
+/* ================================================================
+   USER PROFILES (other people) — mutual friends visible
+   ================================================================ */
+function relButtonHTML(uid) {
+  const s = relState[uid];
+  const u = USERS[uid];
+  if (u && u.friend) return `<button class="rel-btn quiet">${IC.check(11)} Friends</button>`;
+  if (s === 'friend') return `<button class="rel-btn quiet">${IC.check(11)} Friends</button>`;
+  if (s === 'following') return `<button class="rel-btn quiet" onclick="cycleRel('${uid}');event.stopPropagation()">Following</button>`;
+  if (s === 'requested') return `<button class="rel-btn quiet" onclick="cycleRel('${uid}');event.stopPropagation()">Added</button>`;
+  if (s === 'incoming') return `<button class="rel-btn primary" onclick="cycleRel('${uid}');event.stopPropagation()">Add Back</button>`;
+  return `<button class="rel-btn primary" onclick="cycleRel('${uid}');event.stopPropagation()">Add</button>`;
+}
+function cycleRel(uid) {
+  const s = relState[uid];
+  if (s === 'none') { relState[uid] = 'requested'; toast('Friend request sent'); }
+  else if (s === 'incoming') { relState[uid] = 'friend'; toast(`You and ${USERS[uid].name.split(' ')[0]} are now friends`); }
+  else if (s === 'requested') { relState[uid] = 'none'; toast('Request withdrawn'); }
+  else if (s === 'following') { relState[uid] = 'none'; toast('Unfollowed'); }
+  renderFriends(true);
+  refreshOpenProfile(uid);
+}
+let openProfileUid = null;
+function refreshOpenProfile(uid) {
+  if (openProfileUid === uid) {
+    const btn = document.getElementById('prof-rel-' + uid);
+    if (btn) btn.innerHTML = relButtonHTML(uid);
+  }
+}
+
+function openUserProfile(uid) {
+  if (uid === 'me') { navTo('profile'); return; }
+  const u = USERS[uid];
+  openProfileUid = uid;
+  const mut = u.mutuals || [];
+  const theirPosts = [...FRIEND_POSTS, ...PUBLIC_POSTS].filter(p => p.user === uid);
+  pushPanel(`
+    ${panelHead(u.handle.slice(1))}
+    <div class="prof-head">
+      ${av(uid, 72)}
+      <div class="prof-id">
+        <div class="prof-name">${u.name}</div>
+        <div class="prof-handle">${u.handle}</div>
+        <div class="prof-gym">${IC.pin()} ${u.gym}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 18px 0">
+      <span id="prof-rel-${uid}" style="display:flex">${relButtonHTML(uid)}</span>
+    </div>
+    ${mut.length ? `
+    <div class="mutual-strip" onclick="openMutualsSheet('${uid}')">
+      <div class="mutual-avs">${mut.slice(0,3).map(m => av(m, 26)).join('')}</div>
+      <div class="mutual-text"><b>${mut.length} mutual friend${mut.length === 1 ? '' : 's'}</b> · ${mut.slice(0,2).map(m => USERS[m].name.split(' ')[0]).join(', ')}${mut.length > 2 ? ` +${mut.length - 2}` : ''}</div>
+    </div>` : `<div class="mutual-strip"><div class="mutual-text">No mutual friends yet</div></div>`}
+    <div class="section-label">Recent posts</div>
+    ${theirPosts.length
+      ? theirPosts.map(p => postCard(p)).join('')
+      : `<div class="empty">Posts unlock when you’re friends.</div>`}
+  `);
+}
+function openMutualsSheet(uid) {
+  const mut = USERS[uid].mutuals || [];
+  openSheet(`
+    <div class="sheet-title">Mutual friends</div>
+    <div class="sheet-sub">You and ${USERS[uid].name.split(' ')[0]} both know</div>
+    ${mut.map(m => `
+      <div class="row row-press" onclick="closeSheet();openUserProfile('${m}')">
+        ${av(m, 42)}
+        <div class="row-main"><div class="row-name">${USERS[m].name}</div><div class="row-sub">${USERS[m].handle}</div></div>
+        ${IC.chevR()}
+      </div>`).join('')}
+  `);
+}
+
+/* ================================================================
+   FRIENDS TAB — Messages / Find Friends
+   ================================================================ */
+function renderFriends(preserveScroll = false) {
+  const el = $('#screen-friends');
+  const scrollY = preserveScroll ? el.scrollTop : 0;
+  const tab = state.friendsTab;
+  el.innerHTML = `
+    <div class="app-head"><div class="app-head-title">Friends</div></div>
+    <div class="seg">
+      <button class="${tab === 'messages' ? 'on' : ''}" onclick="setFriendsTab('messages')">Messages</button>
+      <button class="${tab === 'find' ? 'on' : ''}" onclick="setFriendsTab('find')">Find Friends</button>
+    </div>
+    ${tab === 'messages' ? inboxHTML() : findHTML()}
+  `;
+  el.scrollTop = scrollY;
+  if (tab === 'find') {
+    const inp = document.getElementById('find-search');
+    if (inp && state._findQuery) { inp.value = state._findQuery; filterFind(); }
+  }
+}
+function setFriendsTab(t) { state.friendsTab = t; renderFriends(); }
+
+function inboxHTML() {
+  return INBOX.map(c => {
+    const avatar = c.kind === 'dm'
+      ? av(c.user, 46)
+      : `<div class="group-av">${av(c.avs[0], 30)}${av(c.avs[1], 30)}</div>`;
+    const name = c.kind === 'dm' ? USERS[c.user].name : c.name;
+    return `<div class="row row-press" onclick="openConvo('${c.id}')">
+      ${avatar}
+      <div class="row-main">
+        <div class="row-name">${name}</div>
+        <div class="row-sub" style="${c.unread ? 'color:var(--mist);font-weight:600' : ''}">${c.preview}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <div class="row-time">${c.time}</div>
+        ${c.unread ? '<div class="dot"></div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function msgBubbles(msgs, groupNames = false) {
+  return msgs.map(m => {
+    if (m.sep) return `<div class="msg-time-sep">${m.sep}</div>`;
+    const me = m.from === 'me';
+    const who = !me && groupNames ? `<div class="who">${USERS[m.from].name.split(' ')[0]}</div>` : '';
+    return `${who}<div class="msg ${me ? 'me' : ''}"><div class="bubble">${m.t}</div></div>`;
+  }).join('');
+}
+
+function openConvo(cid) {
+  const c = CONVOS[cid];
+  const meta = INBOX.find(i => i.id === cid);
+  if (meta) meta.unread = false;
+  const p = pushPanel(`
+    ${panelHead(c.title, c.sub)}
+    <div class="convo-body" id="convo-${cid}">${msgBubbles(c.msgs, !!c.group)}</div>
+    <div class="convo-input-bar">
+      <input class="comment-input" id="convo-input-${cid}" placeholder="Message…" onkeydown="if(event.key==='Enter')sendMsg('${cid}')">
+      <button class="comment-send pressable" onclick="sendMsg('${cid}')">${IC.send(14)}</button>
+    </div>
+  `);
+  p.scrollTop = p.scrollHeight;
+  renderFriends(true);
+}
+function sendMsg(cid) {
+  const input = document.getElementById('convo-input-' + cid);
+  const t = input.value.trim();
+  if (!t) return;
+  CONVOS[cid].msgs.push({ from:'me', t });
+  const body = document.getElementById('convo-' + cid);
+  body.insertAdjacentHTML('beforeend', `<div class="msg me"><div class="bubble">${t.replace(/</g,'&lt;')}</div></div>`);
+  input.value = '';
+  const meta = INBOX.find(i => i.id === cid);
+  if (meta) { meta.preview = 'You: ' + t; meta.time = 'now'; }
+  body.closest('.panel').scrollTop = body.closest('.panel').scrollHeight;
+}
+
+/* Find Friends */
+function findRow(item) {
+  const u = USERS[item.u];
+  return `<div class="row row-press" data-find-name="${(u.name + ' ' + u.handle).toLowerCase()}" onclick="openUserProfile('${item.u}')">
+    ${av(item.u, 46)}
+    <div class="row-main">
+      <div class="row-name">${u.name}</div>
+      <div class="row-sub">${u.handle} · ${item.note}</div>
+    </div>
+    ${relButtonHTML(item.u)}
+  </div>`;
+}
+function findHTML() {
+  return `
+    <div class="search-box">${IC.search()}<input id="find-search" placeholder="Search people" oninput="filterFind()"></div>
+    <div id="find-lists">
+      <div class="section-label" data-find-sec>Mutual friends</div>
+      ${FIND.mutuals.map(findRow).join('')}
+      <div class="section-label" data-find-sec>Nearby</div>
+      ${FIND.nearby.map(findRow).join('')}
+      <div class="section-label" data-find-sec>Suggested</div>
+      ${FIND.suggested.map(findRow).join('')}
+      <div class="section-label" data-find-sec>From your contacts</div>
+      ${FIND.contacts.map(findRow).join('')}
+    </div>
+    <div class="empty" id="find-empty" style="display:none">No one found. Try a different name.</div>`;
+}
+function filterFind() {
+  const q = document.getElementById('find-search').value.trim().toLowerCase();
+  state._findQuery = q;
+  let any = false;
+  $$('#find-lists [data-find-name]').forEach(r => {
+    const show = !q || r.dataset.findName.includes(q);
+    r.style.display = show ? '' : 'none';
+    if (show) any = true;
+  });
+  $$('#find-lists [data-find-sec]').forEach(s => { s.style.display = q ? 'none' : ''; });
+  document.getElementById('find-empty').style.display = any ? 'none' : '';
+}
+
+/* ================================================================
+   CAMERA — daily front-and-back flow + max-lift video
+   ================================================================ */
+const SCENE_BACK = ['s2','lift'];   // simulated rear camera scene
+const SCENE_FRONT = ['s5','face'];  // simulated front camera scene
+const MUSIC = [
+  { t:'Ambition', a:'Wale' }, { t:'Till I Collapse', a:'Eminem' },
+  { t:'Runnin', a:'21 Savage' }, { t:'Stronger', a:'Kanye West' }, { t:'HUMBLE.', a:'Kendrick Lamar' },
+];
+
+let cam = null;
+function freshCam(mode) {
+  return {
+    mode,                 // 'daily' | 'lift'
+    step: 'capture1',
+    gym: null,            // gymId | 'home' | 'other'
+    tags: [],
+    music: null,
+    caption: '',
+    communities: [],
+    lift: 'Bench press',
+    weight: '245 lb',
+    recorded: false,
+  };
+}
+
+function openCamera() {
+  cam = freshCam(hasPostedToday() ? 'lift' : 'daily');
+  renderCam();
+  $('#cam').classList.add('in');
+}
+function closeCamera() {
+  $('#cam').classList.remove('in');
+  setTimeout(() => { $('#cam').innerHTML = ''; }, 360);
+}
+
+function camModeRow() {
+  const posted = hasPostedToday();
+  return `<div class="cam-mode-row">
+    <button class="cam-mode ${cam.mode === 'daily' ? 'on' : ''}" ${posted ? 'disabled' : ''} onclick="setCamMode('daily')">${posted ? 'Daily ✓' : 'Daily'}</button>
+    <button class="cam-mode ${cam.mode === 'lift' ? 'on' : ''}" ${!posted ? 'disabled' : ''} onclick="setCamMode('lift')" title="${!posted ? 'Post your daily first' : ''}">Max lift</button>
+  </div>`;
+}
+function setCamMode(m) {
+  if (m === 'lift' && !hasPostedToday()) { toast('Post your daily first'); return; }
+  cam = freshCam(m);
+  renderCam();
+}
+
+function renderCam() {
+  const el = $('#cam');
+  if (!cam) return;
+  if (cam.mode === 'daily') renderDailyCam(el);
+  else renderLiftCam(el);
+}
+
+/* ---- daily: two captures ---- */
+function renderDailyCam(el) {
+  const step = cam.step;
+  if (step === 'capture1' || step === 'capture2') {
+    const second = step === 'capture2';
+    el.innerHTML = `
+      <div class="cam-view">
+        ${photo(...(second ? SCENE_FRONT : SCENE_BACK))}
+        <div class="cam-grid"></div>
+      </div>
+      <div class="cam-top">
+        <button class="cam-close pressable" onclick="closeCamera()">${IC.x()}</button>
+        <div class="cam-step">${second ? 'Front · 2 of 2' : 'Back · 1 of 2'}</div>
+        <button class="cam-flip pressable" onclick="toast('Camera flipped')">${IC.flip()}</button>
+      </div>
+      ${second ? `<div class="cam-shot-thumb">${photo(...SCENE_BACK)}</div>` : ''}
+      <div class="cam-bottom">
+        <button class="shutter" onclick="dailyCapture()"></button>
+        ${camModeRow()}
+      </div>`;
+  }
+  else if (step === 'review') {
+    el.innerHTML = `
+      <div class="cam-view" style="background:var(--black)">
+        <div class="compose-fb" style="width:78%;margin-top:calc(var(--status-h) + 30px)">
+          ${photo(...SCENE_BACK)}
+          <div class="fb-inset">${photo(...SCENE_FRONT)}</div>
+        </div>
+      </div>
+      <div class="cam-top">
+        <button class="cam-close pressable" onclick="cam.step='capture1';renderCam()">${IC.back()}</button>
+        <div class="cam-step">Front &amp; back</div>
+        <div style="width:40px"></div>
+      </div>
+      <div class="cam-bottom" style="padding-left:18px;padding-right:18px">
+        <button class="btn-solid pressable" onclick="cam.step='compose';renderCam()">Continue ${IC.chevR(13)}</button>
+      </div>`;
+  }
+  else if (step === 'compose') el.innerHTML = composeHTML();
+  else if (step === 'preview') el.innerHTML = previewHTML();
+}
+function dailyCapture() {
+  flash(() => {
+    if (cam.step === 'capture1') cam.step = 'capture2';
+    else if (cam.step === 'capture2') cam.step = 'review';
+    renderCam();
+  });
+}
+
+/* ---- compose (edit options: gym, tags, music, caption, communities only) ---- */
+function gymValueLabel() {
+  if (!cam.gym) return 'Choose';
+  if (cam.gym === 'home') return 'Home gym';
+  if (cam.gym === 'other') return 'Other location';
+  return gymById(cam.gym).name;
+}
+function composeHTML() {
+  const isLift = cam.mode === 'lift';
+  return `
+    <div class="compose">
+      <div class="panel-head" style="position:static;background:none;padding-top:0">
+        <button class="panel-back pressable" onclick="cam.step='${isLift ? 'liftmeta' : 'review'}';renderCam()">${IC.back()}</button>
+        <div class="panel-title">${isLift ? 'Max-lift post' : 'Today’s post'}</div>
+      </div>
+      <div class="compose-fb">
+        ${photo(...(isLift ? ['s6','lift'] : SCENE_BACK))}
+        ${isLift
+          ? `<div class="lift-tag">${IC.trophy(11)} ${cam.lift} · ${cam.weight}</div><div class="play-badge">${IC.play(20)}</div>`
+          : `<div class="fb-inset">${photo(...SCENE_FRONT)}</div>`}
+      </div>
+
+      <div class="section-label">Details</div>
+      <div class="opt-row" onclick="openGymSheet()">
+        <div class="opt-icon">${IC.pin(15)}</div>
+        <div class="opt-label">Gym</div>
+        <div class="opt-value ${cam.gym ? 'set' : ''}">${gymValueLabel()}</div>
+        ${IC.chevR()}
+      </div>
+      <div class="opt-row" onclick="openTagSheet()">
+        <div class="opt-icon">${IC.tag()}</div>
+        <div class="opt-label">Tag friends</div>
+        <div class="opt-value ${cam.tags.length ? 'set' : ''}">${cam.tags.length ? cam.tags.map(t => USERS[t].name.split(' ')[0]).join(', ') : 'None'}</div>
+        ${IC.chevR()}
+      </div>
+      <div class="opt-row" onclick="openMusicSheet()">
+        <div class="opt-icon">${IC.music()}</div>
+        <div class="opt-label">Music</div>
+        <div class="opt-value ${cam.music ? 'set' : ''}">${cam.music ? cam.music.t : 'None'}</div>
+        ${IC.chevR()}
+      </div>
+      <div class="opt-row" onclick="openCommSheet()">
+        <div class="opt-icon">${IC.users()}</div>
+        <div class="opt-label">Communities</div>
+        <div class="opt-value ${cam.communities.length ? 'set' : ''}">${cam.communities.length ? cam.communities.map(c => commById(c).name).join(', ') : 'None'}</div>
+        ${IC.chevR()}
+      </div>
+      <div class="section-label">Caption</div>
+      <textarea class="caption-field" id="cap-field" placeholder="Say something about today…" oninput="cam.caption=this.value">${cam.caption}</textarea>
+      <div class="compose-actions">
+        <button class="btn-solid pressable" onclick="goPreview()">Preview post</button>
+      </div>
+    </div>`;
+}
+function goPreview() {
+  if (!cam.gym) { toast('Choose a gym or location first'); openGymSheet(); return; }
+  cam.step = 'preview';
+  renderCam();
+}
+
+/* gym selection sheet — mapped gyms, home gym, other */
+function openGymSheet() {
+  const rows = GYMS.map(g => `
+    <div class="choice-row" onclick="pickGym('${g.id}')">
+      <div class="gympv-icon" style="width:38px;height:38px">${IC.dumbbell(15)}</div>
+      <div class="choice-main">
+        <div class="choice-name">${g.name}</div>
+        <div class="choice-sub">${g.addr}${g.nearby ? ' · You’re here' : ''}</div>
+      </div>
+      <div class="check-ring ${cam.gym === g.id ? 'on' : ''}">${cam.gym === g.id ? IC.check(11) : ''}</div>
+    </div>`).join('');
+  openSheet(`
+    <div class="sheet-title">Where was this?</div>
+    <div class="sheet-sub">Mapped gyms show on the post. Home gym and unlisted spots won’t claim a mapped gym.</div>
+    ${rows}
+    <div class="hairline" style="margin:6px 20px"></div>
+    <div class="choice-row" onclick="pickGym('home')">
+      <div class="gympv-icon" style="width:38px;height:38px;border-color:var(--slate)">${IC.home(15)}</div>
+      <div class="choice-main"><div class="choice-name">Home gym</div><div class="choice-sub">Not a mapped gym</div></div>
+      <div class="check-ring ${cam.gym === 'home' ? 'on' : ''}">${cam.gym === 'home' ? IC.check(11) : ''}</div>
+    </div>
+    <div class="choice-row" onclick="pickGym('other')">
+      <div class="gympv-icon" style="width:38px;height:38px;border-color:var(--slate)">${IC.pin(15)}</div>
+      <div class="choice-main"><div class="choice-name">Other / unlisted</div><div class="choice-sub">Not a mapped gym</div></div>
+      <div class="check-ring ${cam.gym === 'other' ? 'on' : ''}">${cam.gym === 'other' ? IC.check(11) : ''}</div>
+    </div>`);
+}
+function pickGym(id) {
+  cam.gym = id;
+  // gym communities require being at that gym — dropping a location clears ineligible picks
+  cam.communities = cam.communities.filter(cid => {
+    const c = commById(cid);
+    return c.type !== 'Gym' || c.gymId === cam.gym;
+  });
+  closeSheet();
+  renderCam();
+}
+
+/* tag friends sheet */
+function openTagSheet() {
+  const friends = Object.values(USERS).filter(u => u.friend);
+  openSheet(`
+    <div class="sheet-title">Tag friends</div>
+    ${friends.map(u => `
+      <div class="choice-row" onclick="toggleTag('${u.id}')">
+        ${av(u.id, 40)}
+        <div class="choice-main"><div class="choice-name">${u.name}</div><div class="choice-sub">${u.handle}</div></div>
+        <div class="check-ring ${cam.tags.includes(u.id) ? 'on' : ''}" id="tag-ring-${u.id}">${cam.tags.includes(u.id) ? IC.check(11) : ''}</div>
+      </div>`).join('')}
+    <div style="padding:12px 20px 0"><button class="btn-solid pressable" onclick="closeSheet();renderCam()">Done</button></div>`);
+}
+function toggleTag(id) {
+  const i = cam.tags.indexOf(id);
+  if (i >= 0) cam.tags.splice(i, 1); else cam.tags.push(id);
+  const ring = document.getElementById('tag-ring-' + id);
+  ring.classList.toggle('on');
+  ring.innerHTML = ring.classList.contains('on') ? IC.check(11) : '';
+}
+
+/* music sheet */
+function openMusicSheet() {
+  openSheet(`
+    <div class="sheet-title">Add music</div>
+    ${MUSIC.map((m, i) => `
+      <div class="choice-row" onclick="pickMusic(${i})">
+        <div class="opt-icon">${IC.music()}</div>
+        <div class="choice-main"><div class="choice-name">${m.t}</div><div class="choice-sub">${m.a}</div></div>
+        <div class="check-ring ${cam.music === MUSIC[i] ? 'on' : ''}">${cam.music === MUSIC[i] ? IC.check(11) : ''}</div>
+      </div>`).join('')}
+    <div class="choice-row" onclick="cam.music=null;closeSheet();renderCam()">
+      <div class="opt-icon">${IC.x(13)}</div>
+      <div class="choice-main"><div class="choice-name">No music</div></div>
+    </div>`);
+}
+function pickMusic(i) { cam.music = MUSIC[i]; closeSheet(); renderCam(); }
+
+/* community selection — gym communities require being at that gym */
+function openCommSheet() {
+  const rows = COMMUNITIES.map(c => {
+    const isGym = c.type === 'Gym';
+    const eligible = !isGym || c.gymId === cam.gym;
+    const on = cam.communities.includes(c.id);
+    return `
+      <div class="choice-row ${eligible ? '' : 'disabled'}" onclick="${eligible ? `toggleComm('${c.id}')` : ''}">
+        <div class="comm-icon" style="width:38px;height:38px">${IC[c.icon](16)}</div>
+        <div class="choice-main">
+          <div class="choice-name">${c.name}</div>
+          <div class="choice-sub">${c.type} · ${eligible ? c.members + ' members' : 'You must be at this gym to post here'}</div>
+        </div>
+        <div class="check-ring ${on ? 'on' : ''}" id="comm-ring-${c.id}">${on ? IC.check(11) : ''}</div>
+      </div>`;
+  }).join('');
+  openSheet(`
+    <div class="sheet-title">Share to communities</div>
+    <div class="sheet-sub">Gym communities need you at that gym. Custom communities are always open to you.</div>
+    ${rows}
+    <div style="padding:12px 20px 0"><button class="btn-solid pressable" onclick="closeSheet();renderCam()">Done</button></div>`);
+}
+function toggleComm(id) {
+  const i = cam.communities.indexOf(id);
+  if (i >= 0) cam.communities.splice(i, 1); else cam.communities.push(id);
+  const ring = document.getElementById('comm-ring-' + id);
+  ring.classList.toggle('on');
+  ring.innerHTML = ring.classList.contains('on') ? IC.check(11) : '';
+}
+
+/* ---- preview + publish ---- */
+function previewPost() {
+  const isLift = cam.mode === 'lift';
+  return {
+    id: isLift ? 'my-lift' : 'my-daily',
+    user: 'me',
+    kind: isLift ? 'lift' : 'daily',
+    gymId: (cam.gym === 'home' || cam.gym === 'other') ? null : cam.gym,
+    altLoc: cam.gym === 'home' ? 'Home gym' : cam.gym === 'other' ? 'Unlisted location' : null,
+    time: 'now',
+    main: isLift ? ['s6','lift'] : SCENE_BACK,
+    inset: SCENE_FRONT,
+    lift: cam.lift, weight: cam.weight, dur: '0:12',
+    caption: buildCaption(),
+    reactions: [], comments: [],
+  };
+}
+function buildCaption() {
+  let c = cam.caption.trim();
+  if (cam.tags.length) c += (c ? ' ' : '') + cam.tags.map(t => USERS[t].handle).join(' ');
+  if (cam.music) c += (c ? ' · ' : '') + '♪ ' + cam.music.t + ' — ' + cam.music.a;
+  return c;
+}
+function previewHTML() {
+  const p = previewPost();
+  return `
+    <div class="compose">
+      <div class="panel-head" style="position:static;background:none;padding-top:0">
+        <button class="panel-back pressable" onclick="cam.step='compose';renderCam()">${IC.back()}</button>
+        <div class="panel-title">Preview</div>
+      </div>
+      <div class="preview-wrap">
+        <div class="preview-label">This is how it posts</div>
+        <div class="preview-card">${postCard(p)}</div>
+        ${cam.communities.length ? `<div class="sheet-sub" style="padding:12px 20px 0">Also shared to: ${cam.communities.map(c => commById(c).name).join(', ')}</div>` : ''}
+        <div class="compose-actions">
+          <button class="btn-ghost pressable" style="flex:1" onclick="cam.step='compose';renderCam()">Edit</button>
+          <button class="btn-solid pressable" style="flex:2" onclick="publishPost()">Publish</button>
+        </div>
+      </div>
+    </div>`;
+}
+function publishPost() {
+  const p = previewPost();
+  if (cam.mode === 'daily') {
+    state.myDailyPost = p;
+    markPostedToday();
+    $('#tab-cam').classList.add('posted');
+    closeCamera();
+    navTo('home');
+    state.feedTab = 'friends';
+    renderHome();
+    renderProfile();
+    toast('Posted. Feed unlocked.');
+  } else {
+    state.myLiftPost = p;
+    // reflect in profile achievements + gym community
+    ACHIEVEMENTS.unshift({ id:'a-new', kind:'video', lift:cam.lift, weight:cam.weight, scene:'s6', sil:'lift', dur:'0:12', date:'Today' });
+    closeCamera();
+    navTo('home');
+    renderHome();
+    renderProfile();
+    toast('Max-lift video posted');
+  }
+}
+
+/* ---- max-lift video mode ---- */
+let recTimer = null;
+function renderLiftCam(el) {
+  if (cam.step === 'capture1') {
+    el.innerHTML = `
+      <div class="cam-view">
+        ${photo('s6','lift')}
+        <div class="cam-grid"></div>
+      </div>
+      <div class="cam-top">
+        <button class="cam-close pressable" onclick="closeCamera()">${IC.x()}</button>
+        <div class="cam-step" id="rec-step">Max-lift video</div>
+        <button class="cam-flip pressable" onclick="toast('Camera flipped')">${IC.flip()}</button>
+      </div>
+      <div class="cam-bottom">
+        <div class="cam-rec-timer" id="rec-timer" style="visibility:hidden"><span class="rec-dot"></span><span id="rec-t">0:00</span></div>
+        <button class="shutter" id="rec-btn" onclick="toggleRec()"></button>
+        ${camModeRow()}
+      </div>`;
+  }
+  else if (cam.step === 'liftmeta') {
+    el.innerHTML = `
+      <div class="compose">
+        <div class="panel-head" style="position:static;background:none;padding-top:0">
+          <button class="panel-back pressable" onclick="cam.step='capture1';renderCam()">${IC.back()}</button>
+          <div class="panel-title">Which lift?</div>
+        </div>
+        <div class="compose-fb">${photo('s6','lift')}<div class="play-badge">${IC.play(20)}</div></div>
+        <div class="section-label">Lift</div>
+        ${['Bench press','Squat','Deadlift'].map(l => `
+          <div class="choice-row" onclick="cam.lift='${l}';renderCam()">
+            <div class="opt-icon">${IC.dumbbell(15)}</div>
+            <div class="choice-main"><div class="choice-name">${l}</div></div>
+            <div class="check-ring ${cam.lift === l ? 'on' : ''}">${cam.lift === l ? IC.check(11) : ''}</div>
+          </div>`).join('')}
+        <div class="section-label">Weight</div>
+        <div style="display:flex;gap:8px;padding:0 18px">
+          ${['225 lb','245 lb','275 lb','315 lb'].map(w => `
+            <button class="rank-cat ${cam.weight === w ? 'on' : ''}" onclick="cam.weight='${w}';renderCam()">${w}</button>`).join('')}
+        </div>
+        <div class="compose-actions"><button class="btn-solid pressable" onclick="cam.step='compose';renderCam()">Continue</button></div>
+      </div>`;
+  }
+  else if (cam.step === 'compose') el.innerHTML = composeHTML();
+  else if (cam.step === 'preview') el.innerHTML = previewHTML();
+}
+function toggleRec() {
+  const btn = document.getElementById('rec-btn');
+  const timer = document.getElementById('rec-timer');
+  if (!btn.classList.contains('rec')) {
+    btn.classList.add('rec');
+    timer.style.visibility = 'visible';
+    let s = 0;
+    recTimer = setInterval(() => {
+      s++;
+      document.getElementById('rec-t').textContent = '0:' + String(s).padStart(2, '0');
+    }, 1000);
+  } else {
+    clearInterval(recTimer);
+    flash(() => { cam.recorded = true; cam.step = 'liftmeta'; renderCam(); });
+  }
+}
+
+/* ================================================================
+   TAB 4 — MAP  (Communities | Map)
+   ================================================================ */
+let commTab = {};   // communityId -> 'posts' | 'chat' | 'rankings'
+let rankCat = {};   // communityId -> 'lifts' | 'streaks' | 'friends' | 'trophies'
+let rankLift = {};  // communityId -> 'bench' | 'squat' | 'deadlift'
+
+function renderMap() {
+  const el = $('#screen-map');
+  el.innerHTML = `
+    <div class="app-head">
+      <div class="app-head-title">${state.mapTab === 'communities' ? 'Communities' : 'Map'}</div>
+    </div>
+    <div class="seg">
+      <button class="${state.mapTab === 'communities' ? 'on' : ''}" onclick="setMapTab('communities')">Communities</button>
+      <button class="${state.mapTab === 'map' ? 'on' : ''}" onclick="setMapTab('map')">Map</button>
+    </div>
+    ${state.mapTab === 'communities' ? communitiesHTML() : mapHTML()}`;
+}
+function setMapTab(t) { state.mapTab = t; renderMap(); }
+
+/* ---- Communities list (joined only) ---- */
+function communitiesHTML() {
+  const joined = COMMUNITIES.filter(c => c.type !== 'Gym' || state.joinedGyms[c.gymId]);
+  const gymC = joined.filter(c => c.type === 'Gym');
+  const otherC = joined.filter(c => c.type !== 'Gym');
+  const card = c => `
+    <div class="comm-card pressable" onclick="openCommunity('${c.id}')">
+      <div class="comm-icon">${IC[c.icon] ? IC[c.icon](18) : IC.users(18)}</div>
+      <div class="comm-main">
+        <div class="comm-name">${c.name}<span class="type-pill">${c.type}</span></div>
+        <div class="comm-meta">${c.members} members</div>
+        <div class="comm-activity">${c.activity}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:none">
+        <div class="today-pill" title="Posted today">${c.today || 0} today</div>
+        <div class="comm-chat-entry pressable" onclick="event.stopPropagation();openCommunity('${c.id}','chat')">${IC.comment(15)}</div>
+      </div>
+    </div>`;
+  return `
+    <div class="section-label">This week</div>
+    ${challengeCardHTML()}
+    <div class="section-label">Your gyms</div>
+    ${gymC.map(card).join('')}
+    <div class="section-label">Your communities</div>
+    ${otherC.map(card).join('')}
+    <div style="height:16px"></div>`;
+}
+
+/* ---- Community page ---- */
+function openCommunity(id, tab) {
+  const c = commById(id);
+  if (tab) commTab[id] = tab;
+  if (!commTab[id]) commTab[id] = 'posts';
+  if (!rankCat[id]) rankCat[id] = 'lifts';
+  if (!rankLift[id]) rankLift[id] = 'bench';
+  const p = pushPanel(`
+    ${panelHead(c.name, c.type === 'Gym' ? 'Gym community' : c.type + ' community')}
+    <div id="comm-body-${id}"></div>`);
+  renderCommunityBody(id);
+}
+function setCommTab(id, t) { commTab[id] = t; renderCommunityBody(id); }
+function renderCommunityBody(id) {
+  const c = commById(id);
+  const t = commTab[id];
+  const el = document.getElementById('comm-body-' + id);
+  if (!el) return;
+  let body = '';
+  if (t === 'posts') body = commPostsHTML(id);
+  else if (t === 'chat') body = commChatHTML(id);
+  else body = commRankingsHTML(id);
+  el.innerHTML = `
+    <div class="comm-hero">
+      <div class="comm-hero-name">${c.name}</div>
+      <div class="comm-hero-meta">${c.type === 'Gym' ? gymById(c.gymId).addr + ' · ' : ''}${c.members} members${c.type === 'Gym' ? ' · Posts require being at this gym' : ''}</div>
+    </div>
+    <div class="comm-tabs">
+      <button class="comm-tab ${t === 'posts' ? 'on' : ''}" onclick="setCommTab('${id}','posts')">Posts</button>
+      <button class="comm-tab ${t === 'chat' ? 'on' : ''}" onclick="setCommTab('${id}','chat')">Chat</button>
+      ${c.type === 'Gym' ? `<button class="comm-tab ${t === 'rankings' ? 'on' : ''}" onclick="setCommTab('${id}','rankings')">Rankings</button>` : ''}
+    </div>
+    ${body}`;
+}
+function commPostsHTML(id) {
+  const posts = COMM_POSTS[id] || [];
+  return `
+    <div class="cgrid">
+      ${posts.map(p => {
+        const u = p.user === 'me' ? ME : USERS[p.user];
+        return `<div class="cell pressable" onclick="${p.user === 'me' ? "navToProfileFromComm()" : `openUserProfile('${p.user}')`}">
+          ${photo(p.scene, p.sil)}
+          ${p.video ? `<div class="play-badge" style="width:30px;height:30px">${IC.play(13)}</div>` : ''}
+          <div class="cell-user">${u.handle}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+function navToProfileFromComm() { clearPanels(); navTo('profile'); }
+function commChatHTML(id) {
+  return `
+    <div class="convo-body comm-chat" id="comm-chat-${id}" style="min-height:280px">${msgBubbles(COMM_CHAT[id] || [], true)}</div>
+    <div class="convo-input-bar" style="position:sticky;bottom:0">
+      <input class="comment-input" id="comm-chat-input-${id}" placeholder="Message the community…" onkeydown="if(event.key==='Enter')sendCommMsg('${id}')">
+      <button class="comment-send pressable" onclick="sendCommMsg('${id}')">${IC.send()}</button>
+    </div>`;
+}
+function sendCommMsg(id) {
+  const input = document.getElementById('comm-chat-input-' + id);
+  const t = input.value.trim();
+  if (!t) return;
+  input.value = '';
+  const body = document.getElementById('comm-chat-' + id);
+  body.insertAdjacentHTML('beforeend', `<div class="msg me"><div class="bubble">${t.replace(/</g,'&lt;')}</div></div>`);
+  body.scrollTop = body.scrollHeight;
+  (COMM_CHAT[id] = COMM_CHAT[id] || []).push({ from:'me', t });
+}
+function commRankingsHTML(id) {
+  const cat = rankCat[id];
+  const lift = rankLift[id];
+  const cats = [ ['lifts','Max lifts'], ['streaks','Streaks'], ['friends','Friends'], ['trophies','Trophies'] ];
+  let rows, unitLabel;
+  if (cat === 'lifts') rows = RANKINGS.lifts[lift];
+  else rows = RANKINGS[cat];
+  const liftChips = cat === 'lifts' ? `
+    <div class="rank-cats" style="padding-top:2px">
+      ${[['bench','Bench press'],['squat','Squat'],['deadlift','Deadlift']].map(([k,l]) => `
+        <button class="rank-cat ${lift === k ? 'on' : ''}" onclick="rankLift['${id}']='${k}';renderCommunityBody('${id}')">${l}</button>`).join('')}
+    </div>` : '';
+  return `
+    <div class="rank-cats">
+      ${cats.map(([k,l]) => `<button class="rank-cat ${cat === k ? 'on' : ''}" onclick="rankCat['${id}']='${k}';renderCommunityBody('${id}')">${l}</button>`).join('')}
+    </div>
+    ${liftChips}
+    <div style="padding-top:8px">
+      ${rows.map((r,i) => {
+        const u = r.u === 'me' ? ME : USERS[r.u];
+        return `<div class="rank-row" onclick="${r.u === 'me' ? "navToProfileFromComm()" : `openUserProfile('${r.u}')`}">
+          <div class="rank-pos ${i === 0 ? 'top' : ''}">${i+1}</div>
+          ${av(r.u, 34)}
+          <div class="row-main">
+            <div class="row-name">${u.name}${r.u === 'me' ? ' <span style="color:var(--fog);font-weight:500">(you)</span>' : ''}</div>
+            <div class="row-sub">${u.handle}</div>
+          </div>
+          <div class="rank-val">${r.v}${r.unit ? `<small>${r.unit}</small>` : ''}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="height:16px"></div>`;
+}
+
+/* ---- Map view ---- */
+function mapHTML() {
+  return `
+    <div class="map-wrap">
+      <svg class="map-streets" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path class="water" d="M0 0 L14 0 C10 20 12 40 8 60 C5 76 6 90 4 100 L0 100 Z"/>
+        <path class="water" d="M100 30 L100 100 L88 100 C92 80 90 55 94 30 Z"/>
+        <path class="park" d="M52 4 h18 v14 h-18 z"/>
+        <line class="major" x1="16" y1="12" x2="96" y2="18"/>
+        <line class="major" x1="12" y1="46" x2="92" y2="52"/>
+        <line class="major" x1="10" y1="80" x2="88" y2="86"/>
+        <line class="major" x1="30" y1="0" x2="24" y2="100"/>
+        <line class="major" x1="62" y1="0" x2="56" y2="100"/>
+        <line x1="14" y1="28" x2="94" y2="34"/>
+        <line x1="12" y1="62" x2="90" y2="68"/>
+        <line x1="46" y1="0" x2="40" y2="100"/>
+        <line x1="78" y1="0" x2="72" y2="100"/>
+        <line x1="90" y1="0" x2="86" y2="30"/>
+        <line x1="18" y1="94" x2="80" y2="98"/>
+      </svg>
+      <div class="map-label" style="left:54%;top:6%">MIDTOWN</div>
+      <div class="map-label" style="left:34%;top:52%">CHELSEA</div>
+      <div class="map-label" style="left:66%;top:70%">BROOKLYN</div>
+      <div class="map-self" style="left:42%;top:50%"></div>
+      ${GYMS.map(g => `
+        <div class="gym-marker ${(g.liveNow && g.liveNow.length) ? 'live' : ''}" style="left:${g.x}%;top:${g.y}%" onclick="openGymPreview('${g.id}')" title="${(g.liveNow && g.liveNow.length) ? g.liveNow.length + ' friends here now' : ''}">
+          ${IC.dumbbell(19)}
+          <div class="m-count">${g.members}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ---- Gym preview sheet ---- */
+function openGymPreview(id) {
+  const g = gymById(id);
+  const joined = !!state.joinedGyms[id];
+  const friendCtx = g.friendsHere.length
+    ? `<div class="gympv-friends">
+         <div class="react-stack">${g.friendsHere.map(f => `<div class="react-chip" style="width:24px;height:24px">${av(f,24)}</div>`).join('')}</div>
+         ${g.friendsHere.map(f => USERS[f].name.split(' ')[0]).join(' and ')} train here</div>`
+    : `<div class="gympv-friends">No friends here yet</div>`;
+  openSheet(`
+    <div class="gympv-head">
+      <div class="gympv-icon">${IC.dumbbell(20)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="gympv-name">${g.name}</div>
+        <div class="gympv-addr">${g.addr}${g.nearby ? ' · 0.4 mi' : ''}</div>
+      </div>
+    </div>
+    <div class="gympv-stats">
+      <div class="gympv-stat"><div class="n">${g.members}</div><div class="l">Members</div></div>
+      <div class="gympv-stat"><div class="n">${g.friendsHere.length}</div><div class="l">Friends</div></div>
+      <div class="gympv-stat"><div class="n">${(g.liveNow || []).length}</div><div class="l">Here now</div></div>
+    </div>
+    ${friendCtx}
+    ${hereBlockHTML(g)}
+    <div class="gympv-actions">
+      <button class="btn-ghost pressable" style="flex:1" onclick="checkInGym('${id}')">◎ Check in</button>
+      <button class="btn-ghost pressable" style="flex:0.9" id="gym-join-${id}" onclick="toggleJoinGym('${id}')">${joined ? '✓ Joined' : 'Join'}</button>
+      <button class="btn-solid pressable" style="flex:1.2" onclick="closeSheet();openGymCommunity('${id}')">Community</button>
+    </div>
+    <div style="height:8px"></div>`);
+}
+function toggleJoinGym(id) {
+  state.joinedGyms[id] = !state.joinedGyms[id];
+  const btn = document.getElementById('gym-join-' + id);
+  if (btn) btn.textContent = state.joinedGyms[id] ? '✓ Joined' : 'Join';
+  toast(state.joinedGyms[id] ? 'Joined ' + gymById(id).name : 'Left ' + gymById(id).name);
+  ensureGymCommunity(id);
+}
+function ensureGymCommunity(id) {
+  // gym communities appear in the list only when joined
+  if (state.joinedGyms[id] && !commById(id)) {
+    const g = gymById(id);
+    COMMUNITIES.unshift({ id, type:'Gym', gymId:id, name:g.name, members:g.members, activity:'You joined just now', icon:'dumbbell', joined:true });
+    COMM_POSTS[id] = COMM_POSTS[id] || [ {user:'lena', scene:'s1', sil:'run'}, {user:'theo', scene:'s5', sil:'bench'} ];
+    COMM_CHAT[id] = COMM_CHAT[id] || [ {sep:'Today'}, {from:'theo', t:'Welcome to the community 👋'} ];
+  }
+  if (state.mapTab === 'communities') renderMap();
+}
+function openGymCommunity(id) {
+  ensureGymCommunity(id);
+  if (!commById(id)) {
+    const g = gymById(id);
+    COMMUNITIES.push({ id, type:'Gym', gymId:id, name:g.name, members:g.members, activity:'Active today', icon:'dumbbell', joined:false });
+    COMM_POSTS[id] = COMM_POSTS[id] || [ {user:'lena', scene:'s1', sil:'run'}, {user:'theo', scene:'s5', sil:'bench'} ];
+    COMM_CHAT[id] = COMM_CHAT[id] || [ {sep:'Today'}, {from:'theo', t:'Platform open all morning'} ];
+  }
+  openCommunity(id);
+}
+
+/* ---- live "here now" presence inside the gym sheet ---- */
+function hereBlockHTML(g) {
+  const live = g.liveNow || [];
+  if (!live.length) {
+    return `<div class="here-quiet">○ No friends here right now — check in and you'll be the first.</div>`;
+  }
+  return `
+    <div class="here-row" onclick="toggleHereList('${g.id}')">
+      <span class="here-dot"></span>
+      <div class="react-stack">${live.slice(0,3).map(x => `<div class="react-chip" style="width:24px;height:24px">${av(x.u, 24)}</div>`).join('')}</div>
+      <span class="here-txt"><b>${live.length} ${live.length === 1 ? 'friend' : 'friends'} here now</b> · tap to see who</span>
+      <span class="here-caret" id="here-caret-${g.id}">⌄</span>
+    </div>
+    <div class="here-list" id="here-list-${g.id}">
+      ${live.map(x => {
+        const u = x.u === 'me' ? ME : USERS[x.u];
+        return `<div class="here-item">
+          ${av(x.u, 34)}
+          <div class="row-main">
+            <div class="row-name" style="font-size:13px">${x.u === 'me' ? 'You' : u.name}</div>
+            <div class="row-sub" style="font-size:11.5px">${x.note}</div>
+          </div>
+          ${x.u === 'me' ? '' : `<button class="rank-cat" style="padding:5px 13px;font-size:11px" onclick="event.stopPropagation();this.textContent = this.textContent === 'Wave' ? '◎ Waved' : 'Wave'">Wave</button>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+function toggleHereList(id) {
+  const l = document.getElementById('here-list-' + id);
+  const c = document.getElementById('here-caret-' + id);
+  if (!l) return;
+  const open = l.classList.toggle('show');
+  if (c) c.style.transform = open ? 'rotate(180deg)' : '';
+}
+function checkInGym(id) {
+  const g = gymById(id);
+  g.liveNow = g.liveNow || [];
+  if (g.liveNow.some(x => x.u === 'me')) { toast('Already checked in here'); return; }
+  g.liveNow.unshift({ u:'me', note:'Just checked in' });
+  toast('Checked in at ' + g.name);
+  openGymPreview(id);
+  if (state.screen === 'map' && state.mapTab === 'map') renderMap();
+}
+
+/* ---- weekly gym-vs-gym challenge ---- */
+function chalPct() { return Math.round(CHALLENGE.a.v / (CHALLENGE.a.v + CHALLENGE.b.v) * 100); }
+function challengeCardHTML() {
+  return `
+    <div class="chal-card pressable" onclick="openChallengeSheet()">
+      <div class="chal-tag">◎ Gym vs gym · weekly check-ins</div>
+      <div class="chal-vs">
+        <div class="chal-team">${CHALLENGE.a.name}</div>
+        <div class="chal-x">VS</div>
+        <div class="chal-team dim">${CHALLENGE.b.name}</div>
+      </div>
+      <div class="chal-bar"><div class="chal-fill" style="width:${chalPct()}%"></div></div>
+      <div class="chal-nums">
+        <span><b>${CHALLENGE.a.v}</b> check-ins</span>
+        <span>ends in ${CHALLENGE.ends}</span>
+        <span><b>${CHALLENGE.b.v}</b> check-ins</span>
+      </div>
+    </div>`;
+}
+function openChallengeSheet() {
+  const contrib = [ {u:'mia', v:6}, {u:'me', v:CHALLENGE.mine}, {u:'jordan', v:4}, {u:'octavio', v:3}, {u:'dana', v:3} ]
+    .sort((a,b) => b.v - a.v);
+  openSheet(`
+    <div class="sheet-title">Weekly challenge</div>
+    <div class="sheet-sub">Most member check-ins by Sunday night takes the banner.</div>
+    <div style="padding:8px 20px 0">
+      <div class="chal-vs">
+        <div class="chal-team">${CHALLENGE.a.name}</div>
+        <div class="chal-x">VS</div>
+        <div class="chal-team dim">${CHALLENGE.b.name}</div>
+      </div>
+      <div class="chal-bar"><div class="chal-fill" style="width:${chalPct()}%"></div></div>
+      <div class="chal-nums">
+        <span><b>${CHALLENGE.a.v}</b></span>
+        <span>ends in ${CHALLENGE.ends}</span>
+        <span><b>${CHALLENGE.b.v}</b></span>
+      </div>
+    </div>
+    <div class="section-label" style="padding:16px 20px 8px">Top contributors — Gold's</div>
+    ${contrib.map((r,i) => {
+      const u = r.u === 'me' ? ME : USERS[r.u];
+      return `<div class="rank-row" style="padding:9px 20px" onclick="${r.u === 'me' ? 'closeSheet();navTo(\'profile\')' : `closeSheet();openUserProfile('${r.u}')`}">
+        <div class="rank-pos ${i === 0 ? 'top' : ''}">${i+1}</div>
+        ${av(r.u, 32)}
+        <div class="row-main"><div class="row-name" style="font-size:13.5px">${u.name}${r.u === 'me' ? ' <span style="color:var(--fog);font-weight:500">(you)</span>' : ''}</div></div>
+        <div class="rank-val">${r.v}<small>this wk</small></div>
+      </div>`;
+    }).join('')}
+    <div style="padding:12px 20px 0">
+      <button class="btn-solid pressable" onclick="chalCheckIn()">◎ Check in at Gold's — count me in</button>
+    </div>
+    <div style="height:8px"></div>`);
+}
+function chalCheckIn() {
+  CHALLENGE.a.v++;
+  CHALLENGE.mine++;
+  closeSheet();
+  if (state.screen === 'map') renderMap();
+  toast("Checked in — +1 for Gold's");
+}
+
+/* ================================================================
+   TAB 5 — PROFILE
+   ================================================================ */
+function renderProfile() {
+  const el = $('#screen-profile');
+  const pinned = TROPHIES.filter(t => t.pinned);
+  const streak = hasPostedToday() ? 24 : 23;
+  const totalPosts = DAILY_ARCHIVE.reduce((n,m) => n + m.days.filter(d => !d.missed).length, 0) + (state.myDailyPost ? 1 : 0);
+  const videos = ACHIEVEMENTS.filter(a => a.kind === 'video').length;
+  el.innerHTML = `
+    <div class="app-head"><div class="app-head-title">Profile</div></div>
+
+    <div class="prof-head">
+      ${av('me', 72)}
+      <div class="prof-id">
+        <div class="prof-name">${ME.name}</div>
+        <div class="prof-handle">${ME.handle}</div>
+        <div class="prof-gym">${IC.pin()} ${ME.gym}</div>
+      </div>
+    </div>
+
+    <div class="pin-row">
+      ${pinned.map(t => `<div class="pin-trophy pressable" onclick="openTrophy('${t.id}')">${IC.trophy(13)} ${t.name}</div>`).join('')}
+    </div>
+
+    <div class="count-row">
+      <div class="count-cell pressable" onclick="openFriendsList()"><div class="count-n">${ME.friends}</div><div class="count-l">Friends</div></div>
+      <div class="count-cell pressable" onclick="openFollowingList()"><div class="count-n">${ME.following}</div><div class="count-l">Following</div></div>
+    </div>
+
+    <div class="quad-grid">
+      <div class="quad pressable" onclick="openProfSection('stats')">
+        <div class="quad-icon">${IC.chart(24)}</div>
+        <div class="quad-name">STATS</div>
+        <div class="quad-desc">Streak, best lifts &amp; verified PRs</div>
+      </div>
+      <div class="quad pressable" onclick="openProfSection('trophies')">
+        <div class="quad-icon">${IC.trophy(24)}</div>
+        <div class="quad-name">TROPHIES</div>
+        <div class="quad-desc">${TROPHIES.length} earned, each with proof</div>
+      </div>
+      <div class="quad pressable" onclick="openProfSection('videos')">
+        <div class="quad-icon">${IC.play(24)}</div>
+        <div class="quad-name">VIDEOS</div>
+        <div class="quad-desc">${videos} max-lift videos &amp; milestones</div>
+      </div>
+      <div class="quad pressable" onclick="openProfSection('posts')">
+        <div class="quad-icon">${IC.calendar(24)}</div>
+        <div class="quad-name">POSTS</div>
+        <div class="quad-desc">${totalPosts} dailies, month by month</div>
+      </div>
+    </div>
+    <div style="height:20px"></div>`;
+}
+
+/* ---- profile sections — pushed panels ---- */
+function openProfSection(cat) {
+  if (cat === 'stats') {
+    const streak = hasPostedToday() ? 24 : 23;
+    const totalPosts = DAILY_ARCHIVE.reduce((n,m) => n + m.days.filter(d => !d.missed).length, 0) + (state.myDailyPost ? 1 : 0);
+    const best = [
+      ['Bench press', RANKINGS.lifts.bench.find(r => r.u === 'me')],
+      ['Squat', RANKINGS.lifts.squat.find(r => r.u === 'me')],
+      ['Deadlift', RANKINGS.lifts.deadlift.find(r => r.u === 'me')],
+    ];
+    pushPanel(`
+      ${panelHead('Stats', 'Your numbers at a glance')}
+      <div class="stat-strip" style="padding-top:8px">
+        <div class="stat-cell"><div class="stat-n">${streak}<small>days</small></div><div class="stat-l">Gym streak</div></div>
+        <div class="stat-cell"><div class="stat-n">${totalPosts}</div><div class="stat-l">Daily posts</div></div>
+        <div class="stat-cell"><div class="stat-n">${ACHIEVEMENTS.filter(a => a.kind === 'video').length}</div><div class="stat-l">Verified PRs</div></div>
+      </div>
+      <div class="section-label">Best lifts — verified</div>
+      ${best.map(([name, r]) => `
+        <div class="row">
+          <div class="opt-icon" style="flex:none">${IC.dumbbell(15)}</div>
+          <div class="row-main"><div class="row-name">${name}</div><div class="row-sub">Ranked #${(RANKINGS.lifts[name === 'Bench press' ? 'bench' : name.toLowerCase()].findIndex(x => x.u === 'me')) + 1} at Gold's Chelsea</div></div>
+          <div class="rank-val">${r.v}<small>${r.unit}</small></div>
+        </div>`).join('')}
+      <div class="section-label">Community standing</div>
+      <div class="row">
+        <div class="opt-icon" style="flex:none">${IC.flame(15)}</div>
+        <div class="row-main"><div class="row-name">Streak rank</div><div class="row-sub">Gold's Gym Chelsea leaderboard</div></div>
+        <div class="rank-val">#3</div>
+      </div>
+      <div style="height:20px"></div>`);
+  }
+  else if (cat === 'trophies') {
+    pushPanel(`
+      ${panelHead('Trophies', TROPHIES.length + ' earned · tap one for its proof')}
+      <div class="trophy-grid" style="padding-top:10px">
+        ${TROPHIES.map(t => `
+          <div class="trophy-card pressable" onclick="openTrophy('${t.id}')">
+            ${t.pinned ? `<div class="trophy-pinflag">PINNED</div>` : ''}
+            ${IC.trophy(19)}
+            <div class="trophy-name">${t.name}</div>
+            <div class="trophy-meta">${t.cat} · ${t.meta}</div>
+          </div>`).join('')}
+      </div>
+      <div style="height:20px"></div>`);
+  }
+  else if (cat === 'videos') {
+    pushPanel(`
+      ${panelHead('Videos', 'Max-lift videos & achievement posts')}
+      <div class="ach-grid">
+        ${ACHIEVEMENTS.map(a => achCard(a)).join('')}
+      </div>
+      <div style="height:20px"></div>`);
+  }
+  else if (cat === 'posts') {
+    pushPanel(`
+      ${panelHead('Daily posts', 'Your archive, month by month')}
+      ${state.myDailyPost ? todayCalRow() : ''}
+      ${DAILY_ARCHIVE.map(m => `
+        <div class="cal-month">${m.month}</div>
+        <div class="cal-grid">
+          ${m.days.map(d => d.missed
+            ? `<div class="cal-cell missed"><div class="cal-x">${IC.x(13)}</div><div class="cal-date">${d.d}</div></div>`
+            : `<div class="cal-cell pressable" onclick="openDailyPost('${d.id}')">
+                 ${photo(d.main[0], d.main[1])}
+                 <div class="mini-inset">${photo(d.inset[0], d.inset[1])}</div>
+                 <div class="cal-date">${d.d}</div>
+               </div>`).join('')}
+        </div>`).join('')}
+      <div style="height:20px"></div>`);
+  }
+}
+function achCard(a) {
+  return `
+    <div class="ach-card pressable" onclick="openAchievement('${a.id}')">
+      ${photo(a.scene, a.sil)}
+      <div class="a-tag">${a.kind === 'video' ? 'MAX LIFT' : 'ACHIEVEMENT'}</div>
+      ${a.kind === 'video' ? `<div class="a-play">${IC.play(14)}</div>` : ''}
+      <div class="a-lift">${a.lift}${a.weight ? ' · ' + a.weight : ''}<br><span style="color:var(--fog);font-weight:500">${a.date}</span></div>
+    </div>`;
+}
+
+function todayCalRow() {
+  const p = state.myDailyPost;
+  return `
+    <div class="cal-month">Today</div>
+    <div class="cal-grid">
+      <div class="cal-cell pressable" onclick="openMyTodayPost()">
+        ${photo(p.main[0], p.main[1])}
+        <div class="mini-inset">${photo(p.inset[0], p.inset[1])}</div>
+        <div class="cal-date">${new Date().getDate()}</div>
+      </div>
+    </div>`;
+}
+
+/* ---- trophy detail: links to the confirming post or video ---- */
+function openTrophy(id) {
+  const t = TROPHIES.find(x => x.id === id);
+  const a = achById(t.proof);
+  const d = a ? null : dailyById(t.proof);
+  pushPanel(`
+    ${panelHead('Trophy', t.cat)}
+    <div style="padding:20px 18px 6px;text-align:center">
+      <div style="display:inline-flex;width:64px;height:64px;border:1.5px solid var(--mist);border-radius:50%;align-items:center;justify-content:center;color:var(--white)">${IC.trophy(28)}</div>
+      <div style="font-weight:800;font-size:19px;color:var(--white);margin-top:12px;letter-spacing:-0.02em">${t.name}</div>
+      <div style="font-size:12.5px;color:var(--fog);margin-top:5px">${t.meta}${t.pinned ? ' · Pinned to profile' : ''}</div>
+    </div>
+    <div class="section-label">Earned by this ${a ? (a.kind === 'video' ? 'max-lift video' : 'achievement post') : 'daily post'}</div>
+    <div style="padding:0 18px">
+      ${a ? `
+        <div class="fb lift-video pressable" style="border-radius:14px;overflow:hidden" onclick="openAchievement('${a.id}')">
+          <div class="fb-main">${photo(a.scene, a.sil)}</div>
+          ${a.kind === 'video' ? `<div class="play-badge">${IC.play(20)}</div><div class="vid-dur">${a.dur}</div>` : ''}
+          <div class="lift-tag">${a.lift}${a.weight ? ' · ' + a.weight : ''}</div>
+        </div>` : `
+        <div class="fb pressable" style="border-radius:14px;overflow:hidden" onclick="openDailyPost('${d.id}')">
+          <div class="fb-main">${photo(d.main[0], d.main[1])}</div>
+          <div class="fb-inset">${photo(d.inset[0], d.inset[1])}</div>
+        </div>`}
+    </div>
+    <div style="height:20px"></div>`);
+}
+
+/* ---- achievement / max-lift detail ---- */
+function openAchievement(id) {
+  const a = achById(id);
+  pushPanel(`
+    ${panelHead(a.kind === 'video' ? 'Max-lift video' : 'Achievement post', a.date)}
+    <div style="padding:6px 18px 0">
+      <div class="fb lift-video" style="border-radius:14px;overflow:hidden">
+        <div class="fb-main">${photo(a.scene, a.sil)}</div>
+        ${a.kind === 'video' ? `<div class="play-badge">${IC.play(22)}</div><div class="vid-dur">${a.dur}</div>` : ''}
+        <div class="lift-tag">${a.lift}${a.weight ? ' · ' + a.weight : ''}</div>
+      </div>
+      <div class="post-caption" style="padding:12px 2px 0"><b>${ME.handle.slice(1)}</b>${a.kind === 'video' ? 'Verified on camera. No spot needed.' : 'Milestone locked in.'}</div>
+    </div>
+    <div style="height:20px"></div>`);
+}
+
+/* ---- daily post detail ---- */
+function openDailyPost(id) {
+  const d = dailyById(id);
+  const loc = d.gymId
+    ? `<div class="post-loc">${IC.pin()} ${gymById(d.gymId).name}</div>`
+    : `<div class="post-loc unmapped">${IC.home()} ${d.altLoc || 'Not at a mapped gym'}</div>`;
+  pushPanel(`
+    ${panelHead('Daily post', d.d + ' ' + (DAILY_ARCHIVE.find(m => m.days.includes(d)) || {month:''}).month)}
+    <div style="padding:6px 18px 0">
+      <div class="fb" style="border-radius:14px;overflow:hidden">
+        <div class="fb-main">${photo(d.main[0], d.main[1])}</div>
+        <div class="fb-inset">${photo(d.inset[0], d.inset[1])}</div>
+      </div>
+      <div style="padding:10px 2px 0">${loc}</div>
+      <div class="post-caption" style="padding:8px 2px 0"><b>${ME.handle.slice(1)}</b>${d.caption || ''}</div>
+    </div>
+    <div style="height:20px"></div>`);
+}
+function openMyTodayPost() {
+  const p = state.myDailyPost;
+  pushPanel(`
+    ${panelHead('Daily post', 'Today')}
+    <div style="padding:6px 18px 0">
+      <div class="preview-card" style="margin:0">${postCard(p)}</div>
+    </div>
+    <div style="height:20px"></div>`);
+}
+
+/* ---- friends / following — distinct lists ---- */
+function openFriendsList() {
+  const friends = Object.values(USERS).filter(u => u.friend);
+  openSheet(`
+    <div class="sheet-title" style="font-weight:700;font-size:16px;color:var(--white);padding:6px 20px 2px">Friends</div>
+    <div class="sheet-sub">Mutual — they added you back · ${ME.friends} total</div>
+    ${friends.map(u => `
+      <div class="row row-press" onclick="closeSheet();openUserProfile('${u.id}')">
+        ${av(u.id, 40)}
+        <div class="row-main"><div class="row-name">${u.name}</div><div class="row-sub">${u.handle} · ${u.gym}</div></div>
+        <span class="rel-btn quiet">Friends</span>
+      </div>`).join('')}
+    <div style="height:10px"></div>`);
+}
+function openFollowingList() {
+  const following = ['lena','dana','marcus'];
+  openSheet(`
+    <div class="sheet-title" style="font-weight:700;font-size:16px;color:var(--white);padding:6px 20px 2px">Following</div>
+    <div class="sheet-sub">One-directional — public accounts you follow · ${ME.following} total</div>
+    ${following.map(id => {
+      const u = USERS[id];
+      return `<div class="row row-press" onclick="closeSheet();openUserProfile('${id}')">
+        ${av(id, 40)}
+        <div class="row-main"><div class="row-name">${u.name}</div><div class="row-sub">${u.handle} · ${u.gym}</div></div>
+        <span class="rel-btn quiet">Following</span>
+      </div>`;
+    }).join('')}
+    <div style="height:10px"></div>`);
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+renderHome();
+renderFriends();
+renderMap();
+renderProfile();
+if (hasPostedToday()) $('#tab-cam').classList.add('posted');
+</script>
+</body>
+</html>

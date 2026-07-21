@@ -1,6 +1,7 @@
-import type { ConfigContext, ExpoConfig } from "expo/config";
+﻿import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const black = `${String.fromCharCode(35)}000000`;
+const apnsEnvironment = process.env.EXPO_PUBLIC_APNS_ENV === "production" ? "production" : "development";
 
 export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   ...baseConfig,
@@ -19,19 +20,23 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     bundleIdentifier: "com.octavio.spotted",
-    buildNumber: "1",
     supportsTablet: false,
+    usesAppleSignIn: true,
     infoPlist: {
-      NSCameraUsageDescription: "Spotted uses the camera to capture pump drops.",
-      NSMicrophoneUsageDescription: "Spotted uses the microphone when you record video pump drops.",
+      ITSAppUsesNonExemptEncryption: false,
+      NSCameraUsageDescription: "Spotted uses the camera to capture your posts.",
+      NSContactsUsageDescription: "Spotted uses your contacts to help you find friends who already use Spotted.",
+      NSMicrophoneUsageDescription: "Spotted uses the microphone when you record video posts.",
       NSLocationAlwaysAndWhenInUseUsageDescription:
-        "Spotted uses location to verify gym check-ins and show friends at gyms.",
+        "Spotted uses location to verify gym check-ins and keep your presence accurate.",
+      NSLocationAlwaysUsageDescription:
+        "Spotted uses location to verify gym check-ins and keep your presence accurate.",
       NSLocationWhenInUseUsageDescription: "Spotted uses location to verify gym check-ins and find nearby gyms.",
       NSPhotoLibraryUsageDescription: "Spotted uses your library when you choose a profile photo.",
-      UIBackgroundModes: ["location", "remote-notification"]
+      UIBackgroundModes: ["remote-notification"]
     },
     entitlements: {
-      "aps-environment": "development"
+      "aps-environment": apnsEnvironment
     }
   },
   android: {
@@ -43,7 +48,6 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
     permissions: [
       "ACCESS_FINE_LOCATION",
       "ACCESS_COARSE_LOCATION",
-      "ACCESS_BACKGROUND_LOCATION",
       "CAMERA",
       "RECORD_AUDIO",
       "POST_NOTIFICATIONS"
@@ -57,15 +61,36 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
     "expo-router",
     "expo-font",
     "expo-apple-authentication",
-    "expo-location",
+    [
+      "expo-location",
+      {
+        locationAlwaysAndWhenInUsePermission:
+          "Spotted uses location to verify gym check-ins and keep your presence accurate."
+      }
+    ],
+    [
+      "expo-contacts",
+      {
+        contactsPermission: "Spotted uses your contacts to help you find friends who already use Spotted."
+      }
+    ],
     "expo-notifications",
     "expo-task-manager",
+    "expo-video",
+    "expo-audio",
+    "expo-iap",
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "Spotted uses your photo library to post images you've already taken."
+      }
+    ],
     [
       "react-native-vision-camera",
       {
-        cameraPermissionText: "Spotted uses the camera to capture pump drops.",
+        cameraPermissionText: "Spotted uses the camera to capture your posts.",
         enableMicrophonePermission: true,
-        microphonePermissionText: "Spotted uses the microphone for video pump drops."
+        microphonePermissionText: "Spotted uses the microphone for video posts."
       }
     ],
     [
@@ -95,7 +120,7 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   extra: {
     ...baseConfig.extra,
     eas: {
-      projectId: process.env.EAS_PROJECT_ID ?? ""
+      projectId: process.env.EAS_PROJECT_ID ?? "c64d03b4-83c0-48c9-863b-f225fb8de92d"
     },
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? "",
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",

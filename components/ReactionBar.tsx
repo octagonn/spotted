@@ -29,7 +29,7 @@ export function ReactionBar({ onReact }: ReactionBarProps) {
   }
 
   return (
-    <View className="h-16 flex-row items-center justify-around border-t border-iron bg-black/80">
+    <View className="h-16 flex-row items-center justify-around border-t border-hairline bg-black/70">
       {reactions.map((reaction) => (
         <Pressable
           key={reaction}

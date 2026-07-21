@@ -1,10 +1,7 @@
 import * as Location from "expo-location";
-import * as TaskManager from "expo-task-manager";
 
 import { isInsideGeofence, type Coordinate } from "@/lib/geofence";
 import { supabase } from "@/lib/supabase";
-
-export const GEOFENCE_TASK = "spotted-geofence";
 
 export type GymRegion = {
   identifier: string;
@@ -13,27 +10,27 @@ export type GymRegion = {
   radius: number;
 };
 
-TaskManager.defineTask(GEOFENCE_TASK, () => Promise.resolve());
-
-export async function requestAlwaysLocation() {
-  const foreground = await Location.requestForegroundPermissionsAsync();
-  if (!foreground.granted) {
-    return false;
-  }
-  const background = await Location.requestBackgroundPermissionsAsync();
-  return background.granted;
+export async function requestForegroundLocation() {
+  const result = await Location.requestForegroundPermissionsAsync();
+  return result.granted;
 }
 
-export async function registerGeofences(regions: GymRegion[]) {
-  const selectedRegions = regions.slice(0, 20).map((region) => ({
-    identifier: region.identifier,
-    latitude: region.latitude,
-    longitude: region.longitude,
-    radius: region.radius,
-    notifyOnEnter: true,
-    notifyOnExit: true
-  }));
-  await Location.startGeofencingAsync(GEOFENCE_TASK, selectedRegions);
+/**
+ * Returns the current position only when foreground permission has already
+ * been granted — never prompts. Used by passive presence sync.
+ */
+export async function getCurrentCoordinateIfPermitted(): Promise<Coordinate | null> {
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (!permission.granted) return null;
+  const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  return { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
+}
+
+export async function getCurrentCoordinate(): Promise<Coordinate | null> {
+  const granted = await requestForegroundLocation();
+  if (!granted) return null;
+  const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  return { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
 }
 
 export async function checkin(

@@ -1,7 +1,9 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { Pause, Play, RotateCcw } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { PanResponder, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/Button";
@@ -23,10 +25,11 @@ function fmt(seconds: number) {
 
 /**
  * Review screen for a recorded max-lift clip: real playback (expo-video) plus a
- * trim bar with draggable start/end handles. The preview loops inside the
- * trimmed window so what you see is what you'll post. Trimming is stored as a
- * time range (soft trim) — the file itself is cut server-side at publish.
- * A load/decode failure shows a friendly retake state, never a crash.
+ * trim bar with draggable start/end handles. The handles are driven by
+ * reanimated shared values on the UI thread so they track the finger precisely
+ * (#3) — React state is only committed on release (for the loop window + label).
+ * The preview loops inside the trimmed window so what you see is what you'll
+ * post. A load/decode failure shows a friendly retake state, never a crash.
  */
 export function LiftVideoReview({
   uri,
@@ -45,6 +48,12 @@ export function LiftVideoReview({
   const [trackWidth, setTrackWidth] = useState(0);
   const trimRef = useRef(trim);
   trimRef.current = trim;
+
+  // UI-thread handle positions in PIXELS. Kept in sync with committed state.
+  const startPx = useSharedValue(0);
+  const endPx = useSharedValue(0);
+  const startBase = useSharedValue(0);
+  const endBase = useSharedValue(0);
 
   const player = useVideoPlayer(uri, (p) => {
     p.loop = false;
@@ -69,7 +78,6 @@ export function LiftVideoReview({
     });
     const timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
       const { start, end } = trimRef.current;
-      // Loop the preview inside the trim window.
       if (end > 0 && (currentTime >= end || currentTime < start - 0.4)) {
         player.currentTime = start;
         player.play();
@@ -83,6 +91,14 @@ export function LiftVideoReview({
     };
   }, [player]);
 
+  // Sync shared pixel positions whenever the geometry or committed trim changes
+  // (initial load, or after a drag commits).
+  useEffect(() => {
+    if (!trackWidth || !duration) return;
+    startPx.value = (trim.start / duration) * trackWidth;
+    endPx.value = trim.end > 0 ? (trim.end / duration) * trackWidth : trackWidth;
+  }, [trackWidth, duration, trim, startPx, endPx]);
+
   const togglePlay = () => {
     if (playing) player.pause();
     else {
@@ -91,44 +107,53 @@ export function LiftVideoReview({
     }
   };
 
-  const seekPreview = (seconds: number) => {
-    try {
-      player.currentTime = seconds;
-    } catch {
-      // Seeking a torn-down player must never crash the screen.
-    }
+  // Commit a dragged handle: px → seconds, update state, seek to the new start.
+  const commit = (edge: "start" | "end", px: number) => {
+    if (!trackWidth || !duration) return;
+    const seconds = (px / trackWidth) * duration;
+    setTrim((t) => {
+      const next =
+        edge === "start"
+          ? { start: Math.min(Math.max(0, seconds), t.end - MIN_CLIP_SECONDS), end: t.end }
+          : { start: t.start, end: Math.max(Math.min(duration, seconds), t.start + MIN_CLIP_SECONDS) };
+      try {
+        player.currentTime = Math.max(0, next.start);
+      } catch {
+        // seeking a torn-down player must never crash
+      }
+      return next;
+    });
   };
 
-  const makeHandle = (edge: "start" | "end") =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_evt, gesture) => {
-        if (!trackWidth || !duration) return;
-        const t = trimRef.current;
-        const base = edge === "start" ? t.start : t.end;
-        const next = base + (gesture.dx / trackWidth) * duration;
-        if (edge === "start") {
-          const clamped = Math.min(Math.max(0, next), t.end - MIN_CLIP_SECONDS);
-          if (Number.isFinite(clamped)) setTrim({ start: clamped, end: t.end });
-        } else {
-          const clamped = Math.max(Math.min(duration, next), t.start + MIN_CLIP_SECONDS);
-          if (Number.isFinite(clamped)) setTrim({ start: t.start, end: clamped });
-        }
-      },
-      onPanResponderRelease: () => {
-        seekPreview(trimRef.current.start);
-      }
+  const minGapPx = trackWidth && duration ? (MIN_CLIP_SECONDS / duration) * trackWidth : 20;
+
+  const startGesture = Gesture.Pan()
+    .onStart(() => {
+      startBase.value = startPx.value;
+    })
+    .onUpdate((e) => {
+      startPx.value = Math.min(Math.max(0, startBase.value + e.translationX), endPx.value - minGapPx);
+    })
+    .onEnd(() => {
+      runOnJS(commit)("start", startPx.value);
     });
 
-  const startPan = useRef(makeHandle("start"));
-  const endPan = useRef(makeHandle("end"));
-  // PanResponders capture trackWidth/duration via refs-in-closure; recreate when they land.
-  useEffect(() => {
-    startPan.current = makeHandle("start");
-    endPan.current = makeHandle("end");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackWidth, duration]);
+  const endGesture = Gesture.Pan()
+    .onStart(() => {
+      endBase.value = endPx.value;
+    })
+    .onUpdate((e) => {
+      endPx.value = Math.max(Math.min(trackWidth, endBase.value + e.translationX), startPx.value + minGapPx);
+    })
+    .onEnd(() => {
+      runOnJS(commit)("end", endPx.value);
+    });
+
+  const leftDim = useAnimatedStyle(() => ({ width: startPx.value }));
+  const rightDim = useAnimatedStyle(() => ({ left: endPx.value }));
+  const keptStyle = useAnimatedStyle(() => ({ left: startPx.value, width: Math.max(0, endPx.value - startPx.value) }));
+  const startHandleStyle = useAnimatedStyle(() => ({ left: Math.max(0, startPx.value - HANDLE_W / 2) }));
+  const endHandleStyle = useAnimatedStyle(() => ({ left: Math.max(0, endPx.value - HANDLE_W / 2) }));
 
   if (failed) {
     return (
@@ -144,15 +169,12 @@ export function LiftVideoReview({
         </View>
         <View style={{ paddingHorizontal: 18, paddingBottom: insets.bottom + 18 }}>
           <Button onPress={onRetake} icon={<RotateCcw size={16} color={colors.black} strokeWidth={2} />}>
-            Retake
+            Restart
           </Button>
         </View>
       </View>
     );
   }
-
-  const startX = duration ? (trim.start / duration) * trackWidth : 0;
-  const endX = duration ? (trim.end / duration) * trackWidth : trackWidth;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
@@ -202,29 +224,25 @@ export function LiftVideoReview({
             onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
             style={{ height: TRACK_H, borderRadius: 10, backgroundColor: colors.graphite, overflow: "hidden" }}
           >
-            {/* Dimmed outside the kept range */}
-            <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: startX, backgroundColor: "rgba(0,0,0,0.55)" }} />
-            <View style={{ position: "absolute", left: endX, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" }} />
-            {/* Kept range outline */}
-            <View
-              pointerEvents="none"
-              style={{ position: "absolute", left: startX, width: Math.max(0, endX - startX), top: 0, bottom: 0, borderWidth: 2, borderColor: colors.white, borderRadius: 8 }}
-            />
-            {/* Handles */}
-            <View
-              {...startPan.current.panHandlers}
-              hitSlop={{ left: 14, right: 14, top: 10, bottom: 10 }}
-              style={{ position: "absolute", left: Math.max(0, startX - HANDLE_W / 2), top: 0, bottom: 0, width: HANDLE_W, alignItems: "center", justifyContent: "center" }}
-            >
-              <View style={{ width: 5, height: 22, borderRadius: 2.5, backgroundColor: colors.white }} />
-            </View>
-            <View
-              {...endPan.current.panHandlers}
-              hitSlop={{ left: 14, right: 14, top: 10, bottom: 10 }}
-              style={{ position: "absolute", left: Math.min(trackWidth - HANDLE_W / 2, endX - HANDLE_W / 2), top: 0, bottom: 0, width: HANDLE_W, alignItems: "center", justifyContent: "center" }}
-            >
-              <View style={{ width: 5, height: 22, borderRadius: 2.5, backgroundColor: colors.white }} />
-            </View>
+            <Animated.View style={[{ position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" }, leftDim]} />
+            <Animated.View style={[{ position: "absolute", right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" }, rightDim]} />
+            <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, bottom: 0, borderWidth: 2, borderColor: colors.white, borderRadius: 8 }, keptStyle]} />
+            <GestureDetector gesture={startGesture}>
+              <Animated.View
+                hitSlop={{ left: 16, right: 16, top: 12, bottom: 12 }}
+                style={[{ position: "absolute", top: 0, bottom: 0, width: HANDLE_W, alignItems: "center", justifyContent: "center" }, startHandleStyle]}
+              >
+                <View style={{ width: 5, height: 22, borderRadius: 2.5, backgroundColor: colors.white }} />
+              </Animated.View>
+            </GestureDetector>
+            <GestureDetector gesture={endGesture}>
+              <Animated.View
+                hitSlop={{ left: 16, right: 16, top: 12, bottom: 12 }}
+                style={[{ position: "absolute", top: 0, bottom: 0, width: HANDLE_W, alignItems: "center", justifyContent: "center" }, endHandleStyle]}
+              >
+                <View style={{ width: 5, height: 22, borderRadius: 2.5, backgroundColor: colors.white }} />
+              </Animated.View>
+            </GestureDetector>
           </View>
           <Text style={{ paddingTop: 8, fontFamily: "Geist_400Regular", fontSize: 11.5, color: colors.fog }}>
             Drag the handles to trim. The preview loops inside your selection.
@@ -234,7 +252,7 @@ export function LiftVideoReview({
 
       <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingBottom: insets.bottom + 18 }}>
         <Button variant="ghost" style={{ flex: 1 }} onPress={onRetake} icon={<RotateCcw size={16} color={colors.bone} strokeWidth={2} />}>
-          Retake
+          Restart
         </Button>
         <Button style={{ flex: 1 }} onPress={() => onContinue(trimRef.current)}>
           Continue

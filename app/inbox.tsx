@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { ChevronDown, UserPlus } from "lucide-react-native";
+import { ChevronDown, MessageCircle, Swords, UserPlus, type LucideIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,6 +59,28 @@ const TAUNTS = [
   "Gym said it misses you 😂",
   "Legs day? More like rest year 💀"
 ];
+
+/**
+ * Notification avatar with a small type-icon badge (#22). Friend → friend
+ * icon, message → message icon, taunt → taunt icon. Buddy check-in, stream
+ * end, and trophy earns intentionally have NO badge.
+ */
+function NotifAvatar({ name, avatar, type }: { name: string; avatar: string | null; type: string }) {
+  let Icon: LucideIcon | null = null;
+  if (type === "friend_request" || type === "friend_accepted") Icon = UserPlus;
+  else if (type === "dm") Icon = MessageCircle;
+  else if (type === "streak_break_friend") Icon = Swords;
+  return (
+    <View style={{ width: 42, height: 42 }}>
+      <Avatar name={name} uri={avatar} size={42} />
+      {Icon ? (
+        <View style={{ position: "absolute", right: -2, bottom: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.charcoal, borderWidth: 1.5, borderColor: colors.black, alignItems: "center", justifyContent: "center" }}>
+          <Icon size={11} color={colors.mist} strokeWidth={2.2} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 function TauntSheet({ targetId, name }: { targetId: string; name: string }) {
   const sheet = useSheet();
@@ -287,7 +309,7 @@ export default function InboxScreen() {
                       backgroundColor: n.read ? "transparent" : "rgba(255,255,255,0.04)"
                     }}
                   >
-                    <Avatar name={n.actorName} uri={n.actorAvatar} size={42} />
+                    <NotifAvatar name={n.actorName} avatar={n.actorAvatar} type={n.type} />
                     <Text style={{ flex: 1, fontSize: 13.5, color: colors.mist, lineHeight: 13.5 * 1.4 }}>
                       <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>{n.actorName}</Text>
                       {n.type === "streak_break_friend" ? "" : " "}

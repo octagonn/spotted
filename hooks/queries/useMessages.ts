@@ -100,7 +100,11 @@ export function useSendMessage(conversationId?: string | null) {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
   return useMutation({
-    mutationFn: async (content: string): Promise<void> => {
+    // Accepts a bare string (legacy call sites) or { content, replyToId } for
+    // quote-replies (#10).
+    mutationFn: async (input: string | { content: string; replyToId?: string | null }): Promise<void> => {
+      const content = typeof input === "string" ? input : input.content;
+      const replyToId = typeof input === "string" ? null : input.replyToId ?? null;
       const trimmed = content.trim();
       if (!conversationId || trimmed.length === 0) {
         return;
@@ -114,7 +118,12 @@ export function useSendMessage(conversationId?: string | null) {
           media_url: null,
           reply_story_media: null,
           sent_at: new Date().toISOString(),
-          read_at: null
+          read_at: null,
+          reply_to_id: replyToId ?? null,
+          deleted_at: null,
+          kind: "text",
+          shared_kind: null,
+          shared_id: null
         };
         queryClient.setQueryData<ChatMessage[]>(["messages", conversationId], (prev) => [
           ...(prev ?? []),
@@ -128,7 +137,8 @@ export function useSendMessage(conversationId?: string | null) {
       const { error } = await supabase.from("messages").insert({
         conversation_id: conversationId,
         sender_id: userId,
-        content: trimmed
+        content: trimmed,
+        reply_to_id: replyToId
       });
       if (error) {
         throw error;

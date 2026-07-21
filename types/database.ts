@@ -327,6 +327,8 @@ export type Database = {
           participant_a: string
           participant_b: string
           updated_at: string
+          status: string
+          requester_id: string | null
         }
         Insert: {
           id?: string
@@ -334,6 +336,8 @@ export type Database = {
           participant_a: string
           participant_b: string
           updated_at?: string
+          status?: string
+          requester_id?: string | null
         }
         Update: {
           id?: string
@@ -341,6 +345,8 @@ export type Database = {
           participant_a?: string
           participant_b?: string
           updated_at?: string
+          status?: string
+          requester_id?: string | null
         }
         Relationships: [
           {
@@ -544,6 +550,11 @@ export type Database = {
           read_at: string | null
           sender_id: string
           sent_at: string
+          reply_to_id: string | null
+          deleted_at: string | null
+          kind: string
+          shared_kind: string | null
+          shared_id: string | null
         }
         Insert: {
           content?: string | null
@@ -554,6 +565,11 @@ export type Database = {
           read_at?: string | null
           sender_id: string
           sent_at?: string
+          reply_to_id?: string | null
+          deleted_at?: string | null
+          kind?: string
+          shared_kind?: string | null
+          shared_id?: string | null
         }
         Update: {
           content?: string | null
@@ -564,6 +580,11 @@ export type Database = {
           read_at?: string | null
           sender_id?: string
           sent_at?: string
+          reply_to_id?: string | null
+          deleted_at?: string | null
+          kind?: string
+          shared_kind?: string | null
+          shared_id?: string | null
         }
         Relationships: [
           {
@@ -811,6 +832,36 @@ export type Database = {
           performed_at?: string
           created_at?: string
         }
+        Relationships: []
+      }
+      conversation_participants: {
+        Row: { conversation_id: string; user_id: string; joined_at: string; muted: boolean; folder_id: string | null; last_read_at: string | null }
+        Insert: { conversation_id: string; user_id: string; joined_at?: string; muted?: boolean; folder_id?: string | null; last_read_at?: string | null }
+        Update: { conversation_id?: string; user_id?: string; joined_at?: string; muted?: boolean; folder_id?: string | null; last_read_at?: string | null }
+        Relationships: []
+      }
+      message_folders: {
+        Row: { id: string; user_id: string; name: string; created_at: string }
+        Insert: { id?: string; user_id: string; name: string; created_at?: string }
+        Update: { id?: string; user_id?: string; name?: string; created_at?: string }
+        Relationships: []
+      }
+      message_reactions: {
+        Row: { message_id: string; user_id: string; emoji: string; created_at: string }
+        Insert: { message_id: string; user_id: string; emoji: string; created_at?: string }
+        Update: { message_id?: string; user_id?: string; emoji?: string; created_at?: string }
+        Relationships: []
+      }
+      message_hides: {
+        Row: { message_id: string; user_id: string; hidden_at: string }
+        Insert: { message_id: string; user_id: string; hidden_at?: string }
+        Update: { message_id?: string; user_id?: string; hidden_at?: string }
+        Relationships: []
+      }
+      user_blocks: {
+        Row: { blocker_id: string; blocked_id: string; created_at: string }
+        Insert: { blocker_id: string; blocked_id: string; created_at?: string }
+        Update: { blocker_id?: string; blocked_id?: string; created_at?: string }
         Relationships: []
       }
       story_tags: {
@@ -1347,6 +1398,7 @@ export type Database = {
     }
     Functions: {
       are_friends: { Args: { a: string; b: string }; Returns: boolean }
+      respond_message_request: { Args: { p_conversation_id: string; p_accept: boolean }; Returns: undefined }
       community_invite_code: { Args: { cid: string }; Returns: string | null }
       regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
       join_community_by_code: { Args: { code: string }; Returns: string | null }

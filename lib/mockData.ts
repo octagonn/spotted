@@ -347,7 +347,12 @@ export const mockMessages = [
     media_url: null,
     reply_story_media: null,
     sent_at: now,
-    read_at: now
+    read_at: now,
+    reply_to_id: null,
+    deleted_at: null,
+    kind: "text",
+    shared_kind: null,
+    shared_id: null
   },
   {
     id: "msg-2",
@@ -357,7 +362,12 @@ export const mockMessages = [
     media_url: null,
     reply_story_media: null,
     sent_at: now,
-    read_at: now
+    read_at: now,
+    reply_to_id: null,
+    deleted_at: null,
+    kind: "text",
+    shared_kind: null,
+    shared_id: null
   }
 ];
 

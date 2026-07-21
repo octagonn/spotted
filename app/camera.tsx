@@ -741,15 +741,26 @@ export default function CameraScreen() {
   // Friends tagged on the story — rendered as tappable chips in the viewer.
   const [storyTags, setStoryTags] = useState<string[]>([]);
 
-  // ---- Draft saving (#23) ----
+  // ---- Draft system (#23) ----
+  // One draft slot. NO modal on open — a saved draft surfaces as a tappable
+  // "Resume draft" chip on the capture screen (tap = resume, long-press =
+  // delete). Closing the camera with unposted media asks Save draft / Discard.
   const draftCheckedRef = useRef(false);
+  const [pendingDraft, setPendingDraft] = useState<CameraDraft | null>(null);
   const clearDraft = useCallback(() => {
+    setPendingDraft(null);
     void clearCameraDraft(userId);
   }, [userId]);
   const restoreDraft = useCallback((draft: CameraDraft) => {
+    setPendingDraft(null);
     setMode(draft.mode);
-    if (draft.mode === "lift") setLiftStep((draft.step as LiftStep) || "review");
-    else setDailyStep((draft.step as DailyStep) || "review");
+    if (draft.mode === "lift") {
+      const step = draft.step as LiftStep;
+      setLiftStep(["record", "review", "liftmeta", "compose"].includes(step) ? step : "review");
+    } else {
+      const step = draft.step as DailyStep;
+      setDailyStep(["capture", "review", "compose"].includes(step) ? step : "review");
+    }
     if (draft.photoUri) setPhotoUri(draft.photoUri);
     if (draft.extraPhotos) setExtraPhotos(draft.extraPhotos);
     if (draft.videoUri) setVideoUri(draft.videoUri);
@@ -758,59 +769,99 @@ export default function CameraScreen() {
     if (draft.liftValue) setLiftValue(draft.liftValue);
     if (draft.tags) setTags(draft.tags);
     if (draft.communities) setCommunities(draft.communities);
+    if (draft.gym) setGym(draft.gym);
+    if (draft.photoTags) setPhotoTags(draft.photoTags);
+    if (draft.storyTags) setStoryTags(draft.storyTags);
+    if (draft.videoTrim) videoTrimRef.current = draft.videoTrim;
     if (draft.track) {
       const t = draft.track;
       if (draft.mode === "story") setStoryTrack(t as SelectedTrack);
       else setTrack(t as MusicTrack & { clipStart?: number });
     }
   }, []);
-  // On open, offer to resume a saved draft.
+  // On open, quietly load any saved draft for the chip. No interruption.
   useEffect(() => {
     if (draftCheckedRef.current || !userId) return;
     draftCheckedRef.current = true;
-    void (async () => {
-      const draft = await loadCameraDraft(userId);
-      if (!draft) return;
-      Alert.alert("Resume your draft?", "You have an unfinished post from earlier.", [
-        { text: "Discard", style: "destructive", onPress: () => void clearCameraDraft(userId) },
-        { text: "Resume", onPress: () => restoreDraft(draft) }
-      ]);
-    })();
-  }, [userId, restoreDraft]);
+    void loadCameraDraft(userId).then((draft) => {
+      if (draft) setPendingDraft(draft);
+    });
+  }, [userId]);
+  // Everything the draft needs to fully reconstruct this screen.
+  const buildDraft = useCallback((): Omit<CameraDraft, "savedAt"> => {
+    const step = mode === "lift" ? liftStep : dailyStep;
+    const activeTrack = mode === "story" ? storyTrack : track;
+    return {
+      mode,
+      step,
+      photoUri,
+      extraPhotos,
+      videoUri,
+      caption,
+      track: activeTrack
+        ? {
+            id: activeTrack.id,
+            title: activeTrack.title,
+            artist: activeTrack.artist,
+            artworkUrl: activeTrack.artworkUrl,
+            previewUrl: activeTrack.previewUrl,
+            clipStart: activeTrack.clipStart
+          }
+        : null,
+      liftExercise,
+      liftValue,
+      tags,
+      communities,
+      gym,
+      photoTags,
+      storyTags,
+      videoTrim: videoTrimRef.current
+    };
+  }, [mode, dailyStep, liftStep, photoUri, extraPhotos, videoUri, caption, track, storyTrack, liftExercise, liftValue, tags, communities, gym, photoTags, storyTags]);
+
   // Autosave the in-progress post (media + edits) whenever anything changes,
-  // once media is captured and we're past the capture step (#23).
+  // once media is captured and we're past the capture step (#23) — crash and
+  // interruption protection. Explicit intent is handled at close time.
   useEffect(() => {
     if (!userId) return;
     const hasMedia = Boolean(photoUri || videoUri);
     const step = mode === "lift" ? liftStep : dailyStep;
     if (!hasMedia || step === "capture" || step === "record") return;
-    const activeTrack = mode === "story" ? storyTrack : track;
     const t = setTimeout(() => {
-      void saveCameraDraft(userId, {
-        mode,
-        step,
-        photoUri,
-        extraPhotos,
-        videoUri,
-        caption,
-        track: activeTrack
-          ? {
-              id: activeTrack.id,
-              title: activeTrack.title,
-              artist: activeTrack.artist,
-              artworkUrl: activeTrack.artworkUrl,
-              previewUrl: activeTrack.previewUrl,
-              clipStart: activeTrack.clipStart
-            }
-          : null,
-        liftExercise,
-        liftValue,
-        tags,
-        communities
-      });
+      void saveCameraDraft(userId, buildDraft());
     }, 700);
     return () => clearTimeout(t);
-  }, [userId, mode, dailyStep, liftStep, photoUri, extraPhotos, videoUri, caption, track, storyTrack, liftExercise, liftValue, tags, communities]);
+  }, [userId, mode, dailyStep, liftStep, photoUri, videoUri, buildDraft]);
+
+  /**
+   * Close the camera. With unposted media in hand, ask once whether to keep it
+   * as a draft — so drafts only ever exist on purpose (or via crash autosave).
+   */
+  const attemptClose = useCallback(() => {
+    const hasMedia = Boolean(photoUri || videoUri || extraPhotos.length);
+    if (!hasMedia || !userId) {
+      router.back();
+      return;
+    }
+    Alert.alert("Keep this as a draft?", "Your shot and edits will be here when you come back.", [
+      {
+        text: "Discard",
+        style: "destructive",
+        onPress: () => {
+          clearDraft();
+          router.back();
+        }
+      },
+      {
+        text: "Save draft",
+        onPress: () => {
+          void saveCameraDraft(userId, buildDraft());
+          router.back();
+        }
+      },
+      { text: "Cancel", style: "cancel" }
+    ]);
+  }, [photoUri, videoUri, extraPhotos.length, userId, buildDraft, clearDraft, router]);
 
   // Music preview on the story review screen (2d): loop the chosen ~15s segment
   // so the user hears exactly what viewers will, before posting.
@@ -1016,7 +1067,7 @@ export default function CameraScreen() {
         onError: (error) => {
           logger.warn("story_publish_failed", { message: error instanceof Error ? error.message : String(error) });
           Alert.alert("Couldn't post your story", "It didn't upload — poor connection?", [
-            { text: "Discard", style: "destructive" },
+            { text: "Discard", style: "destructive", onPress: clearDraft },
             { text: "Retry", onPress: post }
           ]);
         }
@@ -1412,7 +1463,7 @@ export default function CameraScreen() {
             justifyContent: "space-between"
           }}
         >
-          <CircleButton label="Close camera" onPress={() => router.back()}>
+          <CircleButton label="Close camera" onPress={attemptClose}>
             <X color={colors.white} size={20} strokeWidth={2.2} />
           </CircleButton>
           <StepPill>{stepLabel}</StepPill>
@@ -1441,6 +1492,50 @@ export default function CameraScreen() {
             gap: 16
           }}
         >
+          {/* Saved draft — non-blocking entry point. Tap resumes; long-press
+              deletes (with confirm). Never interrupts a fresh shot. */}
+          {pendingDraft && !photoUri && !videoUri && !recording ? (
+            <Pressable
+              accessibilityLabel="Resume draft"
+              onPress={() => restoreDraft(pendingDraft)}
+              onLongPress={() =>
+                Alert.alert("Delete draft?", "This can't be undone.", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Delete", style: "destructive", onPress: clearDraft }
+                ])
+              }
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingVertical: 6,
+                  paddingLeft: 7,
+                  paddingRight: 14,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: colors.slate,
+                  backgroundColor: "rgba(0,0,0,0.6)"
+                }}
+              >
+                {pendingDraft.photoUri ? (
+                  <ExpoImage
+                    source={{ uri: pendingDraft.photoUri }}
+                    contentFit="cover"
+                    style={{ width: 26, height: 26, borderRadius: 13 }}
+                  />
+                ) : (
+                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.graphite, alignItems: "center", justifyContent: "center" }}>
+                    <ImageIcon size={14} color={colors.mist} strokeWidth={2} />
+                  </View>
+                )}
+                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}>
+                  Resume draft
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
           {recording ? (
             <View
               style={{

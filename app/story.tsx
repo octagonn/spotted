@@ -149,11 +149,16 @@ export default function StoryViewer() {
     const g = queue[gi];
     if (g && si < g.stories.length - 1) {
       setSi(si + 1);
-    } else if (gi < queue.length - 1) {
-      setGi(gi + 1);
-      // Land on the first unseen story of the next group.
-      const next = queue[gi + 1];
-      const firstUnseen = next ? next.stories.findIndex((s) => !s.seen) : -1;
+      return;
+    }
+    // End of this person: advance to the next group that still has UNSEEN
+    // content. If none remains, EXIT rather than replaying already-viewed
+    // stories (4c — the auto-advance chain stops at the boundary of new content).
+    let ni = gi + 1;
+    while (ni < queue.length && !queue[ni].stories.some((s) => !s.seen)) ni += 1;
+    if (ni < queue.length) {
+      setGi(ni);
+      const firstUnseen = queue[ni].stories.findIndex((s) => !s.seen);
       setSi(firstUnseen >= 0 ? firstUnseen : 0);
     } else {
       close();
@@ -265,9 +270,38 @@ export default function StoryViewer() {
         dragY.value = withSpring(0, { damping: 18, stiffness: 240 });
       }
     });
-  // Swipe up (on someone else's story) opens the reply keyboard.
-  const focusReply = () => {
-    if (group && !group.isMe) replyInputRef.current?.focus();
+  // Swipe = jump to the next/previous PERSON's ring (4d), independent of how many
+  // of the current person's segments are viewed (explicit navigation).
+  const goNextPerson = useCallback(() => {
+    if (!queue) return;
+    if (gi < queue.length - 1) {
+      const next = queue[gi + 1];
+      const fu = next.stories.findIndex((s) => !s.seen);
+      setGi(gi + 1);
+      setSi(fu >= 0 ? fu : 0);
+    } else {
+      close();
+    }
+  }, [queue, gi, close]);
+  const goPrevPerson = useCallback(() => {
+    if (gi > 0) {
+      setGi(gi - 1);
+      setSi(0);
+    } else {
+      setSi(0);
+    }
+  }, [gi]);
+
+  // Swipe up: on someone else's story → reply keyboard; on YOUR OWN → viewer
+  // sheet (4e). The timer pauses via `held` while either is open.
+  const swipeUpAction = () => {
+    if (!group) return;
+    if (group.isMe) {
+      setHeld(true);
+      setViewersOpen(true);
+    } else {
+      replyInputRef.current?.focus();
+    }
   };
   const swipeUp = Gesture.Pan()
     .activeOffsetY(-16)
@@ -275,10 +309,17 @@ export default function StoryViewer() {
     .failOffsetX([-24, 24])
     .onEnd((e) => {
       if (e.translationY < -60 || e.velocityY < -700) {
-        runOnJS(focusReply)();
+        runOnJS(swipeUpAction)();
       }
     });
-  const storyGesture = Gesture.Exclusive(swipeDown, swipeUp);
+  const swipeH = Gesture.Pan()
+    .activeOffsetX([-24, 24])
+    .failOffsetY([-20, 20])
+    .onEnd((e) => {
+      if (e.translationX < -60 || e.velocityX < -700) runOnJS(goNextPerson)();
+      else if (e.translationX > 60 || e.velocityX > 700) runOnJS(goPrevPerson)();
+    });
+  const storyGesture = Gesture.Exclusive(swipeDown, swipeUp, swipeH);
 
   const dragStyle = useAnimatedStyle(() => {
     const p = Math.min(1, dragY.value / 420);

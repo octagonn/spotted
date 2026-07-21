@@ -13,7 +13,7 @@ import {
   X
 } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -733,6 +733,10 @@ export default function WorkoutScreen() {
       {/* ---------------------------- picker sheet --------------------------- */}
       <Modal visible={Boolean(picker) && !activeId} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={() => setPicker(null)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1, justifyContent: "flex-end" }}
+          >
           <Pressable
             onPress={(e) => { e.stopPropagation(); dismissKeyboardFromPress(e); }}
             style={{
@@ -883,12 +887,17 @@ export default function WorkoutScreen() {
               </View>
             </ScrollView>
           </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 
       {/* ---------------------------- logger sheet --------------------------- */}
       <Modal visible={Boolean(active)} transparent animationType="slide" onRequestClose={closeLogger}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.62)" }} onPress={closeLogger}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1, justifyContent: "flex-end" }}
+          >
           <Pressable
             onPress={(e) => { e.stopPropagation(); dismissKeyboardFromPress(e); }}
             style={{
@@ -993,6 +1002,7 @@ export default function WorkoutScreen() {
               </View>
             </ScrollView>
           </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
 
         {/* PR celebration renders over the logger too */}

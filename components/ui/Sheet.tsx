@@ -90,7 +90,10 @@ export function SheetProvider({ children }: { children: ReactNode }) {
           ref={modalRef}
           enableDynamicSizing
           maxDynamicContentSize={windowHeight * 0.78}
-          keyboardBehavior="interactive"
+          // "extend": when the keyboard opens the sheet grows to its max
+          // height, so search fields sit well above the keyboard with room
+          // for results in between.
+          keyboardBehavior="extend"
           keyboardBlurBehavior="restore"
           android_keyboardInputMode="adjustResize"
           animationConfigs={animationConfigs}

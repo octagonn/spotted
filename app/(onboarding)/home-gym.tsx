@@ -4,7 +4,7 @@ import * as Location from "expo-location";
 import { router } from "expo-router";
 import { MapPin } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/Button";
@@ -151,11 +151,12 @@ export default function HomeGymScreen() {
         <FlashList
           data={rows}
           keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
           renderItem={renderGym}
           extraData={selectedId}
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
-          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 12 }}
           ItemSeparatorComponent={() => <View className="h-3" />}

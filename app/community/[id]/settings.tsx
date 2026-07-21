@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Bell, Check, Copy, Flag, Globe, KeyRound, Lock, LogOut, Pencil, RefreshCw, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
@@ -164,9 +164,16 @@ export default function CommunitySettingsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.black }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1, backgroundColor: colors.black }}
+    >
       <PanelHeader title="Community settings" />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: insets.bottom + 28 }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: insets.bottom + 28 }}
+      >
         {/* ---- Member settings (everyone) ---- */}
         <SettingRow
           icon={<Bell size={17} color={colors.silver} strokeWidth={2} />}
@@ -314,7 +321,7 @@ export default function CommunitySettingsScreen() {
           </>
         ) : null}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

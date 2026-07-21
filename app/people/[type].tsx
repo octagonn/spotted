@@ -1,7 +1,7 @@
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
@@ -65,6 +65,8 @@ export default function PeopleListScreen() {
       <FlashList
         data={filtered}
         keyExtractor={(item: Profile) => item.id}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         renderItem={({ item }: { item: Profile }) => (
           <PersonRow

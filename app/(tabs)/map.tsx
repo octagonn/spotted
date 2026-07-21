@@ -11,7 +11,7 @@ import {
   Users
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, Share, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, Share, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -27,6 +27,7 @@ import { MapCanvas } from "@/components/map/MapCanvas";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
+import { SheetTextInput } from "@/components/ui/SheetTextInput";
 import { Segmented } from "@/components/ui/Segmented";
 import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
 import {
@@ -166,7 +167,7 @@ function InviteCodeSheet() {
       <SheetTitle>Enter invite code</SheetTitle>
       <SheetSub>Join a private community directly with its code.</SheetSub>
       <View style={{ paddingHorizontal: 20, paddingTop: 6 }}>
-        <TextInput
+        <SheetTextInput
           value={code}
           onChangeText={(v) => {
             setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
@@ -461,7 +462,11 @@ export default function MapTabScreen() {
           )}
         </ScrollView>
       ) : tab === "Communities" ? (
-        <ScrollView contentContainerStyle={{ paddingBottom: NAV_H + insets.bottom + 12 }}>
+        <ScrollView
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: NAV_H + insets.bottom + 12 }}
+        >
           {/* LIVE PRESENCE — only when friends are actually there (spec). */}
           {presenceRows.length > 0 ? (
             <View style={{ paddingHorizontal: 18, paddingTop: 4 }}>

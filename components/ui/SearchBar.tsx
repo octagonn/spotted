@@ -1,7 +1,8 @@
 import { Search, X } from "lucide-react-native";
-import { TextInput, View, type StyleProp, type ViewStyle } from "react-native";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 
 import { Pressable } from "@/components/ui/Pressable";
+import { SheetTextInput } from "@/components/ui/SheetTextInput";
 import { colors } from "@/theme/colors";
 
 type SearchBarProps = {
@@ -36,7 +37,9 @@ export function SearchBar({ value, onChangeText, placeholder, containerStyle, au
       ]}
     >
       <Search color={colors.ash} size={17} strokeWidth={1.8} />
-      <TextInput
+      {/* Sheet-aware: inside the bottom-sheet host this drives the sheet's
+          keyboard behavior (field rises above the keyboard, results visible). */}
+      <SheetTextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

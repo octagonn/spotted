@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { Check, X } from "lucide-react-native";
 import { useState } from "react";
-import { Text, View, type LayoutRectangle } from "react-native";
+import { KeyboardAvoidingView, Platform, Text, View, type LayoutRectangle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
@@ -107,7 +107,13 @@ export function PhotoTagOverlay({
       {/* Friend picker — appears after tapping a point on the photo. */}
       {pending ? (
         <Pressable onPress={() => setPending(null)} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)" }}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "70%", backgroundColor: tokens.bg.raised, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12 }}>
+          {/* KAV lifts the picker above the keyboard: search on top, results
+              visible between the field and the keyboard. */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
+          >
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ maxHeight: "70%", backgroundColor: tokens.bg.raised, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12 }}>
             <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.border.strong, marginBottom: 8 }} />
             <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white, paddingBottom: 8 }}>Tag a friend</Text>
@@ -133,6 +139,7 @@ export function PhotoTagOverlay({
               )}
             </View>
           </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       ) : null}
     </View>

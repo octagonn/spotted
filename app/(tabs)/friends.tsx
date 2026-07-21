@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { ChevronRight, FolderPlus, Inbox, Mail, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { Alert, Platform, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useInboxThreadActions, useInboxThreads } from "@/components/friends/useInboxThreads";
@@ -233,6 +233,7 @@ export default function FriendsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: NAV_H + insets.bottom + 12 }}
       >
         <View

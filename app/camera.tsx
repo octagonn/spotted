@@ -722,6 +722,42 @@ export default function CameraScreen() {
   // Friends tagged on the story — rendered as tappable chips in the viewer.
   const [storyTags, setStoryTags] = useState<string[]>([]);
 
+  // Music preview on the story review screen (2d): loop the chosen ~15s segment
+  // so the user hears exactly what viewers will, before posting.
+  const storyReviewActive = mode === "story" && dailyStep === "review";
+  const storyPreview = useAudioPlayer(storyTrack?.previewUrl ? { uri: storyTrack.previewUrl } : null);
+  const storyPreviewStatus = useAudioPlayerStatus(storyPreview);
+  const storyClipStart = storyTrack?.clipStart ?? 0;
+  useEffect(() => {
+    if (!storyReviewActive || !storyTrack?.previewUrl || !storyPreviewStatus.isLoaded) {
+      try {
+        storyPreview.pause();
+      } catch {
+        // player torn down
+      }
+      return;
+    }
+    try {
+      void storyPreview.seekTo(storyClipStart);
+      storyPreview.play();
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyReviewActive, storyTrack?.previewUrl, storyClipStart, storyPreviewStatus.isLoaded]);
+  // Loop just the chosen 15s window.
+  useEffect(() => {
+    if (!storyReviewActive || !storyTrack?.previewUrl) return;
+    if (storyPreviewStatus.currentTime > storyClipStart + 15) {
+      try {
+        void storyPreview.seekTo(storyClipStart);
+      } catch {
+        // ignore
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyPreviewStatus.currentTime]);
+
   useEffect(() => {
     if (Platform.OS !== "web" && permission && !permission.granted && permission.canAskAgain && !permissionAsked.current) {
       permissionAsked.current = true;

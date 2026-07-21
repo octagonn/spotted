@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -109,6 +110,22 @@ export default function StoryViewer() {
   const pausedRef = useRef(false);
   const replyInputRef = useRef<TextInput>(null);
   pausedRef.current = held || typing;
+
+  // Distinct slide transition when moving between DIFFERENT people (4b): the new
+  // person's media slides in from the swipe direction while the header + progress
+  // re-render fresh. Within one person, segments just cut (no slide).
+  const { width: screenW } = useWindowDimensions();
+  const slideX = useSharedValue(0);
+  const prevGi = useRef(gi);
+  useEffect(() => {
+    if (prevGi.current !== gi) {
+      const dir = gi > prevGi.current ? 1 : -1;
+      slideX.value = dir * screenW;
+      slideX.value = withTiming(0, { duration: 260 });
+      prevGi.current = gi;
+    }
+  }, [gi, screenW, slideX]);
+  const slideStyle = useAnimatedStyle(() => ({ transform: [{ translateX: slideX.value }] }));
 
   // Pick the starting group + first UNVIEWED story once, when stories load.
   useEffect(() => {
@@ -378,19 +395,21 @@ export default function StoryViewer() {
           </View>
         ) : null}
         {story.mediaUrl ? (
-          <Image
-            source={{ uri: story.mediaUrl }}
-            contentFit="contain"
-            transition={150}
-            cachePolicy="memory-disk"
-            priority="high"
-            onLoad={() => setMediaLoaded(true)}
-            // Reuse one decoded surface across stories (no reload flash) and let
-            // expo-image downscale big photos to the view — the main viewer cost.
-            recyclingKey={story.id}
-            allowDownscaling
-            style={{ position: "absolute", inset: 0 }}
-          />
+          <Animated.View style={[{ position: "absolute", inset: 0 }, slideStyle]}>
+            <Image
+              source={{ uri: story.mediaUrl }}
+              contentFit="contain"
+              transition={150}
+              cachePolicy="memory-disk"
+              priority="high"
+              onLoad={() => setMediaLoaded(true)}
+              // Reuse one decoded surface across stories (no reload flash) and let
+              // expo-image downscale big photos to the view — the main viewer cost.
+              recyclingKey={story.id}
+              allowDownscaling
+              style={{ position: "absolute", inset: 0 }}
+            />
+          </Animated.View>
         ) : null}
 
         {/* Tap zones: left third = prev, right two-thirds = next; hold = pause. */}

@@ -1,5 +1,4 @@
 import { Image } from "expo-image";
-import * as ImageManipulator from "expo-image-manipulator";
 import { Check, Crop, Pen, RotateCw, Smile, Trash2, Type, Undo2, X } from "lucide-react-native";
 import { useRef, useState } from "react";
 import {
@@ -17,13 +16,13 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
   type SharedValue
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path as SvgPath } from "react-native-svg";
 import { captureRef } from "react-native-view-shot";
 
-import { FreeformCrop } from "@/components/camera/FreeformCrop";
 import { colors } from "@/theme/colors";
 
 type Tool = "none" | "draw" | "text" | "sticker" | "crop";
@@ -162,10 +161,8 @@ export function PhotoEditor({
   const [tool, setTool] = useState<Tool>("none");
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
   const [penWidth, setPenWidth] = useState(PEN_WIDTHS[1]);
-  // Rotate/crop write real pixels via expo-image-manipulator; the edited base
-  // image lives in workingUri (uri stays untouched for "Original" crop reset).
-  const [workingUri, setWorkingUri] = useState(uri);
-  const [transforming, setTransforming] = useState(false);
+  // Base image (crop/rotate now happen as a live transform, baked on export).
+  const [workingUri] = useState(uri);
 
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [texts, setTexts] = useState<TextItem[]>([]);
@@ -183,6 +180,70 @@ export function PhotoEditor({
   const trashStyle = useAnimatedStyle(() => ({
     transform: [{ scale: 1 + trashHot.value * 0.35 }]
   }));
+
+  // Crop transform (2b) — pinch/zoom/rotate/pan the base photo inside the fixed
+  // full-screen frame. Persisted so the flattened export bakes exactly what's
+  // visible; snapshotted on entry so Cancel restores.
+  const cScale = useSharedValue(1);
+  const cTx = useSharedValue(0);
+  const cTy = useSharedValue(0);
+  const cRot = useSharedValue(0);
+  const cScaleStart = useSharedValue(1);
+  const cTxStart = useSharedValue(0);
+  const cTyStart = useSharedValue(0);
+  const cRotStart = useSharedValue(0);
+  const cropSnapshot = useRef({ scale: 1, tx: 0, ty: 0, rot: 0 });
+
+  const cropStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: cTx.value },
+      { translateY: cTy.value },
+      { scale: cScale.value },
+      { rotateZ: `${cRot.value}rad` }
+    ]
+  }));
+
+  const cropPan = Gesture.Pan()
+    .onStart(() => {
+      cTxStart.value = cTx.value;
+      cTyStart.value = cTy.value;
+    })
+    .onUpdate((e) => {
+      cTx.value = cTxStart.value + e.translationX;
+      cTy.value = cTyStart.value + e.translationY;
+    });
+  const cropPinch = Gesture.Pinch()
+    .onStart(() => {
+      cScaleStart.value = cScale.value;
+    })
+    .onUpdate((e) => {
+      // Clamp min to fill-frame so there are no black edges unless intentional.
+      cScale.value = Math.max(1, cScaleStart.value * e.scale);
+    });
+  const cropRotate = Gesture.Rotation()
+    .onStart(() => {
+      cRotStart.value = cRot.value;
+    })
+    .onUpdate((e) => {
+      cRot.value = cRotStart.value + e.rotation;
+    });
+  const cropGesture = Gesture.Simultaneous(cropPan, cropPinch, cropRotate);
+
+  const enterCrop = () => {
+    cropSnapshot.current = { scale: cScale.value, tx: cTx.value, ty: cTy.value, rot: cRot.value };
+    setTool("crop");
+  };
+  const cancelCrop = () => {
+    const s = cropSnapshot.current;
+    cScale.value = withTiming(s.scale, { duration: 140 });
+    cTx.value = withTiming(s.tx, { duration: 140 });
+    cTy.value = withTiming(s.ty, { duration: 140 });
+    cRot.value = withTiming(s.rot, { duration: 140 });
+    setTool("none");
+  };
+  const rotate90 = () => {
+    cRot.value = withTiming(cRot.value + Math.PI / 2, { duration: 160 });
+  };
 
   const ptsRef = useRef<string>("");
 
@@ -210,23 +271,6 @@ export function PhotoEditor({
     .onFinalize(() => {
       setStrokes((prev) => prev.map((s) => (s.id === "live" ? { ...s, id: uid() } : s)));
     });
-
-  /** Rotate the actual pixels 90° clockwise. Never throws out of the editor. */
-  const rotate = async () => {
-    if (transforming) return;
-    setTransforming(true);
-    try {
-      const result = await ImageManipulator.manipulateAsync(workingUri, [{ rotate: 90 }], {
-        compress: 0.9,
-        format: ImageManipulator.SaveFormat.JPEG
-      });
-      setWorkingUri(result.uri);
-    } catch {
-      // Leave the image as-is rather than crash or lose edits.
-    } finally {
-      setTransforming(false);
-    }
-  };
 
   const addText = () => {
     const text = draft.trim();
@@ -298,9 +342,12 @@ export function PhotoEditor({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      {/* Captured region: photo + drawings + overlays */}
-      <View ref={captureViewRef} collapsable={false} style={StyleSheet.absoluteFill}>
-        <Image source={{ uri: workingUri }} contentFit="cover" style={StyleSheet.absoluteFill} />
+      {/* Captured region: photo (crop-transformed) + drawings + overlays. The
+          frame clips the base image so the transform IS the crop when flattened. */}
+      <View ref={captureViewRef} collapsable={false} style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, cropStyle]}>
+          <Image source={{ uri: workingUri }} contentFit="cover" style={StyleSheet.absoluteFill} />
+        </Animated.View>
 
         <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
           {strokes.map((s) => (
@@ -384,11 +431,8 @@ export function PhotoEditor({
         <RoundBtn active={tool === "sticker"} onPress={() => setTool(tool === "sticker" ? "none" : "sticker")} accessibilityLabel="Stickers">
           <Smile size={20} color={colors.white} strokeWidth={2.2} />
         </RoundBtn>
-        <RoundBtn active={tool === "crop"} onPress={() => setTool(tool === "crop" ? "none" : "crop")} accessibilityLabel="Crop">
+        <RoundBtn active={tool === "crop"} onPress={() => (tool === "crop" ? setTool("none") : enterCrop())} accessibilityLabel="Crop">
           <Crop size={20} color={colors.white} strokeWidth={2.2} />
-        </RoundBtn>
-        <RoundBtn onPress={() => void rotate()} accessibilityLabel="Rotate">
-          <RotateCw size={20} color={colors.white} strokeWidth={2.2} />
         </RoundBtn>
         <RoundBtn onPress={undo} accessibilityLabel="Undo">
           <Undo2 size={20} color={colors.white} strokeWidth={2.2} />
@@ -416,15 +460,6 @@ export function PhotoEditor({
               ))}
             </View>
           ) : null}
-        </View>
-      ) : null}
-
-      {/* Busy overlay while rotating/cropping */}
-      {transforming ? (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
-          <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9, color: colors.white }}>…</Text>
-          </View>
         </View>
       ) : null}
 
@@ -509,18 +544,44 @@ export function PhotoEditor({
         </View>
       ) : null}
 
-      {/* Freeform crop — full-screen overlay; applies to the working image. */}
+      {/* Crop mode (2b): pinch/zoom/rotate/pan the photo inside the frame. The
+          full-screen gesture layer sits above the media but below the controls. */}
       {tool === "crop" ? (
-        <View style={StyleSheet.absoluteFill}>
-          <FreeformCrop
-            uri={workingUri}
-            onApply={(cropped) => {
-              setWorkingUri(cropped);
-              setTool("none");
+        <>
+          <GestureDetector gesture={cropGesture}>
+            <View style={StyleSheet.absoluteFill} />
+          </GestureDetector>
+          {/* Frame guides */}
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }]} />
+          <View
+            style={{
+              position: "absolute",
+              bottom: insets.bottom + 20,
+              left: 0,
+              right: 0,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 24
             }}
-            onCancel={() => setTool("none")}
-          />
-        </View>
+          >
+            <Pressable onPress={cancelCrop} accessibilityLabel="Cancel crop" hitSlop={10}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}>
+                <X size={22} color={colors.white} strokeWidth={2.2} />
+              </View>
+            </Pressable>
+            <Pressable onPress={rotate90} accessibilityLabel="Rotate 90 degrees" hitSlop={10}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}>
+                <RotateCw size={22} color={colors.white} strokeWidth={2.2} />
+              </View>
+            </Pressable>
+            <Pressable onPress={() => setTool("none")} accessibilityLabel="Apply crop" hitSlop={10}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}>
+                <Check size={22} color={colors.black} strokeWidth={2.6} />
+              </View>
+            </Pressable>
+          </View>
+        </>
       ) : null}
     </View>
   );

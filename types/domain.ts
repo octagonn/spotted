@@ -24,6 +24,8 @@ export type FeedPost = Post & {
   viewer_count: number;
   /** Usernames of tagged friends (post_tags join). */
   tag_usernames?: string[];
+  /** Positional photo tags (M1) — normalized 0–1 coords + username. */
+  photo_tags?: { username: string; x: number; y: number }[];
 };
 
 export type FriendSuggestion = Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> & {

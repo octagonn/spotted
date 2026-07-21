@@ -53,6 +53,7 @@ import { impactHaptic } from "@/lib/haptics";
 import { LIFT_OPTIONS, LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
 import { useLogLift, useUserLifts } from "@/hooks/queries/useUserLifts";
 import { PhotoEditor } from "@/components/camera/PhotoEditor";
+import { PhotoTagOverlay, type PhotoTag } from "@/components/camera/PhotoTagOverlay";
 import { EditorBoundary } from "@/components/EditorBoundary";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
 import { Avatar } from "@/components/ui/Avatar";
@@ -719,6 +720,10 @@ export default function CameraScreen() {
   const logLift = useLogLift();
   const [gym, setGym] = useState<SelectedGym | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  // Positional photo tags (M1) — placed on the daily photo; their user ids also
+  // feed `tags` so the post still surfaces on friends' TAGGED grid.
+  const [photoTags, setPhotoTags] = useState<PhotoTag[]>([]);
+  const [tagging, setTagging] = useState(false);
   const [track, setTrack] = useState<(MusicTrack & { clipStart?: number }) | null>(null);
   // Opened from a community's camera button → that community starts selected
   // as a post destination (16). All posting rules (geofence etc.) still apply.
@@ -1271,6 +1276,15 @@ export default function CameraScreen() {
           logger.warn("post_tags_insert_failed", { message: tagError.message });
         }
       }
+      // Positional photo tags (M1) — where each friend sits on the photo.
+      if (photoTags.length) {
+        const { error: photoTagError } = await supabase
+          .from("photo_tags")
+          .insert(photoTags.map((t) => ({ post_id: postId, photo_index: 0, user_id: t.userId, x: t.x, y: t.y })));
+        if (photoTagError) {
+          logger.warn("photo_tags_insert_failed", { message: photoTagError.message });
+        }
+      }
       // Cross-post to the chosen communities (best-effort — the post itself is live).
       const crossPosts = selectedCommunities
         .filter((community) => community.type !== "gym" || (gym?.type === "gym" && community.gym_id === gym.id))
@@ -1310,6 +1324,22 @@ export default function CameraScreen() {
           onCancel={() => setEditing(false)}
         />
       </EditorBoundary>
+    );
+  }
+
+  // Positional photo tagging (M1) — full-screen over the compose.
+  if (tagging && photoUri) {
+    return (
+      <PhotoTagOverlay
+        uri={photoUri}
+        initial={photoTags}
+        onClose={() => setTagging(false)}
+        onDone={(next) => {
+          setPhotoTags(next);
+          setTags(next.map((t) => t.userId));
+          setTagging(false);
+        }}
+      />
     );
   }
 
@@ -1759,10 +1789,16 @@ export default function CameraScreen() {
         />
         <OptRow
           icon={<Tag size={16} color={colors.silver} />}
-          label="Tag friends"
+          label={mode === "daily" && photoUri ? "Tag people on photo" : "Tag friends"}
           value={selectedFriends.length ? selectedFriends.map((friend) => friend.name.split(" ")[0]).join(", ") : "None"}
           isSet={selectedFriends.length > 0}
-          onPress={() => sheet.open(<FriendsSheet initial={tags} onDone={setTags} />)}
+          // Photo posts get Instagram-style positional tagging (M1); video keeps
+          // the simple friend list.
+          onPress={() =>
+            mode === "daily" && photoUri
+              ? setTagging(true)
+              : sheet.open(<FriendsSheet initial={tags} onDone={setTags} />)
+          }
         />
         <OptRow
           icon={<Music size={16} color={colors.silver} />}

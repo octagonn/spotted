@@ -12,6 +12,7 @@ type FeedRow = Post & {
   profiles: Pick<Profile, "id" | "username" | "display_name" | "avatar_url" | "avatar_blurred_url"> | null;
   gyms: Pick<Gym, "id" | "name" | "latitude" | "longitude"> | null;
   post_tags?: { profile: { username: string } | null }[] | null;
+  photo_tags?: { x: number; y: number; profile: { username: string } | null }[] | null;
 };
 
 async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
@@ -44,7 +45,7 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
       })
     );
   }
-  const { profiles: _profiles, gyms: _gyms, post_tags: _tags, ...post } = row;
+  const { profiles: _profiles, gyms: _gyms, post_tags: _tags, photo_tags: _ptags, ...post } = row;
   return {
     ...post,
     media_url: mediaUrl,
@@ -54,7 +55,10 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
     viewer_count: 0,
     tag_usernames: (row.post_tags ?? [])
       .map((tag) => tag.profile?.username)
-      .filter((username): username is string => Boolean(username))
+      .filter((username): username is string => Boolean(username)),
+    photo_tags: (row.photo_tags ?? [])
+      .filter((t) => t.profile?.username)
+      .map((t) => ({ username: t.profile!.username, x: t.x, y: t.y }))
   };
 }
 
@@ -77,7 +81,7 @@ export function useFeed() {
       let query = supabase
         .from("posts")
         .select(
-          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username))"
+          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username)), photo_tags(x, y, profile:user_id(username))"
         )
         .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })

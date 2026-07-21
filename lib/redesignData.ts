@@ -339,6 +339,8 @@ export type FeedMockPost = {
   ctx?: { icon: FeedCtxIcon; label: string; handle?: string }[];
   /** Tagged friends — rendered as tappable chips that open each profile. */
   taggedFriends?: { handle: string; name: string }[];
+  /** Positional photo tags (M1) — overlaid on the media at normalized coords. */
+  photoTags?: { username: string; x: number; y: number }[];
   reactions: FeedMockReactor[];
   comments: FeedMockComment[];
 };

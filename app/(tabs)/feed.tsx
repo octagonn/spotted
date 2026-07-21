@@ -78,6 +78,7 @@ function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
     taggedFriends: post.tag_usernames?.length
       ? post.tag_usernames.map((u) => ({ handle: u, name: u }))
       : undefined,
+    photoTags: post.photo_tags?.length ? post.photo_tags : undefined,
     reactions: [],
     comments: []
   };

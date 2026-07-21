@@ -870,6 +870,12 @@ export type Database = {
         Update: { story_id?: string; user_id?: string }
         Relationships: []
       }
+      photo_tags: {
+        Row: { id: string; post_id: string; photo_index: number; user_id: string; x: number; y: number; created_at: string }
+        Insert: { id?: string; post_id: string; photo_index?: number; user_id: string; x: number; y: number; created_at?: string }
+        Update: { id?: string; post_id?: string; photo_index?: number; user_id?: string; x?: number; y?: number; created_at?: string }
+        Relationships: []
+      }
       story_likes: {
         Row: { story_id: string; user_id: string; created_at: string }
         Insert: { story_id: string; user_id: string; created_at?: string }

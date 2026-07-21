@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import { Pressable as NativePressable, ScrollView, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -38,11 +39,28 @@ type MediaProps = {
 
 /** Front-and-back photo (`.fb`, §4.3.1) — full-bleed 3/3.6 with optional 31% inset selfie. */
 export function FbMedia({ post, blurRadius }: MediaProps) {
+  const router = useRouter();
   const hasInset = Boolean(post.inset || post.insetUri);
   const isLift = post.kind === "lift";
   return (
     <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
       <ScenePhoto uri={post.mediaUri} scene={post.main} blurRadius={blurRadius} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+      {/* Positional photo tags (M1) — pills at their normalized coords. */}
+      {post.photoTags?.length && blurRadius === undefined ? (
+        <View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 }}>
+          {post.photoTags.map((t, i) => (
+            <NativePressable
+              key={`${t.username}-${i}`}
+              onPress={() => router.push(`/user/${t.username}`)}
+              style={{ position: "absolute", left: `${t.x * 100}%`, top: `${t.y * 100}%` }}
+            >
+              <View style={{ marginTop: -14, flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 9, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.72)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" }}>
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12, color: colors.white }}>@{t.username}</Text>
+              </View>
+            </NativePressable>
+          ))}
+        </View>
+      ) : null}
       {isLift ? (
         <LinearGradient
           colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}

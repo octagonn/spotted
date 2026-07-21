@@ -30,6 +30,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import {
   ActivityIndicator,
   Alert,
+  InputAccessoryView,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -1581,7 +1582,7 @@ export default function CameraScreen() {
 
   if (mode === "lift" && liftStep === "liftmeta") {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.black }}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.black }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
           <PanelHeader title="Log your lift" onBack={() => { setLiftStep("review"); setFacing("back"); }} />
           <MediaPreview mode="lift" videoUri={videoUri} lift={liftName} weight={resolvedWeight} width="62%" />
@@ -1605,6 +1606,9 @@ export default function CameraScreen() {
               onChangeText={(value) => setLiftValue(value.replace(/[^0-9]/g, "").slice(0, 4))}
               keyboardType="number-pad"
               returnKeyType="done"
+              // #17: the number pad has no return key on iOS — add a Done bar.
+              inputAccessoryViewID={Platform.OS === "ios" ? "weightDone" : undefined}
+              onSubmitEditing={() => Keyboard.dismiss()}
               placeholder={liftUnit === "lb" ? "e.g. 225" : "e.g. 12"}
               placeholderTextColor={colors.fog}
               style={{
@@ -1624,7 +1628,18 @@ export default function CameraScreen() {
             <Button disabled={liftNum <= 0} onPress={() => setLiftStep("compose")}>Continue</Button>
           </View>
         </ScrollView>
-      </View>
+        {Platform.OS === "ios" ? (
+          <InputAccessoryView nativeID="weightDone">
+            <View style={{ flexDirection: "row", justifyContent: "flex-end", backgroundColor: colors.ink, borderTopWidth: 1, borderTopColor: colors.iron, paddingHorizontal: 16, paddingVertical: 8 }}>
+              <Pressable onPress={() => Keyboard.dismiss()} accessibilityLabel="Done entering weight">
+                <View style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.white }}>
+                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Done</Text>
+                </View>
+              </Pressable>
+            </View>
+          </InputAccessoryView>
+        ) : null}
+      </KeyboardAvoidingView>
     );
   }
 

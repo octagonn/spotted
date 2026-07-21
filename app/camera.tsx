@@ -701,6 +701,8 @@ export default function CameraScreen() {
   // it can keep up and stall the camera.
   const flipLockRef = useRef(false);
   const [recording, setRecording] = useState(false);
+  /** True between finger-up and the encoder handing back the file (#2). */
+  const [finalizing, setFinalizing] = useState(false);
   /** Hands-free lock (slid onto the lock icon) — recording continues after release. */
   const [recordLocked, setRecordLocked] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -1186,14 +1188,17 @@ export default function CameraScreen() {
       } finally {
         setRecording(false);
         setRecordLocked(false);
+        setFinalizing(false);
       }
     })();
   };
 
-  // Release-to-stop is instant (#2): recordAsync resolves the moment stopRecording
-  // fires — no mode restore in the way anymore.
+  // Release-to-stop responds the instant the finger lifts (#2): the screen
+  // flips to a "saving clip" state immediately; recordAsync resolves as soon
+  // as the encoder finishes the file.
   const stopRecording = () => {
     void impactHaptic(); // #12: haptic on record stop
+    setFinalizing(true);
     cameraRef.current?.stopRecording();
   };
 
@@ -1603,6 +1608,17 @@ export default function CameraScreen() {
             </>
           )}
         </View>
+
+        {/* Perceived-instant stop (#2): the moment the finger lifts, the screen
+            responds \u2014 the encoder finishes the file underneath. */}
+        {finalizing ? (
+          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <ActivityIndicator color={colors.white} />
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, letterSpacing: 1, color: colors.mist }}>
+              SAVING CLIP
+            </Text>
+          </View>
+        ) : null}
       </View>
     );
   }

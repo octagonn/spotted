@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useRouter, type Href } from "expo-router";
 import { Check, ChevronLeft, Globe, MapPin, Pencil, X } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -31,6 +31,7 @@ export default function CommunityWizard() {
   const create = useCreateCommunity();
 
   const [step, setStep] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
   const [type, setType] = useState<CommunityType | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -155,6 +156,7 @@ export default function CommunityWizard() {
           dismisses the keyboard. */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -240,6 +242,9 @@ export default function CommunityWizard() {
               multiline
               maxLength={DESC_MAX}
               textAlignVertical="top"
+              // The description sits low on the Customize step — scroll it above
+              // the keyboard on focus (14).
+              onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80)}
               style={[inputStyle, { minHeight: 92, paddingTop: 12 }]}
             />
             <Counter value={description.length} max={DESC_MAX} />

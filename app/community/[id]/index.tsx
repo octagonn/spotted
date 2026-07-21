@@ -1,9 +1,11 @@
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Check, Globe, Lock, MapPin, Send, Settings, X } from "lucide-react-native";
-import { useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
+import { Camera, Check, Globe, Lock, MapPin, Send, Settings, X } from "lucide-react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 
 import { MessageBubble, TimeSeparator } from "@/components/friends/ChatBubbles";
 import { Avatar } from "@/components/ui/Avatar";
@@ -117,6 +119,15 @@ export default function CommunityScreen() {
 
   const tabs: CommunityTab[] = isGym ? ["Posts", "Chat", "Rankings"] : ["Posts", "Chat"];
 
+  // Chat UX (15): when the keyboard opens on the chat tab, keep the latest
+  // message in view above the input bar.
+  const keyboardVisible = useKeyboardVisible();
+  useEffect(() => {
+    if (keyboardVisible && tab === "Chat") {
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+    }
+  }, [keyboardVisible, tab]);
+
   const send = () => {
     const text = draft.trim();
     if (!text || !isMember) return;
@@ -152,15 +163,26 @@ export default function CommunityScreen() {
         title={info.name}
         sub={`${info.type[0].toUpperCase()}${info.type.slice(1)} community`}
         right={
-          isAdmin ? (
-            <Pressable onPress={() => router.push(`/community/${info.id}/settings` as Href)} accessibilityLabel="Community settings" hitSlop={8}>
-              <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
-                <Settings size={17} color={colors.mist} strokeWidth={2} />
-              </View>
-            </Pressable>
+          isMember ? (
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {/* Post directly to this community (16) — existing camera flow with
+                  this community pre-selected; gym rules still apply there. */}
+              <Pressable onPress={() => router.push(`/camera?community=${info.id}` as Href)} accessibilityLabel="Post to this community" hitSlop={8}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
+                  <Camera size={17} color={colors.mist} strokeWidth={2} />
+                </View>
+              </Pressable>
+              {/* Settings — all members (18); admin-only sections gate inside. */}
+              <Pressable onPress={() => router.push(`/community/${info.id}/settings` as Href)} accessibilityLabel="Community settings" hitSlop={8}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
+                  <Settings size={17} color={colors.mist} strokeWidth={2} />
+                </View>
+              </Pressable>
+            </View>
           ) : undefined
         }
       />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
@@ -332,42 +354,26 @@ export default function CommunityScreen() {
                   <RelButton label="Join" kind="primary" onPress={() => join.mutate(info.id, { onSuccess: () => showToast(`Joined ${info.name}`) })} />
                 </View>
               ) : (
-                <View>
-                  <View style={{ minHeight: 280, gap: 4, paddingHorizontal: 16, paddingTop: 8 }}>
-                    {(messages.data ?? []).length === 0 ? (
-                      <Text style={{ paddingTop: 32, textAlign: "center", fontSize: 12, color: colors.fog }}>
-                        {messages.isLoading ? "Loading…" : "No messages yet. Say something."}
-                      </Text>
-                    ) : (
-                      <>
-                        <TimeSeparator label="Chat" />
-                        {(messages.data ?? []).map((message) => (
-                          <MessageBubble
-                            key={message.id}
-                            mine={message.sender_id === userId}
-                            senderFirst={message.sender_id === userId ? undefined : message.sender?.display_name?.split(" ")[0] ?? message.sender?.username}
-                            text={message.content}
-                          />
-                        ))}
-                      </>
-                    )}
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderColor: colors.iron, borderRadius: 999, backgroundColor: colors.graphite, paddingLeft: 16, paddingRight: 5, paddingVertical: 5 }}>
-                    <TextInput
-                      value={draft}
-                      onChangeText={setDraft}
-                      placeholder="Message the community…"
-                      placeholderTextColor={colors.fog}
-                      returnKeyType="send"
-                      onSubmitEditing={send}
-                      style={{ flex: 1, paddingVertical: 7, fontSize: 14, color: colors.bone }}
-                    />
-                    <Pressable onPress={send} disabled={!draft.trim() || sendMessage.isPending}>
-                      <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: draft.trim() ? colors.white : colors.iron }}>
-                        <Send size={16} color={draft.trim() ? colors.black : colors.fog} />
-                      </View>
-                    </Pressable>
-                  </View>
+                // Messages only — the input bar is pinned at the bottom of the
+                // screen (outside this ScrollView), like a standard chat UI (15).
+                <View style={{ minHeight: 280, gap: 4, paddingHorizontal: 16, paddingTop: 8 }}>
+                  {(messages.data ?? []).length === 0 ? (
+                    <Text style={{ paddingTop: 32, textAlign: "center", fontSize: 12, color: colors.fog }}>
+                      {messages.isLoading ? "Loading…" : "No messages yet. Say something."}
+                    </Text>
+                  ) : (
+                    <>
+                      <TimeSeparator label="Chat" />
+                      {(messages.data ?? []).map((message) => (
+                        <MessageBubble
+                          key={message.id}
+                          mine={message.sender_id === userId}
+                          senderFirst={message.sender_id === userId ? undefined : message.sender?.display_name?.split(" ")[0] ?? message.sender?.username}
+                          text={message.content}
+                        />
+                      ))}
+                    </>
+                  )}
                 </View>
               )
             ) : null}
@@ -380,6 +386,43 @@ export default function CommunityScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Pinned chat input — bottom of the screen, rises with the keyboard (15). */}
+      {tab === "Chat" && isMember && !locked ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            marginHorizontal: 16,
+            marginTop: 6,
+            marginBottom: keyboardVisible ? 8 : insets.bottom + 10,
+            borderWidth: 1,
+            borderColor: colors.iron,
+            borderRadius: 999,
+            backgroundColor: colors.graphite,
+            paddingLeft: 16,
+            paddingRight: 5,
+            paddingVertical: 5
+          }}
+        >
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="Message the community…"
+            placeholderTextColor={colors.fog}
+            returnKeyType="send"
+            onSubmitEditing={send}
+            style={{ flex: 1, paddingVertical: 7, fontSize: 14, color: colors.bone }}
+          />
+          <Pressable onPress={send} disabled={!draft.trim() || sendMessage.isPending}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: draft.trim() ? colors.white : colors.iron }}>
+              <Send size={16} color={draft.trim() ? colors.black : colors.fog} />
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
+      </KeyboardAvoidingView>
     </View>
   );
 }

@@ -121,7 +121,7 @@ export function useCommunity(communityId?: string) {
         supabase.from("communities").select(COMMUNITY_SELECT).eq("id", communityId as string).maybeSingle(),
         supabase
           .from("community_members")
-          .select("user_id")
+          .select("user_id, role")
           .eq("community_id", communityId as string)
           .eq("user_id", userId ?? "")
           .maybeSingle()
@@ -129,10 +129,13 @@ export function useCommunity(communityId?: string) {
       if (communityResult.error) throw communityResult.error;
       if (!communityResult.data) return null;
       const summary = normalizeCommunity(communityResult.data as unknown as CommunityRow);
+      // Admin = creator OR membership role 'admin' (multi-admin ready).
       return {
         ...summary,
         isMember: Boolean(membershipResult.data),
-        isAdmin: Boolean(userId) && summary.createdBy === userId
+        isAdmin:
+          Boolean(userId) &&
+          (summary.createdBy === userId || membershipResult.data?.role === "admin")
       };
     }
   });
@@ -465,6 +468,141 @@ export function useRespondJoinRequest(communityId?: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["community-requests", communityId] });
       invalidateCommunityCaches(queryClient, communityId);
+    }
+  });
+}
+
+/* ------------------------- invite codes (spec 19) ------------------------- */
+
+/** The community's invite code — members only (definer fn returns null otherwise). */
+export function useCommunityInviteCode(communityId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ["community-code", communityId],
+    enabled: isSupabaseConfigured && Boolean(communityId) && enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase.rpc("community_invite_code", {
+        cid: communityId as string
+      });
+      if (error) throw error;
+      return data ?? null;
+    }
+  });
+}
+
+/** Admin: regenerate the invite code (invalidates the old one). */
+export function useRegenerateInviteCode(communityId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<string> => {
+      const { data, error } = await supabase.rpc("regenerate_community_invite_code", {
+        cid: communityId as string
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["community-code", communityId] })
+  });
+}
+
+/** Join any community (incl. private — bypasses approval) with a valid code. */
+export function useJoinByCode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (code: string): Promise<string | null> => {
+      const { data, error } = await supabase.rpc("join_community_by_code", { code });
+      if (error) throw error;
+      return data ?? null;
+    },
+    onSuccess: (communityId) => {
+      if (communityId) invalidateCommunityCaches(queryClient, communityId);
+    }
+  });
+}
+
+/* --------------------- notification prefs (spec 18) ----------------------- */
+
+/** Whether the user muted this community's notifications. */
+export function useCommunityMuted(communityId?: string) {
+  const userId = useAuthStore((state) => state.userId);
+  return useQuery({
+    queryKey: ["community-muted", communityId, userId],
+    enabled: isSupabaseConfigured && Boolean(communityId) && Boolean(userId),
+    staleTime: 30_000,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from("community_notification_prefs")
+        .select("muted")
+        .eq("community_id", communityId as string)
+        .eq("user_id", userId as string)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.muted ?? false;
+    }
+  });
+}
+
+export function useSetCommunityMuted(communityId?: string) {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (muted: boolean) => {
+      if (!communityId || !userId) return;
+      const { error } = await supabase
+        .from("community_notification_prefs")
+        .upsert({ community_id: communityId, user_id: userId, muted, updated_at: new Date().toISOString() });
+      if (error) throw error;
+    },
+    onMutate: async (muted) => {
+      const key = ["community-muted", communityId, userId];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<boolean>(key);
+      queryClient.setQueryData(key, muted);
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) queryClient.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: () =>
+      void queryClient.invalidateQueries({ queryKey: ["community-muted", communityId, userId] })
+  });
+}
+
+/* ------------------------- discovery (spec 20) ---------------------------- */
+
+/**
+ * Public communities to join, excluding ones you're already in. Ranked: your
+ * home gym's communities first, then located ones, then by member count.
+ * Private communities never appear (invite code only).
+ */
+export function useDiscoverCommunities(search: string, homeGymId?: string | null) {
+  const userId = useAuthStore((state) => state.userId);
+  const q = search.trim();
+  return useQuery({
+    queryKey: ["discover-communities", userId, q, homeGymId ?? null],
+    enabled: isSupabaseConfigured && Boolean(userId),
+    staleTime: 30_000,
+    queryFn: async (): Promise<CommunitySummary[]> => {
+      const memberships = await supabase
+        .from("community_members")
+        .select("community_id")
+        .eq("user_id", userId as string);
+      if (memberships.error) throw memberships.error;
+      const mine = new Set((memberships.data ?? []).map((row) => row.community_id));
+      let query = supabase
+        .from("communities")
+        .select(COMMUNITY_SELECT)
+        .eq("privacy", "public")
+        .limit(60);
+      if (q) query = query.ilike("name", `%${q}%`);
+      const { data, error } = await query;
+      if (error) throw error;
+      const rows = ((data ?? []) as unknown as CommunityRow[])
+        .filter((row) => !mine.has(row.id))
+        .map(normalizeCommunity);
+      const rank = (c: CommunitySummary) =>
+        (homeGymId && c.gym_id === homeGymId ? 2 : 0) + (c.location ? 1 : 0);
+      return rows.sort((a, b) => rank(b) - rank(a) || b.memberCount - a.memberCount);
     }
   });
 }

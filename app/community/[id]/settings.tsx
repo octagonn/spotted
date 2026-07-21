@@ -1,21 +1,35 @@
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Globe, Lock, Pencil } from "lucide-react-native";
+import { Bell, Check, Copy, Flag, Globe, KeyRound, Lock, LogOut, Pencil, RefreshCw, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
-import { useCommunity, useUpdateCommunity } from "@/hooks/queries/useCommunities";
+import { ReportSheet } from "@/components/ReportSheet";
+import { useSheet } from "@/components/ui/Sheet";
+import {
+  useCommunity,
+  useCommunityInviteCode,
+  useCommunityJoinRequests,
+  useCommunityMuted,
+  useLeaveCommunity,
+  useRegenerateInviteCode,
+  useRespondJoinRequest,
+  useSetCommunityMuted,
+  useUpdateCommunity
+} from "@/hooks/queries/useCommunities";
 import { compressReactionSelfie } from "@/lib/posts";
 import { logger } from "@/lib/logger";
 import { publicAvatarUrl, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 const NAME_MAX = 126;
 const DESC_MAX = 1251;
@@ -24,9 +38,26 @@ export default function CommunitySettingsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const sheet = useSheet();
   const userId = useAuthStore((state) => state.userId);
   const community = useCommunity(id);
   const update = useUpdateCommunity(id);
+  const leave = useLeaveCommunity();
+
+  const isMember = community.data?.isMember ?? false;
+  const isAdmin = community.data?.isAdmin ?? false;
+  const isPrivate = community.data?.privacy === "private";
+  const isCreator = Boolean(userId) && community.data?.createdBy === userId;
+
+  // Member prefs + invite code (spec 18/19).
+  const muted = useCommunityMuted(isMember ? id : undefined);
+  const setMuted = useSetCommunityMuted(id);
+  const inviteCode = useCommunityInviteCode(id, isMember && isPrivate);
+  const regenerate = useRegenerateInviteCode(id);
+
+  // Admin: pending join requests (spec 17/18).
+  const requests = useCommunityJoinRequests(id, isAdmin && isPrivate);
+  const respond = useRespondJoinRequest(id);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -87,6 +118,33 @@ export default function CommunitySettingsScreen() {
     );
   };
 
+  const confirmLeave = () => {
+    if (isCreator) {
+      showToast("Creators can't leave their own community yet");
+      return;
+    }
+    Alert.alert("Leave community", `Leave ${community.data?.name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: () =>
+          leave.mutate(id as string, {
+            onSuccess: () => {
+              showToast("Left the community");
+              router.back();
+            },
+            onError: () => showToast("Couldn't leave — try again")
+          })
+      }
+    ]);
+  };
+
+  const openReport = () => {
+    if (!id) return;
+    sheet.open(<ReportSheet contentType="community" contentId={id} label="community" reportedUserId={community.data?.createdBy ?? undefined} />);
+  };
+
   if (community.isLoading || !hydrated) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black, alignItems: "center", justifyContent: "center" }}>
@@ -94,12 +152,12 @@ export default function CommunitySettingsScreen() {
       </View>
     );
   }
-  if (!community.data?.isAdmin) {
+  if (!isMember) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
         <PanelHeader title="Settings" />
         <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
-          Only the community admin can edit these.
+          Join the community to manage its settings.
         </Text>
       </View>
     );
@@ -109,50 +167,227 @@ export default function CommunitySettingsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title="Community settings" />
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: insets.bottom + 28 }}>
-        <View style={{ alignItems: "center", paddingTop: 8 }}>
-          <Pressable onPress={() => void pickPhoto()} accessibilityLabel="Community photo">
-            <View style={{ width: 100, height: 100, borderRadius: 20, overflow: "hidden", backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
-              {photoPreview ? (
-                <Image source={{ uri: photoPreview }} contentFit="cover" style={{ width: 100, height: 100 }} />
-              ) : (
-                <Pencil size={22} color={colors.fog} strokeWidth={2} />
-              )}
-              {uploading ? (
-                <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}>
-                  <ActivityIndicator color={colors.white} />
+        {/* ---- Member settings (everyone) ---- */}
+        <SettingRow
+          icon={<Bell size={17} color={colors.silver} strokeWidth={2} />}
+          label="Notifications"
+          sub={muted.data ? "Muted — no posts or chat alerts" : "On for posts and chat"}
+          right={<Toggle value={!(muted.data ?? false)} onToggle={() => setMuted.mutate(!(muted.data ?? false))} />}
+        />
+
+        {isPrivate ? (
+          <SettingRow
+            icon={<KeyRound size={17} color={colors.silver} strokeWidth={2} />}
+            label="Invite code"
+            sub="Anyone with this code can join directly"
+            right={
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text selectable style={{ fontFamily: "GeistMono_500Medium", fontSize: 14, letterSpacing: 2, color: tokens.accent.gold }}>
+                  {inviteCode.data ?? "———"}
+                </Text>
+                {isAdmin ? (
+                  <Pressable
+                    accessibilityLabel="Regenerate invite code"
+                    hitSlop={8}
+                    onPress={() =>
+                      Alert.alert("Regenerate code", "The old code stops working immediately.", [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Regenerate",
+                          onPress: () =>
+                            regenerate.mutate(undefined, {
+                              onSuccess: () => showToast("New code generated"),
+                              onError: () => showToast("Couldn't regenerate — try again")
+                            })
+                        }
+                      ])
+                    }
+                  >
+                    <RefreshCw size={15} color={colors.fog} strokeWidth={2} />
+                  </Pressable>
+                ) : (
+                  <Copy size={14} color={colors.fog} strokeWidth={2} />
+                )}
+              </View>
+            }
+          />
+        ) : null}
+
+        <SettingRow
+          icon={<Flag size={17} color={colors.silver} strokeWidth={2} />}
+          label="Report community"
+          sub="Flag this community for review"
+          onPress={openReport}
+        />
+        <SettingRow
+          icon={<LogOut size={17} color="#EF4444" strokeWidth={2} />}
+          label="Leave community"
+          labelColor="#EF4444"
+          sub={isCreator ? "You created this community" : undefined}
+          onPress={confirmLeave}
+        />
+
+        {/* ---- Admin: pending join requests (private) ---- */}
+        {isAdmin && isPrivate ? (
+          <>
+            <SectionTitle>Join requests</SectionTitle>
+            {(requests.data ?? []).length === 0 ? (
+              <Text style={{ paddingBottom: 8, fontSize: 12.5, color: colors.fog }}>
+                {requests.isLoading ? "Loading…" : "No pending requests."}
+              </Text>
+            ) : (
+              (requests.data ?? []).map((request) => (
+                <View key={request.user_id} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9 }}>
+                  <Avatar name={request.profile?.display_name ?? "?"} uri={request.profile?.avatar_url} size={40} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>
+                      {request.profile?.display_name ?? "Someone"}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.fog }}>@{request.profile?.username ?? "unknown"}</Text>
+                  </View>
+                  <Pressable
+                    accessibilityLabel="Approve request"
+                    onPress={() => respond.mutate({ userId: request.user_id, accept: true })}
+                    style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Check size={17} color={colors.black} strokeWidth={2.6} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="Decline request"
+                    onPress={() => respond.mutate({ userId: request.user_id, accept: false })}
+                    style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}
+                  >
+                    <X size={16} color={colors.fog} strokeWidth={2.2} />
+                  </Pressable>
                 </View>
-              ) : null}
+              ))
+            )}
+          </>
+        ) : null}
+
+        {/* ---- Admin: edit community ---- */}
+        {isAdmin ? (
+          <>
+            <SectionTitle>Edit community</SectionTitle>
+            <View style={{ alignItems: "center", paddingTop: 4 }}>
+              <Pressable onPress={() => void pickPhoto()} accessibilityLabel="Community photo">
+                <View style={{ width: 100, height: 100, borderRadius: 20, overflow: "hidden", backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
+                  {photoPreview ? (
+                    <Image source={{ uri: photoPreview }} contentFit="cover" style={{ width: 100, height: 100 }} />
+                  ) : (
+                    <Pencil size={22} color={colors.fog} strokeWidth={2} />
+                  )}
+                  {uploading ? (
+                    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}>
+                      <ActivityIndicator color={colors.white} />
+                    </View>
+                  ) : null}
+                </View>
+                <View style={{ position: "absolute", right: -2, bottom: -2, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.white, borderWidth: 3, borderColor: colors.black, alignItems: "center", justifyContent: "center" }}>
+                  <Pencil size={14} color={colors.black} strokeWidth={2.2} />
+                </View>
+              </Pressable>
             </View>
-            <View style={{ position: "absolute", right: -2, bottom: -2, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.white, borderWidth: 3, borderColor: colors.black, alignItems: "center", justifyContent: "center" }}>
-              <Pencil size={14} color={colors.black} strokeWidth={2.2} />
+
+            <Label>Name</Label>
+            <TextInput value={name} onChangeText={(v) => setName(v.slice(0, NAME_MAX))} maxLength={NAME_MAX} placeholder="Community name" placeholderTextColor={colors.fog} style={inputStyle} />
+            <Counter value={name.length} max={NAME_MAX} />
+
+            <Label>Description</Label>
+            <TextInput value={description} onChangeText={(v) => setDescription(v.slice(0, DESC_MAX))} maxLength={DESC_MAX} multiline textAlignVertical="top" placeholder="What's this community about?" placeholderTextColor={colors.fog} style={[inputStyle, { minHeight: 92, paddingTop: 12 }]} />
+            <Counter value={description.length} max={DESC_MAX} />
+
+            <Label>Privacy</Label>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <PrivacyPill active={privacy === "public"} onPress={() => setPrivacy("public")} icon={<Globe size={14} color={privacy === "public" ? colors.black : colors.silver} strokeWidth={2} />} label="Public" />
+              <PrivacyPill active={privacy === "private"} onPress={() => setPrivacy("private")} icon={<Lock size={14} color={privacy === "private" ? colors.black : colors.silver} strokeWidth={2} />} label="Private" />
             </View>
-          </Pressable>
-        </View>
 
-        <Label>Name</Label>
-        <TextInput value={name} onChangeText={(v) => setName(v.slice(0, NAME_MAX))} maxLength={NAME_MAX} placeholder="Community name" placeholderTextColor={colors.fog} style={inputStyle} />
-        <Counter value={name.length} max={NAME_MAX} />
+            <Label>Location</Label>
+            <TextInput value={location} onChangeText={setLocation} placeholder="City, State — leave blank for global" placeholderTextColor={colors.fog} style={inputStyle} />
 
-        <Label>Description</Label>
-        <TextInput value={description} onChangeText={(v) => setDescription(v.slice(0, DESC_MAX))} maxLength={DESC_MAX} multiline textAlignVertical="top" placeholder="What's this community about?" placeholderTextColor={colors.fog} style={[inputStyle, { minHeight: 92, paddingTop: 12 }]} />
-        <Counter value={description.length} max={DESC_MAX} />
-
-        <Label>Privacy</Label>
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <PrivacyPill active={privacy === "public"} onPress={() => setPrivacy("public")} icon={<Globe size={14} color={privacy === "public" ? colors.black : colors.silver} strokeWidth={2} />} label="Public" />
-          <PrivacyPill active={privacy === "private"} onPress={() => setPrivacy("private")} icon={<Lock size={14} color={privacy === "private" ? colors.black : colors.silver} strokeWidth={2} />} label="Private" />
-        </View>
-
-        <Label>Location</Label>
-        <TextInput value={location} onChangeText={setLocation} placeholder="City, State — leave blank for global" placeholderTextColor={colors.fog} style={inputStyle} />
-
-        <View style={{ paddingTop: 24 }}>
-          <Button loading={update.isPending} disabled={update.isPending} onPress={save}>
-            Save changes
-          </Button>
-        </View>
+            <View style={{ paddingTop: 24 }}>
+              <Button loading={update.isPending} disabled={update.isPending} onPress={save}>
+                Save changes
+              </Button>
+            </View>
+          </>
+        ) : null}
       </ScrollView>
     </View>
+  );
+}
+
+function SettingRow({
+  icon,
+  label,
+  labelColor,
+  sub,
+  right,
+  onPress
+}: {
+  icon: React.ReactNode;
+  label: string;
+  labelColor?: string;
+  sub?: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+}) {
+  const body = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.graphite }}>
+      <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
+        {icon}
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: labelColor ?? colors.white }}>{label}</Text>
+        {sub ? <Text style={{ marginTop: 1, fontSize: 12, color: colors.fog }}>{sub}</Text> : null}
+      </View>
+      {right}
+    </View>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable onPress={onPress} accessibilityLabel={label}>
+      {body}
+    </Pressable>
+  );
+}
+
+function Toggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      onPress={onToggle}
+      style={{
+        width: 48,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingHorizontal: 3,
+        justifyContent: "center",
+        borderColor: value ? colors.white : colors.slate,
+        backgroundColor: value ? colors.white : colors.graphite
+      }}
+    >
+      <View
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 10,
+          alignSelf: value ? "flex-end" : "flex-start",
+          backgroundColor: value ? colors.black : colors.mist
+        }}
+      />
+    </Pressable>
+  );
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <Text style={{ paddingTop: 26, paddingBottom: 10, fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.12, textTransform: "uppercase", color: colors.fog }}>
+      {children}
+    </Text>
   );
 }
 

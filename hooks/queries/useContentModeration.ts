@@ -41,7 +41,7 @@ export function useDeleteStory() {
   });
 }
 
-export type ReportContentType = "post" | "story" | "user" | "comment";
+export type ReportContentType = "post" | "story" | "user" | "comment" | "community";
 
 export const REPORT_REASONS = [
   "Spam or scam",

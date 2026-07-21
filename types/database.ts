@@ -103,6 +103,7 @@ export type Database = {
           description: string | null
           privacy: string
           location: string | null
+          invite_code: string | null
         }
         Insert: {
           id?: string
@@ -115,6 +116,7 @@ export type Database = {
           description?: string | null
           privacy?: string
           location?: string | null
+          invite_code?: string | null
         }
         Update: {
           id?: string
@@ -127,6 +129,7 @@ export type Database = {
           description?: string | null
           privacy?: string
           location?: string | null
+          invite_code?: string | null
         }
         Relationships: []
       }
@@ -206,21 +209,30 @@ export type Database = {
           },
         ]
       }
+      community_notification_prefs: {
+        Row: { community_id: string; user_id: string; muted: boolean; updated_at: string }
+        Insert: { community_id: string; user_id: string; muted?: boolean; updated_at?: string }
+        Update: { community_id?: string; user_id?: string; muted?: boolean; updated_at?: string }
+        Relationships: []
+      }
       community_members: {
         Row: {
           community_id: string
           user_id: string
           joined_at: string
+          role: string
         }
         Insert: {
           community_id: string
           user_id: string
           joined_at?: string
+          role?: string
         }
         Update: {
           community_id?: string
           user_id?: string
           joined_at?: string
+          role?: string
         }
         Relationships: [
           {
@@ -1335,6 +1347,9 @@ export type Database = {
     }
     Functions: {
       are_friends: { Args: { a: string; b: string }; Returns: boolean }
+      community_invite_code: { Args: { cid: string }; Returns: string | null }
+      regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
+      join_community_by_code: { Args: { code: string }; Returns: string | null }
       can_read_post: {
         Args: { p_post_id: string; p_user_id: string }
         Returns: boolean

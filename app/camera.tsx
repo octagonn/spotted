@@ -659,7 +659,7 @@ function CommunitySheet({
 
 export default function CameraScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; community?: string }>();
   const insets = useSafeAreaInsets();
   const sheet = useSheet();
   const queryClient = useQueryClient();
@@ -712,7 +712,11 @@ export default function CameraScreen() {
   const [gym, setGym] = useState<SelectedGym | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [track, setTrack] = useState<(MusicTrack & { clipStart?: number }) | null>(null);
-  const [communities, setCommunities] = useState<string[]>([]);
+  // Opened from a community's camera button → that community starts selected
+  // as a post destination (16). All posting rules (geofence etc.) still apply.
+  const [communities, setCommunities] = useState<string[]>(() =>
+    typeof params.community === "string" && params.community ? [params.community] : []
+  );
   const [caption, setCaption] = useState("");
   const [coords, setCoords] = useState<GymSearchCoords | null>(null);
   const [locationSettled, setLocationSettled] = useState(false);

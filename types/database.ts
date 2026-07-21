@@ -807,6 +807,12 @@ export type Database = {
         Update: { story_id?: string; user_id?: string }
         Relationships: []
       }
+      story_likes: {
+        Row: { story_id: string; user_id: string; created_at: string }
+        Insert: { story_id: string; user_id: string; created_at?: string }
+        Update: { story_id?: string; user_id?: string; created_at?: string }
+        Relationships: []
+      }
       workouts: {
         Row: {
           id: string

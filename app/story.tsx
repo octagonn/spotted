@@ -2,7 +2,7 @@ import { useAudioPlayer } from "expo-audio";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Eye, Flag, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
+import { Eye, Flag, Heart, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -30,10 +30,12 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useMarkStoryViewed, useStories, type StoryGroup } from "@/hooks/queries/useStories";
 import { REPORT_REASONS, useDeleteStory, useReportContent } from "@/hooks/queries/useContentModeration";
 import { useStoryViewers } from "@/hooks/queries/useStoryViewers";
+import { useStoryLiked, useToggleStoryLike } from "@/hooks/queries/useStoryLikes";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 /** How long each story auto-plays, ms. */
 const STORY_MS = 5000;
@@ -126,6 +128,8 @@ export default function StoryViewer() {
   const group: StoryGroup | undefined = queue?.[gi];
   const story = group?.stories[si];
   const viewers = useStoryViewers(story?.id, Boolean(group?.isMe) && viewersOpen);
+  const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
+  const toggleLike = useToggleStoryLike();
 
   // Any open overlay pauses the story; closing them all resumes it.
   const closeOverlays = () => {
@@ -552,7 +556,23 @@ export default function StoryViewer() {
               >
                 <Send size={18} color={colors.black} strokeWidth={2.2} />
               </Pressable>
-            ) : null}
+            ) : (
+              <Pressable
+                onPress={() => {
+                  if (story?.id) toggleLike.mutate({ storyId: story.id, like: !liked.data });
+                }}
+                accessibilityLabel={liked.data ? "Unlike story" : "Like story"}
+                hitSlop={8}
+                style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" }}
+              >
+                <Heart
+                  size={26}
+                  color={liked.data ? tokens.accent.gold : colors.white}
+                  fill={liked.data ? tokens.accent.gold : "transparent"}
+                  strokeWidth={2}
+                />
+              </Pressable>
+            )}
           </View>
         )}
 

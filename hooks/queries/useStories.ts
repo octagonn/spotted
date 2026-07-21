@@ -180,7 +180,39 @@ export function usePostStory() {
         }
       }
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["stories"] })
+    // Optimistic: drop a temp story into your own group with the LOCAL photo uri
+    // so the "Your story" ring + profile reflect it instantly (no wait for the
+    // upload). Reconciled with the server row on settle.
+    onMutate: async ({ photoUri, music }) => {
+      if (!userId) return { prev: undefined };
+      await queryClient.cancelQueries({ queryKey: ["stories", userId] });
+      const prev = queryClient.getQueryData<StoryGroup[]>(["stories", userId]);
+      const tempStory: StoryItem = {
+        id: `temp-${new Date().getTime()}`,
+        mediaUrl: photoUri,
+        mediaPath: null,
+        createdAt: new Date().toISOString(),
+        seen: true,
+        music: music ?? null,
+        tags: []
+      };
+      queryClient.setQueryData<StoryGroup[]>(["stories", userId], (old) => {
+        const groups = old ? old.map((g) => ({ ...g, stories: [...g.stories] })) : [];
+        const meIdx = groups.findIndex((g) => g.isMe);
+        if (meIdx >= 0) {
+          groups[meIdx].stories.push(tempStory);
+        } else {
+          groups.unshift({ userId, name: "You", username: "", avatarUrl: null, isMe: true, hasUnseen: false, stories: [tempStory] });
+        }
+        // Own group sorts first.
+        return groups.sort((a, b) => (a.isMe === b.isMe ? 0 : a.isMe ? -1 : 1));
+      });
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev && userId) queryClient.setQueryData(["stories", userId], ctx.prev);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["stories"] })
   });
 }
 

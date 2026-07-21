@@ -8,6 +8,8 @@ export type ReactionSelfie = {
   userId: string;
   name: string;
   username: string;
+  /** The reactor's profile picture — shown for non-selfie (emoji/text) reactions. */
+  avatarUrl: string | null;
   mediaUrl: string | null;
   /** The emoji they reacted with (null for selfie-only reactions). */
   emoji: string | null;
@@ -28,7 +30,7 @@ export function usePostReactionSelfies(postId: string) {
     queryFn: async (): Promise<ReactionSelfie[]> => {
       const { data, error } = await supabase
         .from("post_reactions")
-        .select("user_id, media_url, reaction, created_at, profiles:user_id(display_name, username)")
+        .select("user_id, media_url, reaction, created_at, profiles:user_id(display_name, username, avatar_url)")
         .eq("post_id", postId)
         .order("created_at", { ascending: false })
         .limit(30);
@@ -39,7 +41,7 @@ export function usePostReactionSelfies(postId: string) {
         user_id: string;
         media_url: string | null;
         reaction: string | null;
-        profiles: { display_name: string; username: string } | null;
+        profiles: { display_name: string; username: string; avatar_url: string | null } | null;
       }[];
       return Promise.all(
         rows.map(async (row) => {
@@ -58,6 +60,7 @@ export function usePostReactionSelfies(postId: string) {
             userId: row.user_id,
             name: row.profiles?.display_name ?? "Someone",
             username: row.profiles?.username ?? "someone",
+            avatarUrl: row.profiles?.avatar_url ?? null,
             mediaUrl,
             emoji: row.reaction ?? null,
             mine: row.user_id === userId
@@ -103,6 +106,41 @@ export function useAddReactionSelfie() {
       }
     },
     onSuccess: (_data, { postId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["post-reactions", postId] });
+    }
+  });
+}
+
+/**
+ * Remove YOUR OWN reaction from a post. The delete is scoped to the current
+ * user (RLS `post_reactions_delete_self` enforces it server-side too), and the
+ * UI updates optimistically — restored + a toast on failure.
+ */
+export function useRemoveReaction() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async ({ postId }: { postId: string }) => {
+      if (!isSupabaseConfigured || !userId) return;
+      const { error } = await supabase
+        .from("post_reactions")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    onMutate: async ({ postId }) => {
+      await queryClient.cancelQueries({ queryKey: ["post-reactions", postId] });
+      const prev = queryClient.getQueryData<ReactionSelfie[]>(["post-reactions", postId]);
+      queryClient.setQueryData<ReactionSelfie[]>(["post-reactions", postId], (old) =>
+        (old ?? []).filter((r) => !r.mine)
+      );
+      return { prev };
+    },
+    onError: (_err, { postId }, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["post-reactions", postId], ctx.prev);
+    },
+    onSettled: (_data, _err, { postId }) => {
       void queryClient.invalidateQueries({ queryKey: ["post-reactions", postId] });
     }
   });

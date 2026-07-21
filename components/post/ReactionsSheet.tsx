@@ -1,18 +1,36 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Camera } from "lucide-react-native";
-import { Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { ListRow } from "@/components/ui/ListRow";
 import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
-import { type ReactionSelfie } from "@/hooks/queries/usePostReactionSelfies";
+import { useRemoveReaction, type ReactionSelfie } from "@/hooks/queries/usePostReactionSelfies";
+import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 
 /** Bottom-sheet list of everyone who live-reacted to a post — tap to open a profile. */
-export function ReactionsSheet({ reactors }: { reactors: ReactionSelfie[] }) {
+export function ReactionsSheet({ reactors, postId }: { reactors: ReactionSelfie[]; postId?: string }) {
   const router = useRouter();
   const sheet = useSheet();
+  const removeReaction = useRemoveReaction();
+
+  const confirmRemove = () => {
+    if (!postId) return;
+    Alert.alert("Remove reaction", "Remove your reaction from this post?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () =>
+          removeReaction.mutate(
+            { postId },
+            { onError: () => showToast("Couldn't remove your reaction — try again") }
+          )
+      }
+    ]);
+  };
   return (
     <View>
       <SheetTitle>Reactions</SheetTitle>
@@ -29,11 +47,12 @@ export function ReactionsSheet({ reactors }: { reactors: ReactionSelfie[] }) {
               r.mediaUrl ? (
                 <Image source={{ uri: r.mediaUrl }} style={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" />
               ) : (
-                <Avatar name={r.name} size={46} />
+                <Avatar name={r.name} uri={r.avatarUrl} size={46} />
               )
             }
             name={r.mine ? `${r.name} (you)` : r.name}
-            sub={`@${r.username}`}
+            sub={r.mine ? "Hold to remove" : `@${r.username}`}
+            onLongPress={r.mine ? confirmRemove : undefined}
             right={
               // Always show WHAT they reacted with: their emoji, or a selfie
               // thumbnail (with a camera glyph) when it was a photo reaction.

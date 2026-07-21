@@ -932,6 +932,7 @@ export type Database = {
           lift_exercise: string | null
           lift_value: number | null
           lift_unit: string | null
+          thumbnail_url: string | null
           location_kind: string
           media_type: string
           media_url: string
@@ -963,6 +964,7 @@ export type Database = {
           lift_exercise?: string | null
           lift_value?: number | null
           lift_unit?: string | null
+          thumbnail_url?: string | null
           location_kind?: string
           media_type: string
           media_url: string
@@ -994,6 +996,7 @@ export type Database = {
           lift_exercise?: string | null
           lift_value?: number | null
           lift_unit?: string | null
+          thumbnail_url?: string | null
           location_kind?: string
           media_type?: string
           media_url?: string

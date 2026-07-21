@@ -1,4 +1,5 @@
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+import * as VideoThumbnails from "expo-video-thumbnails";
 
 import { logger } from "@/lib/logger";
 import { supabase } from "@/lib/supabase";
@@ -58,6 +59,33 @@ export async function compressReactionSelfie(uri: string): Promise<string> {
   }
 }
 
+/**
+ * Generate a poster frame (~1s in) for a video and upload it to the posts
+ * bucket next to the clip. Returns the storage path, or null if generation
+ * fails — the feed/grid then falls back to a play-icon placeholder cell.
+ */
+async function generateAndUploadThumbnail(videoUri: string, userId: string, stamp: number): Promise<string | null> {
+  try {
+    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 1000, quality: 0.7 });
+    const compressed = await compressPhoto(uri);
+    const response = await fetch(compressed);
+    const body = await response.arrayBuffer();
+    if (body.byteLength === 0) return null;
+    const path = `${userId}/thumb-${stamp}.jpg`;
+    const upload = await supabase.storage.from("posts").upload(path, body, {
+      contentType: "image/jpeg",
+      upsert: false
+    });
+    if (upload.error) return null;
+    return path;
+  } catch (error) {
+    logger.warn("video_thumbnail_failed", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return null;
+  }
+}
+
 export type PublishLiftVideoInput = {
   userId: string;
   /** Local video file URI from expo-camera recordAsync. */
@@ -86,8 +114,9 @@ export async function publishLiftVideo(input: PublishLiftVideoInput): Promise<st
   if (!body || body.byteLength === 0) {
     throw new Error("The recorded video could not be read.");
   }
+  const stamp = Date.now();
   const ext = input.videoUri.toLowerCase().endsWith(".mp4") ? "mp4" : "mov";
-  const path = `${input.userId}/lift-${Date.now()}.${ext}`;
+  const path = `${input.userId}/lift-${stamp}.${ext}`;
   const upload = await supabase.storage.from("posts").upload(path, body, {
     contentType: ext === "mp4" ? "video/mp4" : "video/quicktime",
     upsert: false
@@ -95,12 +124,15 @@ export async function publishLiftVideo(input: PublishLiftVideoInput): Promise<st
   if (upload.error) {
     throw upload.error;
   }
+  // Poster frame — best-effort; a failure just means a placeholder cell.
+  const thumbnailPath = await generateAndUploadThumbnail(input.videoUri, input.userId, stamp);
   const insert = await supabase
     .from("posts")
     .insert({
       user_id: input.userId,
       media_url: path,
       media_type: "video",
+      thumbnail_url: thumbnailPath,
       caption: input.caption.trim() ? input.caption.trim().slice(0, 200) : null,
       gym_id: input.gymId,
       location_kind: input.locationKind,

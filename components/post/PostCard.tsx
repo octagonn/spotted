@@ -289,7 +289,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         {reactorCount > 0 ? (
           <Pressable
             onPress={() => {
-              if (serverReactions.length > 0) sheet.open(<ReactionsSheet reactors={serverReactions} />);
+              if (serverReactions.length > 0) sheet.open(<ReactionsSheet reactors={serverReactions} postId={post.id} />);
             }}
             accessibilityLabel="See who reacted"
             haptic={false}

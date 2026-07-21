@@ -20,6 +20,7 @@ function post(overrides: Partial<FeedPost> & { id: string }): FeedPost {
     lift_exercise: null,
     lift_value: null,
     lift_unit: null,
+    thumbnail_url: null,
     location_kind: "other",
     media_urls: null,
     video_trim_start: null,

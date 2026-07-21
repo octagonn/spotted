@@ -19,18 +19,20 @@ type ListRowProps = {
   /** Custom trailing slot (replaces time/unread column), e.g. a RelButton. */
   right?: ReactNode;
   onPress?: () => void;
+  onLongPress?: () => void;
 };
 
 /**
  * List row per spec §2.5: gap 12, padding 11×18; pressed bg graphite;
  * name 600/14.5 bone, sub 12.5 fog (ellipsis), time mono 10.5 ash, 8px unread dot.
  */
-export function ListRow({ left, name, sub, subStrong, time, unread, right, onPress }: ListRowProps) {
+export function ListRow({ left, name, sub, subStrong, time, unread, right, onPress, onLongPress }: ListRowProps) {
   const [pressed, setPressed] = useState(false);
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={onLongPress}
+      disabled={!onPress && !onLongPress}
       pressScale={1}
       pressOpacity={1}
       onPressIn={() => setPressed(true)}

@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { useRouter, type Href } from "expo-router";
-import { Camera, ChevronDown, ChevronRight, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Plus, Tag, Trophy, Users } from "lucide-react-native";
+import { Camera, ChevronDown, ChevronRight, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Play, Plus, Tag, Trophy, Users } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Linking, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -303,11 +303,7 @@ export default function ProfileScreen() {
                   style={{ width: "33%", aspectRatio: 4 / 5 }}
                   onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
                 >
-                  <View style={{ flex: 1, backgroundColor: colors.graphite }}>
-                    {post.media_url ? (
-                      <Image source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
-                    ) : null}
-                  </View>
+                  <GridCell post={post} />
                 </Pressable>
               ))}
             </View>
@@ -327,11 +323,7 @@ export default function ProfileScreen() {
                 style={{ width: "33%", aspectRatio: 4 / 5 }}
                 onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
               >
-                <View style={{ flex: 1, backgroundColor: colors.graphite }}>
-                  {post.media_url ? (
-                    <Image source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
-                  ) : null}
-                </View>
+                <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />
               </Pressable>
             ))}
           </View>
@@ -427,6 +419,26 @@ function AchievementButton({
         <ChevronRight size={18} color={tokens.text.tertiary} strokeWidth={2} style={{ position: "absolute", right: 16 }} />
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * One grid cell. Photos show their image; videos show the poster thumbnail (or
+ * a bg.subtle placeholder when none was generated) with a play badge overlay,
+ * so video posts never render as blank black cells.
+ */
+function GridCell({ post }: { post: { media_url: string | null; media_type?: string; thumbnail_url?: string | null } }) {
+  const isVideo = post.media_type === "video";
+  const src = isVideo ? post.thumbnail_url ?? null : post.media_url;
+  return (
+    <View style={{ flex: 1, backgroundColor: isVideo && !src ? tokens.bg.subtle : colors.graphite }}>
+      {src ? <Image source={{ uri: src }} contentFit="cover" style={{ flex: 1 }} /> : null}
+      {isVideo ? (
+        <View style={{ position: "absolute", right: 6, bottom: 6 }}>
+          <Play size={16} color="rgba(255,255,255,0.9)" fill="rgba(255,255,255,0.9)" strokeWidth={1} />
+        </View>
+      ) : null}
+    </View>
   );
 }
 

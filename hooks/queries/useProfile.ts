@@ -175,8 +175,8 @@ export function useUserStreak(userId?: string | null) {
 
 export type UserPost = Pick<
   Post,
-  "id" | "media_url" | "caption" | "created_at" | "saved" | "permanent" | "is_daily_drop"
->;
+  "id" | "media_url" | "caption" | "created_at" | "saved" | "permanent" | "is_daily_drop" | "media_type"
+> & { thumbnail_url: string | null };
 
 export function useUserPosts(userId?: string | null) {
   return useQuery({
@@ -196,14 +196,16 @@ export function useUserPosts(userId?: string | null) {
             created_at: post.created_at,
             saved: post.saved,
             permanent: post.permanent,
-            is_daily_drop: post.is_daily_drop
+            is_daily_drop: post.is_daily_drop,
+            media_type: post.media_type,
+            thumbnail_url: null
           }));
       }
       // No expiry filter: your own archive keeps history (RLS already hides
       // other users' expired posts).
       const { data, error } = await supabase
         .from("posts")
-        .select("id, media_url, caption, created_at, saved, permanent, is_daily_drop")
+        .select("id, media_url, caption, created_at, saved, permanent, is_daily_drop, media_type, thumbnail_url")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(120);
@@ -221,7 +223,15 @@ export function useUserPosts(userId?: string | null) {
               mediaUrl = row.media_url;
             }
           }
-          return { ...row, media_url: mediaUrl };
+          let thumbnailUrl = row.thumbnail_url;
+          if (thumbnailUrl && !thumbnailUrl.startsWith("http")) {
+            try {
+              thumbnailUrl = await signedPostUrl(thumbnailUrl);
+            } catch {
+              thumbnailUrl = null;
+            }
+          }
+          return { ...row, media_url: mediaUrl, thumbnail_url: thumbnailUrl };
         })
       );
     }

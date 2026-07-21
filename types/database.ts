@@ -1140,6 +1140,9 @@ export type Database = {
       profiles: {
         Row: {
           arrival_notifs_enabled: boolean
+          last_seen_at: string | null
+          show_activity: boolean
+          dm_preview_enabled: boolean
           avatar_blurred_url: string | null
           avatar_url: string | null
           bio: string | null
@@ -1163,6 +1166,9 @@ export type Database = {
         }
         Insert: {
           arrival_notifs_enabled?: boolean
+          last_seen_at?: string | null
+          show_activity?: boolean
+          dm_preview_enabled?: boolean
           avatar_blurred_url?: string | null
           avatar_url?: string | null
           bio?: string | null
@@ -1186,6 +1192,9 @@ export type Database = {
         }
         Update: {
           arrival_notifs_enabled?: boolean
+          last_seen_at?: string | null
+          show_activity?: boolean
+          dm_preview_enabled?: boolean
           avatar_blurred_url?: string | null
           avatar_url?: string | null
           bio?: string | null

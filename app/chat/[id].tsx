@@ -9,11 +9,13 @@ import {
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, ImagePlus, Mic, Pause, Play, Send, Square } from "lucide-react-native";
+import { ChevronLeft, CornerUpLeft, ImagePlus, Mic, MoreVertical, Pause, Play, Send, Square, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable as RNPressable,
   ScrollView,
   Text,
   TextInput,
@@ -23,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 
 import { MessageBubble, TimeSeparator } from "@/components/friends/ChatBubbles";
+import { PresenceLine } from "@/components/friends/PresenceLine";
 import { useMockChatStore } from "@/components/friends/chatStore";
 import { isMockThreadId, MOCK_CONVERSATIONS } from "@/components/friends/mockConversations";
 import { useInboxThreadActions } from "@/components/friends/useInboxThreads";
@@ -35,12 +38,28 @@ import {
   useMessages,
   useMessagesRealtime,
   useSendMediaMessage,
-  useSendMessage
+  useSendMessage,
+  type ChatMessage
 } from "@/hooks/queries/useMessages";
+import {
+  useBlockedUsers,
+  useConversationMuted,
+  useHideMessage,
+  useMessageHides,
+  useMessageReactions,
+  useReactToMessage,
+  useSetBlocked,
+  useSetConversationMuted,
+  useUnsendMessage
+} from "@/hooks/queries/useMessagesExtras";
+import { useActivityStatus, useChatPresence, useHeartbeat } from "@/hooks/queries/useChatPresence";
 import { useProfileById } from "@/hooks/queries/useProfile";
+import { ReportSheet } from "@/components/ReportSheet";
+import { useSheet } from "@/components/ui/Sheet";
 import { signedMessageUrl, signedPostUrl } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
+import { tokens } from "@/theme/tokens";
 import { colors } from "@/theme/colors";
 
 /** Voice-note bubble: play/pause + progress + elapsed time. */
@@ -175,12 +194,29 @@ export default function ChatScreen() {
   const sendMock = useMockChatStore((state) => state.sendLocal);
   const inboxActions = useInboxThreadActions();
 
+  const sheet = useSheet();
   const profile = useProfileById(realProfileId);
   const conversation = useConversation(realProfileId);
   const conversationId = conversation.data ?? null;
   const messages = useMessages(conversationId);
   const sendReal = useSendMessage(conversationId);
   const sendMedia = useSendMediaMessage(conversationId);
+
+  // DM epic wiring.
+  const [replyTo, setReplyTo] = useState<{ id: string; text: string; mine: boolean } | null>(null);
+  const reactions = useMessageReactions(conversationId, (messages.data ?? []).map((m) => m.id));
+  const react = useReactToMessage(conversationId);
+  const unsend = useUnsendMessage(conversationId);
+  const hides = useMessageHides();
+  const hide = useHideMessage();
+  const blocked = useBlockedUsers();
+  const setBlocked = useSetBlocked();
+  const muted = useConversationMuted(conversationId);
+  const setMuted = useSetConversationMuted(conversationId);
+  const presence = useChatPresence(conversationId, realProfileId);
+  const activity = useActivityStatus(realProfileId);
+  useHeartbeat();
+  const isBlocked = Boolean(realProfileId && blocked.data?.has(realProfileId));
 
   // Voice recording (expo-audio).
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -252,6 +288,13 @@ export default function ChatScreen() {
   const sub = mockConversation?.sub ?? (profile.data?.username ? `@${profile.data.username}` : undefined);
 
   const realItems = useMemo(() => messages.data ?? [], [messages.data]);
+  // Hide messages the user deleted from their own view (#11); keep unsent ones
+  // (rendered as a tombstone). Index by id for quote-reply lookups.
+  const visibleItems = useMemo(
+    () => realItems.filter((m) => !(hides.data?.has(m.id))),
+    [realItems, hides.data]
+  );
+  const byId = useMemo(() => new Map(realItems.map((m) => [m.id, m])), [realItems]);
 
   // Read receipt: only when MY message is the last one in the thread. If the
   // other person has replied since, my message is buried above theirs and no
@@ -274,12 +317,68 @@ export default function ChatScreen() {
     const text = draft.trim();
     if (!text || !sendReady) return;
     setDraft("");
+    const replyId = replyTo?.id ?? null;
+    setReplyTo(null);
     if (mock && id) {
       sendMock(id, text);
     } else {
-      sendReal.mutate(text, { onSuccess: inboxActions.invalidate });
+      sendReal.mutate(
+        { content: text, replyToId: replyId },
+        {
+          onSuccess: inboxActions.invalidate,
+          onError: (err) => {
+            const msg = err instanceof Error ? err.message : "";
+            if (msg.includes("blocked")) showToast("You can't message this person");
+            else if (msg.includes("request_pending")) showToast("Wait for them to accept your request");
+            else showToast("Couldn't send — try again");
+          }
+        }
+      );
     }
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  };
+
+  // Long-press action sheet on a message: react, reply, copy, unsend (own,
+  // <15m), delete-for-me.
+  const messageActions = (message: ChatMessage, mine: boolean) => {
+    const withinWindow = Date.now() - new Date(message.sent_at).getTime() < 15 * 60_000;
+    const options: { text: string; style?: "cancel" | "destructive"; onPress?: () => void }[] = [
+      { text: "React 🔥", onPress: () => react.mutate({ messageId: message.id, emoji: "🔥" }) },
+      { text: "React ❤️", onPress: () => react.mutate({ messageId: message.id, emoji: "❤️" }) },
+      { text: "React 😂", onPress: () => react.mutate({ messageId: message.id, emoji: "😂" }) },
+      { text: "Reply", onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine }) }
+    ];
+    if (mine && withinWindow && message.media_url === null) {
+      options.push({ text: "Unsend for everyone", style: "destructive", onPress: () => unsend.mutate(message.id) });
+    }
+    options.push({ text: "Delete for me", style: "destructive", onPress: () => hide.mutate(message.id) });
+    options.push({ text: "Cancel", style: "cancel" });
+    Alert.alert("Message", undefined, options);
+  };
+
+  const openThreadMenu = () => {
+    if (!realProfileId) return;
+    Alert.alert(profile.data?.display_name ?? "Options", undefined, [
+      {
+        text: muted.data ? "Unmute notifications" : "Mute notifications",
+        onPress: () => setMuted.mutate(!(muted.data ?? false))
+      },
+      {
+        text: isBlocked ? "Unblock" : "Block",
+        style: isBlocked ? "default" : "destructive",
+        onPress: () =>
+          setBlocked.mutate(
+            { otherUserId: realProfileId, blocked: !isBlocked },
+            { onSuccess: () => showToast(isBlocked ? "Unblocked" : "Blocked") }
+          )
+      },
+      {
+        text: "Report",
+        style: "destructive",
+        onPress: () => sheet.open(<ReportSheet contentType="user" contentId={realProfileId} label="user" reportedUserId={realProfileId} />)
+      },
+      { text: "Cancel", style: "cancel" }
+    ]);
   };
 
   return (
@@ -313,13 +412,28 @@ export default function ChatScreen() {
             <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 17.5, letterSpacing: 17.5 * -0.01, color: colors.white }}>
               {title}
             </Text>
-            {sub ? (
-              <Text numberOfLines={1} style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>
-                {sub}
-              </Text>
-            ) : null}
+            {mock ? (
+              sub ? (
+                <Text numberOfLines={1} style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>
+                  {sub}
+                </Text>
+              ) : null
+            ) : (
+              <PresenceLine
+                username={profile.data?.username}
+                typing={presence.otherTyping}
+                online={presence.otherOnline}
+                lastSeenAt={activity.data?.lastSeenAt ?? null}
+                statusVisible={activity.data?.visible ?? false}
+              />
+            )}
           </View>
         </Pressable>
+        {!mock && realProfileId ? (
+          <Pressable onPress={openThreadMenu} accessibilityLabel="Conversation options" hitSlop={8} style={{ padding: 8 }}>
+            <MoreVertical size={22} color={colors.mist} strokeWidth={2} />
+          </Pressable>
+        ) : null}
       </View>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -348,13 +462,30 @@ export default function ChatScreen() {
                 <MessageBubble key={`sent-${index}`} mine text={text} />
               ))}
             </>
-          ) : realItems.length ? (
+          ) : visibleItems.length ? (
             <>
               <TimeSeparator label="Today" />
-              {realItems.map((message) => {
+              {visibleItems.map((message) => {
                 const mine = message.sender_id === userId;
+                const rows = reactions.data?.[message.id] ?? [];
+                const emojis = Array.from(new Set(rows.map((r) => r.emoji)));
+                const parent = message.reply_to_id ? byId.get(message.reply_to_id) : null;
+                if (message.deleted_at) {
+                  return (
+                    <Text key={message.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", marginVertical: 3, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.iron, fontFamily: "Geist_400Regular", fontSize: 13, fontStyle: "italic", color: colors.fog }}>
+                      {mine ? "You unsent a message" : "Unsent a message"}
+                    </Text>
+                  );
+                }
                 return (
-                  <View key={message.id}>
+                  <RNPressable key={message.id} onLongPress={() => messageActions(message, mine)} delayLongPress={220}>
+                    {parent ? (
+                      <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "78%", marginBottom: -2, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.slate }}>
+                        <Text numberOfLines={1} style={{ fontSize: 11.5, color: colors.fog }}>
+                          {parent.content ?? "Media"}
+                        </Text>
+                      </View>
+                    ) : null}
                     {message.reply_story_media ? (
                       <StoryReplyPreview path={message.reply_story_media} mine={mine} />
                     ) : null}
@@ -363,7 +494,14 @@ export default function ChatScreen() {
                     ) : (
                       <MessageBubble mine={mine} text={message.content ?? ""} />
                     )}
-                  </View>
+                    {emojis.length ? (
+                      <View style={{ alignSelf: mine ? "flex-end" : "flex-start", flexDirection: "row", gap: 3, marginTop: -2, marginBottom: 2, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
+                        {emojis.map((e) => (
+                          <Text key={e} style={{ fontSize: 12 }}>{e}</Text>
+                        ))}
+                      </View>
+                    ) : null}
+                  </RNPressable>
                 );
               })}
               {/* Read receipt under my most recent message once it's opened. */}
@@ -426,6 +564,18 @@ export default function ChatScreen() {
               backgroundColor: "rgba(0,0,0,0.92)"
             }}
           />
+          {/* Quote-reply preview (#10) */}
+          {replyTo ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: tokens.accent.gold }}>
+              <CornerUpLeft size={14} color={colors.fog} strokeWidth={2} />
+              <Text numberOfLines={1} style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
+                Replying to {replyTo.mine ? "yourself" : title}: {replyTo.text}
+              </Text>
+              <Pressable onPress={() => setReplyTo(null)} accessibilityLabel="Cancel reply" hitSlop={8}>
+                <X size={16} color={colors.fog} strokeWidth={2} />
+              </Pressable>
+            </View>
+          ) : null}
           <View
             style={{
               minHeight: 46,
@@ -466,9 +616,13 @@ export default function ChatScreen() {
             ) : (
               <TextInput
                 value={draft}
-                onChangeText={setDraft}
-                placeholder={`Message\u2026`}
+                onChangeText={(v) => {
+                  setDraft(v);
+                  if (!mock) presence.notifyTyping();
+                }}
+                placeholder={isBlocked ? "You blocked this person" : `Message\u2026`}
                 placeholderTextColor={colors.fog}
+                editable={!isBlocked}
                 returnKeyType="send"
                 onSubmitEditing={send}
                 style={{ flex: 1, paddingVertical: 7, fontSize: 14, color: colors.bone }}

@@ -24,6 +24,7 @@ import { useMyProfile } from "@/hooks/queries/useProfile";
 import { type FeedCtxIcon, type FeedMockPost } from "@/lib/redesignData";
 import { showToast, useUiStore } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 /** Real Supabase posts carry UUID ids; fixture/demo posts use short slugs. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -168,22 +169,24 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   };
 
   return (
-    <View style={{ paddingTop: 14, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.graphite }}>
+    // A 16px bg.base gap between posts (no hairline) reads cleaner than an
+    // edge-to-edge divider.
+    <View style={{ paddingTop: 16, paddingBottom: 16, backgroundColor: tokens.bg.base }}>
       {/* Header row */}
       <View style={[{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingBottom: 10 }, textBlur]}>
         <Pressable onPress={openProfile}>
           <Avatar name={post.user.name} uri={post.user.avatarUrl} size={40} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white, letterSpacing: -0.14 }}>
+          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: tokens.text.primary, letterSpacing: -0.14 }}>
             {post.user.handle}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 1 }}>
-            <LocIcon size={12} color={post.gym ? colors.silver : colors.fog} strokeWidth={2} />
+            <LocIcon size={14} color={post.gym ? tokens.text.secondary : tokens.text.tertiary} strokeWidth={2} />
             <Text
               style={{
-                fontSize: 12,
-                color: post.gym ? colors.silver : colors.fog,
+                fontSize: 13,
+                color: post.gym ? tokens.text.secondary : tokens.text.tertiary,
                 fontStyle: post.gym ? "normal" : "italic"
               }}
             >
@@ -191,10 +194,10 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             </Text>
           </View>
         </View>
-        <Text style={mono(10.5, colors.ash)}>{post.time}</Text>
+        <Text style={{ fontFamily: "Geist_400Regular", fontSize: 12, color: tokens.text.tertiary }}>{post.time}</Text>
         {isRealPost && !locked ? (
           <Pressable onPress={openMenu} accessibilityLabel="Post options" hitSlop={8} haptic={false} style={{ paddingLeft: 4 }}>
-            <MoreHorizontal size={18} color={colors.fog} strokeWidth={2} />
+            <MoreHorizontal size={18} color={tokens.text.tertiary} strokeWidth={2} />
           </Pressable>
         ) : null}
       </View>

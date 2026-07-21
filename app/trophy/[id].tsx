@@ -43,7 +43,7 @@ export default function TrophyScreen() {
           <View>
             <ProofMedia seed={proof?.id ?? trophy.id} daily={isDaily} video={proof?.video} duration={proof?.duration} />
             {proof?.kind === "maxlift" ? (
-              <LiftTag style={{ position: "absolute", left: 12, top: 12 }}>{proof.line}</LiftTag>
+              <LiftTag line={proof.line} style={{ position: "absolute", left: 12, top: 12 }} />
             ) : null}
           </View>
         </Pressable>

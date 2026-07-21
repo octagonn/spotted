@@ -1,8 +1,14 @@
-import { Play } from "lucide-react-native";
+import { Play, Trophy } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
 
 import { colors } from "@/theme/colors";
+import { radius, tokens } from "@/theme/tokens";
+
+/** Title-case a lift name ("bench press" → "Bench Press"). */
+function titleCase(s: string): string {
+  return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
 
 /**
  * Badges & chips per spec §2.11. All are display-only; wrap in a Pressable
@@ -114,8 +120,31 @@ export function VChip({ children, hot }: { children: ReactNode; hot?: boolean })
   );
 }
 
-/** `.lift-tag` — "🏆 {lift} · {weight}" on media: mono 10.5 uppercase white on rgba(0,0,0,0.72). */
-export function LiftTag({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+/**
+ * Lift stat pill on media (§3c redesign): gold trophy glyph + title-case lift
+ * name (Geist 600) + value in gold Geist Mono. Sits top-left of the media, on a
+ * translucent bg.base plate with a subtle gold hairline — reads as a milestone,
+ * not debug text.
+ */
+export function LiftTag({
+  lift,
+  weight,
+  line,
+  style
+}: {
+  lift?: string;
+  weight?: string;
+  /** Convenience for "Deadlift · 405 lb" — split into name + value. */
+  line?: string;
+  style?: ViewStyle;
+}) {
+  let name = lift ?? "";
+  let value = weight;
+  if (line) {
+    const parts = line.split(/\s*·\s*/);
+    name = parts[0] ?? line;
+    value = parts.slice(1).join(" · ") || undefined;
+  }
   return (
     <View
       style={[
@@ -123,28 +152,22 @@ export function LiftTag({ children, style }: { children: ReactNode; style?: View
           flexDirection: "row",
           alignItems: "center",
           gap: 6,
-          backgroundColor: "rgba(0,0,0,0.72)",
+          backgroundColor: "rgba(9,9,11,0.7)",
           borderWidth: 1,
-          borderColor: colors.slate,
-          borderRadius: 8,
-          paddingVertical: 6,
-          paddingHorizontal: 10,
+          borderColor: "rgba(232,180,76,0.4)",
+          borderRadius: radius.sm,
+          paddingVertical: 8,
+          paddingHorizontal: 12,
           alignSelf: "flex-start"
         },
         style
       ]}
     >
-      <Text
-        style={{
-          fontFamily: "GeistMono_400Regular",
-          fontSize: 10.5,
-          letterSpacing: 10.5 * 0.1,
-          textTransform: "uppercase",
-          color: colors.white
-        }}
-      >
-        {children}
-      </Text>
+      <Trophy size={16} color={tokens.accent.gold} strokeWidth={2} />
+      <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: tokens.text.primary }}>{titleCase(name)}</Text>
+      {value ? (
+        <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 13, color: tokens.accent.gold }}>{value}</Text>
+      ) : null}
     </View>
   );
 }

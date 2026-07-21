@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { useRouter, type Href } from "expo-router";
-import { ChevronDown, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Plus, Tag, Trophy, Users } from "lucide-react-native";
+import { Camera, ChevronDown, ChevronRight, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Plus, Tag, Trophy, Users } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Linking, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,6 +24,7 @@ import { useTrophyProgress } from "@/hooks/useTrophyProgress";
 import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
 import { computeGymStreak } from "@/lib/streak";
 import { colors } from "@/theme/colors";
+import { radius as R, tokens } from "@/theme/tokens";
 
 const NAV_H = 84;
 const RADIUS = 16;
@@ -312,8 +313,9 @@ export default function ProfileScreen() {
             </View>
           ) : (
             <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-              <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
-                {posts.isLoading ? "Loading your posts…" : "No posts yet. Post today's SPOTTED from the camera."}
+              {posts.isLoading ? null : <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+              <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
+                {posts.isLoading ? "Loading your posts…" : "No posts yet"}
               </Text>
             </View>
           )
@@ -335,8 +337,9 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-            <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
-              {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet. When friends tag you, they show up here."}
+            {tagged.isLoading ? null : <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+            <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
+              {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet"}
             </Text>
           </View>
         )}
@@ -412,14 +415,16 @@ function AchievementButton({
           alignItems: "center",
           justifyContent: "center",
           gap: 8,
-          height: 48,
-          borderRadius: RADIUS,
+          height: 52,
+          borderRadius: R.md,
           borderWidth: 1,
-          borderColor: colors.iron
+          borderColor: tokens.border.default,
+          backgroundColor: tokens.bg.raised
         }}
       >
-        <Icon size={16} color={colors.gold} strokeWidth={2} />
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.bone }}>{label}</Text>
+        <Icon size={20} color={tokens.accent.gold} strokeWidth={2} />
+        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.text.primary }}>{label}</Text>
+        <ChevronRight size={18} color={tokens.text.tertiary} strokeWidth={2} style={{ position: "absolute", right: 16 }} />
       </View>
     </Pressable>
   );
@@ -446,11 +451,11 @@ function ProfileTab({
           gap: 6,
           paddingVertical: 12,
           borderBottomWidth: 2,
-          borderBottomColor: active ? colors.white : "transparent"
+          borderBottomColor: active ? tokens.text.primary : "transparent"
         }}
       >
-        <Icon size={16} color={active ? colors.white : colors.fog} strokeWidth={2} />
-        <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.12, color: active ? colors.white : colors.fog }}>
+        <Icon size={16} color={active ? tokens.text.primary : tokens.text.tertiary} strokeWidth={2} />
+        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, letterSpacing: 1, color: active ? tokens.text.primary : tokens.text.tertiary }}>
           {label}
         </Text>
       </View>

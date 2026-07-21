@@ -75,9 +75,7 @@ export function FbMedia({ post, blurRadius }: MediaProps) {
         </View>
       ) : null}
       {isLift && post.lift ? (
-        <LiftTag style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }}>
-          {`🏆 ${post.lift.lift} · ${post.lift.weight}`}
-        </LiftTag>
+        <LiftTag lift={post.lift.lift} weight={post.lift.weight} style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }} />
       ) : null}
       {isLift ? (
         <>
@@ -462,9 +460,7 @@ function RealVideoMedia({ post, blurRadius, active }: MediaProps) {
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
         />
         {post.lift ? (
-          <LiftTag style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }}>
-            {`🏆 ${post.lift.lift} · ${post.lift.weight}`}
-          </LiftTag>
+          <LiftTag lift={post.lift.lift} weight={post.lift.weight} style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }} />
         ) : null}
         {remaining != null || post.duration ? (
           <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>

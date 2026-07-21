@@ -21,7 +21,7 @@ export default function AchievementScreen() {
         <View style={{ marginHorizontal: 18, marginTop: 8 }}>
           <ProofMedia seed={achievement.id} video={achievement.video} duration={achievement.duration} />
           {achievement.kind === "maxlift" ? (
-            <LiftTag style={{ position: "absolute", left: 12, top: 12 }}>{achievement.line}</LiftTag>
+            <LiftTag line={achievement.line} style={{ position: "absolute", left: 12, top: 12 }} />
           ) : null}
         </View>
         <Text style={{ paddingHorizontal: 18, paddingTop: 14, fontSize: 13.5, lineHeight: 19, color: colors.mist }}>

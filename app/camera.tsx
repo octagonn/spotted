@@ -271,9 +271,7 @@ function MediaPreview({
       )}
       {isLift ? (
         <>
-          <LiftTag style={{ position: "absolute", left: 12, top: 12 }}>
-            {`\ud83c\udfc6 ${lift} \u00b7 ${weight}`}
-          </LiftTag>
+          <LiftTag lift={lift} weight={weight} style={{ position: "absolute", left: 12, top: 12 }} />
           <PlayBadge style={{ position: "absolute", left: "50%", top: "50%", marginLeft: -28, marginTop: -28 }} />
         </>
       ) : null}

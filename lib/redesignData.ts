@@ -328,7 +328,7 @@ export type FeedMockPost = {
   /** Video chips top-left, e.g. ["PR", "Form check"]. */
   chips?: string[];
   duration?: string;
-  /** Max-lift tag (kind lift): "🏆 {lift} · {weight}". */
+  /** Max-lift stat pill (kind lift): trophy glyph + {lift} + {weight}. */
   lift?: { lift: string; weight: string };
   /** Before/after compare (kind compare). */
   cmp?: { left: string; right: string; beforeScene: FeedScene; afterScene: FeedScene };

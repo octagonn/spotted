@@ -7,6 +7,11 @@ import { Pressable } from "@/components/ui/Pressable";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { useStories, type StoryGroup } from "@/hooks/queries/useStories";
 import { colors } from "@/theme/colors";
+import { radius, tokens } from "@/theme/tokens";
+
+const AVATAR = 84;
+// Photo (84) + 3px gap (ring padding) + 3px ring stroke, both sides.
+const ITEM = AVATAR + 2 * 3 + 2 * 3;
 
 /** Instagram-style story rail at the top of the feed. */
 export function StoriesRail() {
@@ -28,22 +33,22 @@ export function StoriesRail() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 14, paddingHorizontal: 18, paddingTop: 6, paddingBottom: 6 }}
+      contentContainerStyle={{ gap: 16, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 }}
     >
       {/* Your story — tapping the avatar views your story (or opens the camera
           if you have none); the "+" badge ALWAYS opens the camera so you can add
           another story even after posting one. */}
-      <View style={{ width: 62, alignItems: "center", gap: 4 }}>
-        <View style={{ width: 62, height: 62, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: ITEM, alignItems: "center", gap: 6 }}>
+        <View style={{ width: ITEM, height: ITEM, alignItems: "center", justifyContent: "center" }}>
           <Pressable
             onPress={() => (me ? router.push(`/story?user=${me.userId}`) : router.push("/camera?mode=story"))}
             accessibilityLabel={me ? "View your story" : "Add to your story"}
           >
             <Ring active={Boolean(me)} seen={false}>
               {profileReady ? (
-                <Avatar name={myName || "?"} uri={myAvatar} size={52} />
+                <Avatar name={myName || "?"} uri={myAvatar} size={AVATAR} />
               ) : (
-                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.graphite }} />
+                <View style={{ width: AVATAR, height: AVATAR, borderRadius: radius.pill, backgroundColor: tokens.bg.subtle }} />
               )}
             </Ring>
           </Pressable>
@@ -54,21 +59,21 @@ export function StoriesRail() {
             style={{
               position: "absolute",
               right: 2,
-              bottom: 0,
-              width: 20,
-              height: 20,
-              borderRadius: 10,
-              backgroundColor: colors.white,
+              bottom: 2,
+              width: 28,
+              height: 28,
+              borderRadius: radius.pill,
+              backgroundColor: tokens.accent.gold,
               borderWidth: 2,
-              borderColor: colors.black,
+              borderColor: tokens.bg.base,
               alignItems: "center",
               justifyContent: "center"
             }}
           >
-            <Plus size={12} color={colors.black} strokeWidth={3} />
+            <Plus size={16} color={colors.black} strokeWidth={3} />
           </Pressable>
         </View>
-        <Text numberOfLines={1} style={{ fontSize: 10, color: colors.mist, maxWidth: 62 }}>
+        <Text numberOfLines={1} style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: tokens.text.secondary, maxWidth: ITEM }}>
           Your story
         </Text>
       </View>
@@ -82,13 +87,13 @@ export function StoriesRail() {
 
 function StoryBubble({ group, onPress }: { group: StoryGroup; onPress: () => void }) {
   return (
-    <Pressable style={{ width: 62, alignItems: "center", gap: 4 }} onPress={onPress}>
+    <Pressable style={{ width: ITEM, alignItems: "center", gap: 6 }} onPress={onPress}>
       <Ring active seen={!group.hasUnseen}>
-        <Avatar name={group.name} uri={group.avatarUrl} size={52} />
+        <Avatar name={group.name} uri={group.avatarUrl} size={AVATAR} />
       </Ring>
       <Text
         numberOfLines={1}
-        style={{ fontSize: 10, color: group.hasUnseen ? colors.mist : colors.fog, maxWidth: 62 }}
+        style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: tokens.text.secondary, maxWidth: ITEM }}
       >
         {group.name.split(" ")[0]}
       </Text>
@@ -96,18 +101,18 @@ function StoryBubble({ group, onPress }: { group: StoryGroup; onPress: () => voi
   );
 }
 
-/** Story ring: bright white when there's an unseen story, dim when all seen. */
+/**
+ * Story ring: a 3px stroke with a 3px transparent gap (ring padding) between it
+ * and the photo. Unviewed → gold; viewed or inactive → border.strong.
+ */
 function Ring({ active, seen, children }: { active: boolean; seen: boolean; children: React.ReactNode }) {
   return (
     <View
       style={{
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        borderWidth: active ? 2 : 1.5,
-        borderColor: !active ? colors.iron : seen ? colors.slate : colors.white,
-        alignItems: "center",
-        justifyContent: "center"
+        padding: 3,
+        borderWidth: 3,
+        borderRadius: radius.pill,
+        borderColor: active && !seen ? tokens.accent.gold : tokens.border.strong
       }}
     >
       {children}

@@ -52,7 +52,8 @@ export function ShutterButton({
   onTap,
   onStartRecording,
   onStopRecording,
-  onLock
+  onLock,
+  onZoomDelta
 }: {
   recording: boolean;
   locked: boolean;
@@ -63,10 +64,13 @@ export function ShutterButton({
   onStartRecording: () => void;
   onStopRecording: () => void;
   onLock: () => void;
+  /** Vertical finger travel while holding → zoom (negative dy = up = zoom in). */
+  onZoomDelta?: (dy: number) => void;
 }) {
   // 0 → not locked this drag, 1 → crossed the lock threshold (UI-thread flag).
   const lockedSV = useSharedValue(0);
   const dragX = useSharedValue(0);
+  const lastY = useSharedValue(0);
   const active = useSharedValue(0);
 
   const tap = Gesture.Tap()
@@ -83,15 +87,23 @@ export function ShutterButton({
     .onStart(() => {
       lockedSV.value = 0;
       dragX.value = 0;
+      lastY.value = 0;
       active.value = withTiming(1, { duration: 140 });
       runOnJS(onStartRecording)();
     })
     .onUpdate((e) => {
-      // Only leftward travel matters; clamp so the puck sits on the lock.
+      // Leftward travel → toward the lock; clamp so the puck sits on the lock.
       dragX.value = Math.max(-LOCK_DISTANCE, Math.min(0, e.translationX));
       if (e.translationX <= -LOCK_DISTANCE && lockedSV.value === 0) {
         lockedSV.value = 1;
         runOnJS(onLock)();
+      }
+      // Vertical travel → zoom (#6): report the incremental change so the parent
+      // integrates it. Only while not yet locked (finger still on the button).
+      if (lockedSV.value === 0 && onZoomDelta) {
+        const dy = e.translationY - lastY.value;
+        lastY.value = e.translationY;
+        runOnJS(onZoomDelta)(dy);
       }
     })
     .onEnd(() => {

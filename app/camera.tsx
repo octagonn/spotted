@@ -19,7 +19,9 @@ import {
   RefreshCw,
   Tag,
   Users,
-  X
+  X,
+  Zap,
+  ZapOff
 } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
@@ -45,6 +47,7 @@ import { MusicClipScrubber } from "@/components/camera/MusicClipScrubber";
 import { ShutterButton } from "@/components/camera/ShutterButton";
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
+import { impactHaptic } from "@/lib/haptics";
 import { LIFT_OPTIONS, LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
 import { useLogLift, useUserLifts } from "@/hooks/queries/useUserLifts";
 import { PhotoEditor } from "@/components/camera/PhotoEditor";
@@ -81,6 +84,7 @@ import { useAuthStore } from "@/stores/auth";
 import { usePostedState } from "@/hooks/queries/usePostedState";
 import { markPostedToday, showToast, triggerFlash } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 type Mode = "daily" | "lift" | "story";
 type DailyStep = "capture" | "review" | "compose";
@@ -695,10 +699,12 @@ export default function CameraScreen() {
   /** Hands-free lock (slid onto the lock icon) — recording continues after release. */
   const [recordLocked, setRecordLocked] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
-  // Camera session config: "picture" captures full-sensor stills (best photo
-  // quality); we only flip to "video" while actually recording (video mode
-  // caps stills to video resolution, which made photos look terrible).
-  const [camMode, setCamMode] = useState<"picture" | "video">("picture");
+  const [flashOn, setFlashOn] = useState(false);
+  // Camera session config, DERIVED from the flow (never switched on hold — that
+  // remount + wait was the recording lag). Daily is photo-only → "picture" for
+  // full-sensor quality. Story/lift can record → "video" so holding starts
+  // recording instantly; 1080p stills are fine for ephemeral stories.
+  const camMode: "picture" | "video" = mode === "daily" ? "picture" : "video";
   const [photoUri, setPhotoUri] = useState<string>();
   /** Earlier shots in a multi-photo daily post (carousel). Max 4 total. */
   const [extraPhotos, setExtraPhotos] = useState<string[]>([]);
@@ -863,11 +869,13 @@ export default function CameraScreen() {
     }
   };
 
-  /** Flip front/back, debounced so spamming can't outrun the camera session. */
+  /** Flip front/back, debounced so spamming can't outrun the camera session.
+   *  Allowed mid-recording (#8) — expo-camera keeps the clip going across the
+   *  facing change; we don't reset zoom while recording so the shot isn't jarred. */
   const flipCamera = () => {
-    if (flipLockRef.current || recording) return;
+    if (flipLockRef.current) return;
     flipLockRef.current = true;
-    setZoom(0);
+    if (!recording) setZoom(0);
     setFacing((value) => (value === "back" ? "front" : "back"));
     setTimeout(() => {
       flipLockRef.current = false;
@@ -1012,22 +1020,16 @@ export default function CameraScreen() {
     setRecordSeconds(0);
     setRecordLocked(false);
     setRecording(true);
-    // Flip the session to video mode, then record ONLY once the freshly-remounted
-    // camera reports ready (onCameraReady). The old fixed-400ms guess called
-    // recordAsync mid-reconfigure, which could hang and produce nothing — the
-    // "video doesn't work at all" bug. recordAsync resolves when stopRecording is
-    // called (or maxDuration hits); any failure lands back on capture with a toast.
-    videoReadyRef.current = false;
-    setCamMode("video");
+    // Camera is ALREADY in video mode (camMode derived from the flow) — no mode
+    // switch, no remount, no long wait. Recording starts immediately (#1); a
+    // short readiness guard only matters on the very first hold after mount.
+    void impactHaptic(); // #12: haptic on record start
     void (async () => {
       try {
-        // Wait for the video session to be ready (bounded), then record.
         const start = Date.now();
-        while (!videoReadyRef.current && Date.now() - start < 2500) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
+        while (!videoReadyRef.current && Date.now() - start < 1500) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
         }
-        // A touch of settle time after "ready" so the first frames aren't dropped.
-        await new Promise((resolve) => setTimeout(resolve, 120));
         const result = await cameraRef.current?.recordAsync({ maxDuration: 60 });
         if (result?.uri) {
           videoTrimRef.current = null;
@@ -1043,14 +1045,16 @@ export default function CameraScreen() {
       } finally {
         setRecording(false);
         setRecordLocked(false);
-        // Restore picture mode so the next tap captures a full-quality photo.
-        setCamMode("picture");
-        triggerFlash();
       }
     })();
   };
 
-  const stopRecording = () => cameraRef.current?.stopRecording();
+  // Release-to-stop is instant (#2): recordAsync resolves the moment stopRecording
+  // fires — no mode restore in the way anymore.
+  const stopRecording = () => {
+    void impactHaptic(); // #12: haptic on record stop
+    cameraRef.current?.stopRecording();
+  };
 
   const chooseGym = (next: SelectedGym) => {
     setGym(next);
@@ -1244,6 +1248,9 @@ export default function CameraScreen() {
                 mute={!micPermission?.granted}
                 videoQuality="1080p"
                 animateShutter={false}
+                // Flash for stills (#9); torch stays on through a video recording.
+                flash={flashOn ? "on" : "off"}
+                enableTorch={flashOn && camMode === "video" && recording}
                 onCameraReady={() => {
                   videoReadyRef.current = true;
                 }}
@@ -1292,9 +1299,14 @@ export default function CameraScreen() {
             <X color={colors.white} size={20} strokeWidth={2.2} />
           </CircleButton>
           <StepPill>{stepLabel}</StepPill>
-          <CircleButton label="Flip camera" onPress={flipCamera}>
-            <RefreshCw color={colors.white} size={19} strokeWidth={2} />
-          </CircleButton>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <CircleButton label={flashOn ? "Flash on" : "Flash off"} onPress={() => setFlashOn((v) => !v)}>
+              {flashOn ? <Zap color={tokens.accent.gold} size={19} strokeWidth={2} fill={tokens.accent.gold} /> : <ZapOff color={colors.white} size={19} strokeWidth={2} />}
+            </CircleButton>
+            <CircleButton label="Flip camera" onPress={flipCamera}>
+              <RefreshCw color={colors.white} size={19} strokeWidth={2} />
+            </CircleButton>
+          </View>
         </View>
 
         <LinearGradient
@@ -1349,7 +1361,12 @@ export default function CameraScreen() {
               onTap={() => void capturePhoto()}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
-              onLock={() => setRecordLocked(true)}
+              onLock={() => {
+                setRecordLocked(true);
+                void impactHaptic(); // #12: haptic on lock
+              }}
+              // #6: slide up/down on the button while holding to zoom.
+              onZoomDelta={(dy) => setZoom((z) => Math.max(0, Math.min(1, z - dy / 240)))}
             />
             {/* Spacer to keep the shutter centered. */}
             <View style={{ width: 40 }} />

@@ -2,7 +2,7 @@ import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Camera, Check, Flame, Home, MapPin, MessageCircle, MoreHorizontal, Users } from "lucide-react-native";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { CommentsSheet, type CommentRow } from "@/components/post/CommentsSheet";
@@ -79,6 +79,13 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   const myReactions = useMyReactions();
   const toggleLike = useToggleLike();
   const liked = isRealPost && (myReactions.data ?? []).includes(post.id);
+
+  // Video mute (single tap) registered by the media so it routes through
+  // MediaFrame's gesture instead of a Pressable that would eat double-taps.
+  const mediaTapRef = useRef<(() => void) | null>(null);
+  const registerMediaTap = useCallback((handler: (() => void) | null) => {
+    mediaTapRef.current = handler;
+  }, []);
 
   // Real comments for real posts; fixtures fall back to their seeded list.
   const commentsQuery = usePostComments(post.id, isRealPost && commentsOpen);
@@ -211,7 +218,8 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         </View>
       ) : null}
 
-      {/* Media — pinch to zoom, double-tap to like */}
+      {/* Media — pinch to zoom, double-tap to like; single taps (video mute)
+          route through the same gesture frame so they can't steal the double. */}
       <MediaFrame
         locked={locked}
         onLike={() => {
@@ -219,8 +227,14 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             toggleLike.mutate({ postId: post.id, liked: true });
           }
         }}
+        onSingleTap={() => mediaTapRef.current?.()}
       >
-        <PostMedia post={post} blurRadius={blurRadius} active={audible && !locked} />
+        <PostMedia
+          post={post}
+          blurRadius={blurRadius}
+          active={audible && !locked}
+          onRegisterTap={registerMediaTap}
+        />
       </MediaFrame>
 
       {/* Public-feed context chips */}

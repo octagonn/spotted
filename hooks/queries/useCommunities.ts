@@ -594,20 +594,36 @@ export function useDiscoverCommunities(search: string, homeGymId?: string | null
         .eq("user_id", userId as string);
       if (memberships.error) throw memberships.error;
       const mine = new Set((memberships.data ?? []).map((row) => row.community_id));
-      let query = supabase
-        .from("communities")
-        .select(COMMUNITY_SELECT)
-        .eq("privacy", "public")
-        .limit(60);
-      if (q) query = query.ilike("name", `%${q}%`);
-      const { data, error } = await query;
-      if (error) throw error;
-      const rows = ((data ?? []) as unknown as CommunityRow[])
-        .filter((row) => !mine.has(row.id))
-        .map(normalizeCommunity);
+      let rows: CommunityRow[];
+      if (q) {
+        // Typo-tolerant trigram search over name + description (pg_trgm RPC),
+        // then hydrate member/post counts for the matched ids.
+        const fuzzy = await supabase.rpc("search_communities_fuzzy", { q, max_rows: 60 });
+        if (fuzzy.error) throw fuzzy.error;
+        const ids = ((fuzzy.data ?? []) as { id: string }[]).map((row) => row.id);
+        if (ids.length === 0) return [];
+        const { data, error } = await supabase.from("communities").select(COMMUNITY_SELECT).in("id", ids);
+        if (error) throw error;
+        const order = new Map(ids.map((id, i) => [id, i]));
+        rows = ((data ?? []) as unknown as CommunityRow[]).sort(
+          (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)
+        );
+      } else {
+        const { data, error } = await supabase
+          .from("communities")
+          .select(COMMUNITY_SELECT)
+          .eq("privacy", "public")
+          .limit(60);
+        if (error) throw error;
+        rows = (data ?? []) as unknown as CommunityRow[];
+      }
+      const results = rows.filter((row) => !mine.has(row.id)).map(normalizeCommunity);
+      // With a query, keep similarity order from the RPC; otherwise rank by
+      // home-gym affinity → located → member count (existing behavior).
+      if (q) return results;
       const rank = (c: CommunitySummary) =>
         (homeGymId && c.gym_id === homeGymId ? 2 : 0) + (c.location ? 1 : 0);
-      return rows.sort((a, b) => rank(b) - rank(a) || b.memberCount - a.memberCount);
+      return results.sort((a, b) => rank(b) - rank(a) || b.memberCount - a.memberCount);
     }
   });
 }

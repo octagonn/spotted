@@ -26,6 +26,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { dismissKeyboardFromPress } from "@/components/ui/DismissKeyboard";
 import { Confetti } from "@/components/workout/Confetti";
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import type { TrophyShareData } from "@/components/trophies/TrophyShareCard";
@@ -41,6 +42,7 @@ import {
   type WorkoutExercise
 } from "@/hooks/queries/useWorkouts";
 import { impactHaptic, successHaptic } from "@/lib/haptics";
+import { fuzzyFilter, LIFT_ALIASES } from "@/lib/searchMatch";
 import { BASE_LIBRARY, fmtClock, isCardioItem, LIFT_MUSCLES, sessionTitle, type LibraryItem } from "@/lib/workoutLibrary";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
@@ -197,9 +199,10 @@ export default function WorkoutScreen() {
   const library = useMemo(() => [...BASE_LIBRARY, ...customItems], [customItems]);
   const pickerResults = useMemo(() => {
     if (!picker) return [];
-    const q = query.trim().toLowerCase();
     const pool = library.filter((l) => (picker === "cardio") === isCardioItem(l));
-    if (q) return pool.filter((l) => l.name.toLowerCase().includes(q));
+    const q = query.trim();
+    // Fuzzy, alias-aware ranking ("ohp", "bnech", "press bench" all resolve).
+    if (q) return fuzzyFilter(pool, q, (l) => l.name, (l) => LIFT_ALIASES[l.name]);
     if (picker === "lift" && group !== "All") return pool.filter((l) => l.muscle === group);
     return pool;
   }, [picker, query, group, library]);
@@ -731,7 +734,7 @@ export default function WorkoutScreen() {
       <Modal visible={Boolean(picker) && !activeId} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={() => setPicker(null)}>
           <Pressable
-            onPress={(e) => e.stopPropagation()}
+            onPress={(e) => { e.stopPropagation(); dismissKeyboardFromPress(e); }}
             style={{
               marginTop: "auto",
               maxHeight: "82%",
@@ -887,7 +890,7 @@ export default function WorkoutScreen() {
       <Modal visible={Boolean(active)} transparent animationType="slide" onRequestClose={closeLogger}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.62)" }} onPress={closeLogger}>
           <Pressable
-            onPress={(e) => e.stopPropagation()}
+            onPress={(e) => { e.stopPropagation(); dismissKeyboardFromPress(e); }}
             style={{
               marginTop: "auto",
               maxHeight: "88%",

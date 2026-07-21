@@ -11,6 +11,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DismissKeyboard } from "@/components/ui/DismissKeyboard";
 import { colors } from "@/theme/colors";
 import { durations, easing } from "@/theme/motion";
 
@@ -111,7 +112,9 @@ export function SheetProvider({ children }: { children: ReactNode }) {
           }}
         >
           <BottomSheetView key={content?.key ?? 0} style={{ paddingBottom: 28 + insets.bottom }}>
-            {content?.node ?? null}
+            {/* Tap on sheet dead space closes the keyboard (modals portal
+                outside the root DismissKeyboard wrapper). */}
+            <DismissKeyboard style={{ flex: 0 }}>{content?.node ?? null}</DismissKeyboard>
           </BottomSheetView>
         </BottomSheetModal>
       </BottomSheetModalProvider>

@@ -18,6 +18,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef } from "react";
 import { AppState, View } from "react-native";
+
+import { DismissKeyboard } from "@/components/ui/DismissKeyboard";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
@@ -185,6 +187,8 @@ export default function RootLayout() {
           <AppServices />
           <SessionGuard />
           <SheetProvider>
+            {/* App-wide: tapping dead space closes the keyboard. */}
+            <DismissKeyboard>
             <View className="flex-1 bg-black">
               <Stack
                 screenOptions={{
@@ -229,6 +233,7 @@ export default function RootLayout() {
               <FlashOverlay />
               <StatusBar style="light" />
             </View>
+            </DismissKeyboard>
           </SheetProvider>
         </ThemeProvider>
       </QueryClientProvider>

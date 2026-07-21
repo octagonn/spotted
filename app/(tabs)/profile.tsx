@@ -1,7 +1,8 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { useRouter, type Href } from "expo-router";
 import { Camera, ChevronDown, ChevronRight, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Play, Plus, Tag, Trophy, Users } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Linking, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -28,6 +29,7 @@ import { radius as R, tokens } from "@/theme/tokens";
 
 const NAV_H = 84;
 const RADIUS = 16;
+const CALENDAR_OPEN_KEY = "profile-calendar-open";
 // Vertical rhythm between sections — generous so the page scrolls as one piece.
 const SECTION = 30;
 
@@ -50,6 +52,19 @@ export default function ProfileScreen() {
   const [streakOpen, setStreakOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [grid, setGrid] = useState<"posts" | "tagged">("posts");
+  // Collapsible calendar — the collapsed choice sticks across sessions.
+  const [calendarOpen, setCalendarOpen] = useState(true);
+  useEffect(() => {
+    void AsyncStorage.getItem(CALENDAR_OPEN_KEY).then((v) => {
+      if (v === "0") setCalendarOpen(false);
+    });
+  }, []);
+  const toggleCalendar = () => {
+    setCalendarOpen((open) => {
+      void AsyncStorage.setItem(CALENDAR_OPEN_KEY, open ? "0" : "1").catch(() => undefined);
+      return !open;
+    });
+  };
   const tagged = useTaggedPosts(profile?.id, grid === "tagged");
 
   const name = profile?.display_name ?? "";
@@ -258,26 +273,53 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        {/* Streak calendar — the hero, the one contained surface */}
+        {/* Streak calendar — the hero, the one contained surface. Collapsible;
+            the header row always shows so it can be reopened. */}
         <View style={{ paddingTop: SECTION }}>
           <View
             style={{
               marginHorizontal: H,
               borderRadius: RADIUS,
               backgroundColor: colors.ink,
-              paddingVertical: 16,
+              paddingVertical: calendarOpen ? 16 : 4,
               overflow: "hidden"
             }}
           >
-            <StreakCalendar
-              days={streakDays.data ?? new Map()}
-              createdAt={profile?.created_at}
-              onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
-            />
+            <Pressable
+              accessibilityLabel={calendarOpen ? "Collapse streak calendar" : "Expand streak calendar"}
+              onPress={toggleCalendar}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingHorizontal: 16,
+                paddingVertical: calendarOpen ? 0 : 10,
+                paddingBottom: calendarOpen ? 8 : 10
+              }}
+            >
+              <Flame size={13} color={colors.gold} strokeWidth={2.2} />
+              <Text style={{ flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 12.5, letterSpacing: 1, textTransform: "uppercase", color: colors.mist }}>
+                Streak calendar
+              </Text>
+              {calendarOpen ? (
+                <ChevronDown size={16} color={colors.fog} />
+              ) : (
+                <ChevronRight size={16} color={colors.fog} />
+              )}
+            </Pressable>
+            {calendarOpen ? (
+              <StreakCalendar
+                days={streakDays.data ?? new Map()}
+                createdAt={profile?.created_at}
+                onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
+              />
+            ) : null}
           </View>
-          <View style={{ paddingHorizontal: H }}>
-            <CalendarTapHint />
-          </View>
+          {calendarOpen ? (
+            <View style={{ paddingHorizontal: H }}>
+              <CalendarTapHint />
+            </View>
+          ) : null}
         </View>
 
         {/* Trophies — recessed outline */}

@@ -1458,6 +1458,14 @@ export type Database = {
       join_community_by_code: { Args: { code: string }; Returns: string | null }
       nudge_community: { Args: { cid: string }; Returns: number }
       wave_at_friend: { Args: { target: string; gym_name?: string | null }; Returns: undefined }
+      search_profiles_fuzzy: {
+        Args: { q: string; max_rows?: number }
+        Returns: { id: string; username: string; display_name: string; avatar_url: string | null }[]
+      }
+      search_communities_fuzzy: {
+        Args: { q: string; max_rows?: number }
+        Returns: Database["public"]["Tables"]["communities"]["Row"][]
+      }
       can_read_post: {
         Args: { p_post_id: string; p_user_id: string }
         Returns: boolean
@@ -1563,6 +1571,7 @@ export type Database = {
         | "taunt"
         | "wave"
         | "community_nudge"
+        | "tagged"
       schedule_visibility: "public" | "friends" | "private"
       subscription_tier: "free" | "plus"
     }
@@ -1707,6 +1716,7 @@ export const Constants = {
         "taunt",
         "wave",
         "community_nudge",
+        "tagged",
       ],
       schedule_visibility: ["public", "friends", "private"],
       subscription_tier: ["free", "plus"],

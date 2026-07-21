@@ -35,6 +35,9 @@ type MediaProps = {
   blurRadius?: number;
   /** True while this post is the active one in the viewport (video autoplay). */
   active?: boolean;
+  /** Registers a single-tap action (video mute) with the gesture frame above,
+   *  so taps route through MediaFrame instead of a tap-stealing Pressable. */
+  onRegisterTap?: (handler: (() => void) | null) => void;
 };
 
 /** Front-and-back photo (`.fb`, §4.3.1) — full-bleed 3/3.6 with optional 31% inset selfie. */
@@ -396,7 +399,7 @@ export function CompareMedia({ post, blurRadius }: MediaProps) {
  * There's no play button. Tapping toggles the GLOBAL feed mute (shared with all
  * videos and music posts) and flashes a speaker indicator on this post.
  */
-function RealVideoMedia({ post, blurRadius, active }: MediaProps) {
+function RealVideoMedia({ post, blurRadius, active, onRegisterTap }: MediaProps) {
   const video = post.video as NonNullable<FeedMockPost["video"]>;
   const muted = useAudioStore((s) => s.muted);
   const nonce = useAudioStore((s) => s.nonce);
@@ -456,6 +459,14 @@ function RealVideoMedia({ post, blurRadius, active }: MediaProps) {
     // Record the nonce this tap will produce so only this post flashes.
     setLocalNonce(nonce + 1);
   };
+  // Mute toggling routes through MediaFrame's single-tap gesture — a Pressable
+  // here would steal the first tap of a double-tap and break like-on-double-tap.
+  const tapRef = useRef(onTapMute);
+  tapRef.current = onTapMute;
+  useEffect(() => {
+    onRegisterTap?.(() => tapRef.current());
+    return () => onRegisterTap?.(null);
+  }, [onRegisterTap]);
 
   if (blurRadius !== undefined) {
     // Locked feed: no playback, just the frosted placeholder tile.
@@ -463,31 +474,29 @@ function RealVideoMedia({ post, blurRadius, active }: MediaProps) {
   }
 
   return (
-    <NativePressable onPress={onTapMute}>
-      <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
-        <VideoView
-          player={player}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-          contentFit="cover"
-          nativeControls={false}
-        />
-        <LinearGradient
-          colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
-          locations={[0, 0.35, 1]}
-          pointerEvents="none"
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-        />
-        {post.lift ? (
-          <LiftTag lift={post.lift.lift} weight={post.lift.weight} style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }} />
-        ) : null}
-        {remaining != null || post.duration ? (
-          <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>
-            {remaining != null ? formatClock(remaining) : (post.duration as string)}
-          </VidDur>
-        ) : null}
-        <MuteIndicator muted={muted} nonce={nonce} local={localNonce} />
-      </View>
-    </NativePressable>
+    <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
+      <VideoView
+        player={player}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      <LinearGradient
+        colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
+        locations={[0, 0.35, 1]}
+        pointerEvents="none"
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+      {post.lift ? (
+        <LiftTag lift={post.lift.lift} weight={post.lift.weight} style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }} />
+      ) : null}
+      {remaining != null || post.duration ? (
+        <VidDur style={{ position: "absolute", bottom: 12, right: 12, zIndex: 3 }}>
+          {remaining != null ? formatClock(remaining) : (post.duration as string)}
+        </VidDur>
+      ) : null}
+      <MuteIndicator muted={muted} nonce={nonce} local={localNonce} />
+    </View>
   );
 }
 
@@ -542,9 +551,9 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
 }
 
 /** Media router (§4.3) — picks the media kind for a post. */
-export function PostMedia({ post, blurRadius, active }: MediaProps) {
+export function PostMedia({ post, blurRadius, active, onRegisterTap }: MediaProps) {
   if (post.video) {
-    return <RealVideoMedia post={post} blurRadius={blurRadius} active={active} />;
+    return <RealVideoMedia post={post} blurRadius={blurRadius} active={active} onRegisterTap={onRegisterTap} />;
   }
   if ((post.mediaUris?.length ?? 0) > 1) {
     return <CarouselMedia post={post} blurRadius={blurRadius} />;

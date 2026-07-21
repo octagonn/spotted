@@ -678,6 +678,8 @@ export default function CameraScreen() {
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const permissionAsked = useRef(false);
   const cameraRef = useRef<CameraView>(null);
+  // Share-screen scroller — the caption scrolls above the keyboard on focus.
+  const shareScrollRef = useRef<ScrollView>(null);
   // Set by onCameraReady; gates recordAsync so we never record mid-reconfigure.
   const videoReadyRef = useRef(false);
   const lastTapRef = useRef(0);
@@ -1763,8 +1765,11 @@ export default function CameraScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
+        ref={shareScrollRef}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        // iOS: shift content with the keyboard so the caption stays visible.
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         contentContainerStyle={{ paddingBottom: keyboardVisible ? 12 : insets.bottom + 28 }}
       >
         <PanelHeader
@@ -1827,6 +1832,8 @@ export default function CameraScreen() {
           multiline
           returnKeyType="done"
           submitBehavior="blurAndSubmit"
+          // The caption sits near the bottom — scroll it above the keyboard.
+          onFocus={() => setTimeout(() => shareScrollRef.current?.scrollToEnd({ animated: true }), 80)}
           placeholder={`Say something about today\u2026`}
           placeholderTextColor={colors.fog}
           textAlignVertical="top"

@@ -54,12 +54,8 @@ export function useSearchPeople(query: string) {
     queryFn: async (): Promise<Pick<Profile, "id" | "username" | "display_name" | "avatar_url">[]> => {
       const userResult = await supabase.auth.getUser();
       const userId = userResult.data.user?.id;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, username, display_name, avatar_url")
-        .eq("discoverable", true)
-        .or(`username.ilike.%${cleaned}%,display_name.ilike.%${cleaned}%`)
-        .limit(20);
+      // Typo-tolerant trigram search, similarity-ranked (pg_trgm RPC).
+      const { data, error } = await supabase.rpc("search_profiles_fuzzy", { q: cleaned, max_rows: 20 });
       if (error) {
         throw error;
       }

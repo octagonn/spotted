@@ -45,8 +45,8 @@ export async function searchTracks(query: string): Promise<MusicTrack[]> {
     }));
 }
 
-/** Gym-anthem search terms surfaced as "Suggested" when the box is empty. */
-const SUGGESTED_TERMS = [
+/** Fallback gym-anthem searches if the live charts feed is unreachable. */
+const FALLBACK_TERMS = [
   "Till I Collapse Eminem",
   "Sicko Mode Travis Scott",
   "HUMBLE Kendrick Lamar",
@@ -57,26 +57,69 @@ const SUGGESTED_TERMS = [
   "X Gonna Give It To Ya DMX"
 ];
 
-/** A trending/suggested set of gym songs for an empty picker. Cached 24h. */
+type AppleChartEntry = { id?: string; name?: string; artistName?: string };
+
+/**
+ * TODAY's most-played songs from Apple's live charts RSS, hydrated with
+ * preview clips via one batched iTunes lookup. This keeps "Suggested" current
+ * instead of a frozen list of 2017 hits.
+ */
+async function fetchTrendingTracks(limit = 16): Promise<MusicTrack[]> {
+  const rss = await fetch(
+    `https://rss.marketingtools.apple.com/api/v2/us/music/most-played/${limit}/songs.json`
+  );
+  if (!rss.ok) throw new Error(`apple_charts_${rss.status}`);
+  const feed = (await rss.json()) as { feed?: { results?: AppleChartEntry[] } };
+  const ids = (feed.feed?.results ?? []).map((r) => r.id).filter((id): id is string => Boolean(id));
+  if (ids.length === 0) throw new Error("apple_charts_empty");
+
+  // One lookup call resolves every chart id to full track rows (with previews).
+  const lookup = await fetch(`https://itunes.apple.com/lookup?id=${ids.join(",")}&entity=song`);
+  if (!lookup.ok) throw new Error(`itunes_lookup_${lookup.status}`);
+  const payload = (await lookup.json()) as { results?: ItunesResult[] };
+  const byId = new Map<string, ItunesResult>();
+  for (const r of payload.results ?? []) {
+    if (r.trackId) byId.set(String(r.trackId), r);
+  }
+  const out: MusicTrack[] = [];
+  for (const id of ids) {
+    const r = byId.get(id);
+    if (!r?.trackName || !r.artistName || !r.previewUrl) continue;
+    out.push({
+      id,
+      title: r.trackName,
+      artist: r.artistName,
+      artworkUrl: r.artworkUrl100 ? r.artworkUrl100.replace("100x100", "200x200") : null,
+      previewUrl: r.previewUrl,
+      explicit: r.trackExplicitness === "explicit"
+    });
+  }
+  if (out.length === 0) throw new Error("apple_charts_no_previews");
+  return out;
+}
+
+/** Current most-played songs for an empty picker (falls back to gym anthems). Cached 6h. */
 export function useSuggestedTracks() {
   return useQuery({
-    queryKey: ["suggested-tracks"],
-    staleTime: 24 * 60 * 60_000,
+    queryKey: ["suggested-tracks-v2"],
+    staleTime: 6 * 60 * 60_000,
     queryFn: async (): Promise<MusicTrack[]> => {
-      const results = await Promise.all(
-        SUGGESTED_TERMS.map((term) => searchTracks(term).catch(() => []))
-      );
-      // Take the top hit for each term, de-duped by track id.
-      const seen = new Set<string>();
-      const out: MusicTrack[] = [];
-      for (const list of results) {
-        const top = list.find((t) => t.previewUrl);
-        if (top && !seen.has(top.id)) {
-          seen.add(top.id);
-          out.push(top);
+      try {
+        return await fetchTrendingTracks();
+      } catch {
+        // Charts feed down — fall back to the classic anthem searches.
+        const results = await Promise.all(FALLBACK_TERMS.map((term) => searchTracks(term).catch(() => [])));
+        const seen = new Set<string>();
+        const out: MusicTrack[] = [];
+        for (const list of results) {
+          const top = list.find((t) => t.previewUrl);
+          if (top && !seen.has(top.id)) {
+            seen.add(top.id);
+            out.push(top);
+          }
         }
+        return out;
       }
-      return out;
     }
   });
 }

@@ -51,6 +51,8 @@ function notificationText(n: AppNotification): string {
       return n.payload?.gymName ? `waved at you 👋 — they're at ${String(n.payload.gymName)}` : "waved at you 👋";
     case "community_nudge":
       return `nudged ${String(n.payload?.communityName ?? "your crew")} — it's been quiet`;
+    case "tagged":
+      return `tagged you in their ${n.payload?.kind === "story" ? "story" : "post"}`;
     default:
       return "sent you an update";
   }
@@ -302,6 +304,11 @@ export default function InboxScreen() {
                       router.push(`/community/${String(n.payload.community_id)}`);
                     } else if (n.type === "community_nudge" && n.payload?.communityId) {
                       router.push(`/community/${String(n.payload.communityId)}`);
+                    } else if (n.type === "tagged" && n.payload?.post_id) {
+                      router.push(`/post/${String(n.payload.post_id)}`);
+                    } else if (n.type === "tagged" && n.actorUsername) {
+                      // Story tags open the tagger's story.
+                      router.push(`/story?user=${n.actorUsername}`);
                     } else if (n.actorUsername) router.push(`/user/${n.actorUsername}`);
                   }}
                 >

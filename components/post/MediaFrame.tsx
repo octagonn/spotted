@@ -21,12 +21,16 @@ import { colors } from "@/theme/colors";
 export function MediaFrame({
   children,
   locked = false,
-  onLike
+  onLike,
+  onSingleTap
 }: {
   children: React.ReactNode;
   locked?: boolean;
   /** Called on double-tap. Return handled synchronously; the burst always plays. */
   onLike?: () => void;
+  /** Optional single-tap action (e.g. video mute) — waits for the double-tap
+   *  window so it never races the like. */
+  onSingleTap?: () => void;
 }) {
   const scale = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -77,7 +81,8 @@ export function MediaFrame({
     .enabled(!locked)
     .numberOfTaps(2)
     .maxDelay(260)
-    .onEnd(() => {
+    .onEnd((_event, success) => {
+      if (!success) return;
       heart.value = 0;
       heart.value = withTiming(1, { duration: 180 }, () => {
         heart.value = withTiming(0, { duration: 320 });
@@ -85,7 +90,18 @@ export function MediaFrame({
       runOnJS(fireLike)();
     });
 
-  const composed = Gesture.Simultaneous(pinch, pan, doubleTap);
+  const fireSingleTap = () => onSingleTap?.();
+
+  // Single tap defers to the double-tap window (Exclusive) — mute toggles on
+  // videos can't steal the like anymore.
+  const singleTap = Gesture.Tap()
+    .enabled(!locked)
+    .numberOfTaps(1)
+    .onEnd((_event, success) => {
+      if (success) runOnJS(fireSingleTap)();
+    });
+
+  const composed = Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap));
 
   const mediaStyle = useAnimatedStyle(() => ({
     transform: [

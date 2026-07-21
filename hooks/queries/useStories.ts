@@ -146,6 +146,10 @@ export function usePostStory() {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
   return useMutation({
+    // #24: retry transient upload/insert failures (poor connectivity) with
+    // backoff before surfacing an error, so a flaky network doesn't drop a story.
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     mutationFn: async ({ photoUri, music, tagUserIds }: PostStoryInput) => {
       if (!isSupabaseConfigured || !userId) return;
       const uploadUri = await compressStoryPhoto(photoUri);

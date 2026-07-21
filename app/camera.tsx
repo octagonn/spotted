@@ -48,6 +48,7 @@ import { MusicClipScrubber } from "@/components/camera/MusicClipScrubber";
 import { ShutterButton } from "@/components/camera/ShutterButton";
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
+import { clearCameraDraft, loadCameraDraft, saveCameraDraft, type CameraDraft } from "@/lib/cameraDraft";
 import { impactHaptic } from "@/lib/haptics";
 import { LIFT_OPTIONS, LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
 import { useLogLift, useUserLifts } from "@/hooks/queries/useUserLifts";
@@ -733,6 +734,77 @@ export default function CameraScreen() {
   // Friends tagged on the story — rendered as tappable chips in the viewer.
   const [storyTags, setStoryTags] = useState<string[]>([]);
 
+  // ---- Draft saving (#23) ----
+  const draftCheckedRef = useRef(false);
+  const clearDraft = useCallback(() => {
+    void clearCameraDraft(userId);
+  }, [userId]);
+  const restoreDraft = useCallback((draft: CameraDraft) => {
+    setMode(draft.mode);
+    if (draft.mode === "lift") setLiftStep((draft.step as LiftStep) || "review");
+    else setDailyStep((draft.step as DailyStep) || "review");
+    if (draft.photoUri) setPhotoUri(draft.photoUri);
+    if (draft.extraPhotos) setExtraPhotos(draft.extraPhotos);
+    if (draft.videoUri) setVideoUri(draft.videoUri);
+    if (draft.caption) setCaption(draft.caption);
+    if (draft.liftExercise) setLiftExercise(draft.liftExercise as LiftExercise);
+    if (draft.liftValue) setLiftValue(draft.liftValue);
+    if (draft.tags) setTags(draft.tags);
+    if (draft.communities) setCommunities(draft.communities);
+    if (draft.track) {
+      const t = draft.track;
+      if (draft.mode === "story") setStoryTrack(t as SelectedTrack);
+      else setTrack(t as MusicTrack & { clipStart?: number });
+    }
+  }, []);
+  // On open, offer to resume a saved draft.
+  useEffect(() => {
+    if (draftCheckedRef.current || !userId) return;
+    draftCheckedRef.current = true;
+    void (async () => {
+      const draft = await loadCameraDraft(userId);
+      if (!draft) return;
+      Alert.alert("Resume your draft?", "You have an unfinished post from earlier.", [
+        { text: "Discard", style: "destructive", onPress: () => void clearCameraDraft(userId) },
+        { text: "Resume", onPress: () => restoreDraft(draft) }
+      ]);
+    })();
+  }, [userId, restoreDraft]);
+  // Autosave the in-progress post (media + edits) whenever anything changes,
+  // once media is captured and we're past the capture step (#23).
+  useEffect(() => {
+    if (!userId) return;
+    const hasMedia = Boolean(photoUri || videoUri);
+    const step = mode === "lift" ? liftStep : dailyStep;
+    if (!hasMedia || step === "capture" || step === "record") return;
+    const activeTrack = mode === "story" ? storyTrack : track;
+    const t = setTimeout(() => {
+      void saveCameraDraft(userId, {
+        mode,
+        step,
+        photoUri,
+        extraPhotos,
+        videoUri,
+        caption,
+        track: activeTrack
+          ? {
+              id: activeTrack.id,
+              title: activeTrack.title,
+              artist: activeTrack.artist,
+              artworkUrl: activeTrack.artworkUrl,
+              previewUrl: activeTrack.previewUrl,
+              clipStart: activeTrack.clipStart
+            }
+          : null,
+        liftExercise,
+        liftValue,
+        tags,
+        communities
+      });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [userId, mode, dailyStep, liftStep, photoUri, extraPhotos, videoUri, caption, track, storyTrack, liftExercise, liftValue, tags, communities]);
+
   // Music preview on the story review screen (2d): loop the chosen ~15s segment
   // so the user hears exactly what viewers will, before posting.
   const storyReviewActive = mode === "story" && dailyStep === "review";
@@ -905,38 +977,48 @@ export default function CameraScreen() {
       setZoom(Math.max(0, Math.min(1, next)));
     });
 
-  const shareStory = async () => {
+  const shareStory = () => {
     if (!photoUri) {
       Alert.alert("No photo", "The photo didn't save. Go back and retake it.");
       return;
     }
-    setPublishing(true);
-    try {
-      await postStory.mutateAsync({
-        photoUri,
-        music: storyTrack
-          ? {
-              title: storyTrack.title,
-              artist: storyTrack.artist,
-              artworkUrl: storyTrack.artworkUrl,
-              previewUrl: storyTrack.previewUrl,
-              clipStart: storyTrack.clipStart ?? 0
-            }
-          : null,
-        tagUserIds: storyTags
+    const input = {
+      photoUri,
+      music: storyTrack
+        ? {
+            title: storyTrack.title,
+            artist: storyTrack.artist,
+            artworkUrl: storyTrack.artworkUrl,
+            previewUrl: storyTrack.previewUrl,
+            clipStart: storyTrack.clipStart ?? 0
+          }
+        : null,
+      tagUserIds: storyTags
+    };
+    // #24: post optimistically — the story shows immediately (optimistic cache
+    // insert), we navigate to the feed at once, and the upload retries in the
+    // background (retry:3 on the mutation). On final failure we surface a Retry
+    // so a story can never silently fail to post.
+    const post = () => {
+      showToast("Posting…");
+      postStory.mutate(input, {
+        onSuccess: () => {
+          showToast("Added to your story");
+          clearDraft();
+        },
+        onError: (error) => {
+          logger.warn("story_publish_failed", { message: error instanceof Error ? error.message : String(error) });
+          Alert.alert("Couldn't post your story", "It didn't upload — poor connection?", [
+            { text: "Discard", style: "destructive" },
+            { text: "Retry", onPress: post }
+          ]);
+        }
       });
-      setStoryTrack(null);
-      setStoryTags([]);
-      showToast("Added to your story");
-      router.replace("/(tabs)/feed");
-    } catch (error) {
-      logger.warn("story_publish_failed", {
-        message: error instanceof Error ? error.message : String(error)
-      });
-      Alert.alert("Couldn't post", "Something went wrong. Check your connection and try again.");
-    } finally {
-      setPublishing(false);
-    }
+    };
+    post();
+    setStoryTrack(null);
+    setStoryTags([]);
+    router.replace("/(tabs)/feed");
   };
 
   /** Story mode: pick an existing photo from the library instead of capturing. */
@@ -1134,6 +1216,7 @@ export default function CameraScreen() {
         }
         await queryClient.invalidateQueries({ queryKey: ["feed"] });
         await queryClient.invalidateQueries({ queryKey: ["user-lifts", userId] });
+        clearDraft(); // #23: posted successfully — drop the draft
         if (unlockedData) {
           // Celebrate first; navigate to the feed when the modal closes.
           setCelebrate(unlockedData);
@@ -1200,6 +1283,7 @@ export default function CameraScreen() {
       }
       markPostedToday();
       await queryClient.invalidateQueries({ queryKey: ["feed"] });
+      clearDraft(); // #23: posted successfully — drop the draft
       showToast("Posted. Feed unlocked.");
       router.replace("/(tabs)/feed");
     } catch (error) {

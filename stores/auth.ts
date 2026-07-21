@@ -13,9 +13,11 @@ export type AuthStatus =
   | "needs-onboarding"
   | "ready";
 
-export type OnboardingStage = "permissions" | "home-gym" | "schedule";
+export type OnboardingStage = "permissions" | "home-gym";
 
-const ONBOARDING_STAGES: OnboardingStage[] = ["permissions", "home-gym", "schedule"];
+// Legacy "schedule" is intentionally absent: profiles left mid-onboarding at
+// that (now-removed) step fall through to "ready" and land on the feed.
+const ONBOARDING_STAGES: OnboardingStage[] = ["permissions", "home-gym"];
 
 type AuthState = {
   status: AuthStatus;

@@ -104,9 +104,17 @@ export default function HomeScreen() {
   // (discovery) — your friends' content stays in the Friends tab. No fixtures.
   const posts = useMemo(() => {
     const rows = feed.data ?? [];
-    const scoped = tab === "Friends"
-      ? rows.filter((p) => p.user_id === userId || friendIds.has(p.user_id))
-      : rows.filter((p) => p.user_id !== userId && !friendIds.has(p.user_id));
+    if (tab === "Friends") {
+      // Home feed is strictly reverse-chronological — newest post always at the
+      // top. No ranking, no engagement weighting, no shuffle (BeReal-style).
+      const scoped = rows
+        .filter((p) => p.user_id === userId || friendIds.has(p.user_id))
+        .slice()
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      return scoped.map(toMockShape);
+    }
+    // Public/discovery: reshuffles on pull-to-refresh.
+    const scoped = rows.filter((p) => p.user_id !== userId && !friendIds.has(p.user_id));
     const mapped = scoped.map(toMockShape);
     return shuffleSeed > 0 ? seededShuffle(mapped, shuffleSeed) : mapped;
   }, [feed.data, tab, userId, friendIds, shuffleSeed]);

@@ -95,22 +95,22 @@ export default function HomeGymScreen() {
       return;
     }
     if (!isSupabaseConfigured || !userId) {
-      void advanceOnboarding(userId, "schedule");
-      router.push("/schedule");
+      await advanceOnboarding(userId, "complete");
+      router.replace("/feed");
       return;
     }
     setSubmitting(true);
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ home_gym_id: selectedId, onboarding_stage: "schedule" })
+        .update({ home_gym_id: selectedId, onboarding_stage: "complete" })
         .eq("id", userId);
       if (error) {
         throw error;
       }
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
-      useAuthStore.getState().setOnboardingStage("schedule");
-      router.push("/schedule");
+      useAuthStore.getState().setOnboardingStage("complete");
+      router.replace("/feed");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save gym.";
       Alert.alert("Couldn't save", message);
@@ -130,7 +130,7 @@ export default function HomeGymScreen() {
     <View className="flex-1 bg-black px-4" style={{ paddingTop: insets.top + 16 }}>
       <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
         <Text variant="micro" className="text-mist">
-          STEP 5 OF 6
+          STEP 5 OF 5
         </Text>
       </View>
       <Text variant="display-md" className="mt-6">
@@ -203,8 +203,8 @@ export default function HomeGymScreen() {
         <Pressable
           className="mt-4 self-center"
           onPress={() => {
-            void advanceOnboarding(userId, "schedule");
-            router.push("/schedule");
+            void advanceOnboarding(userId, "complete");
+            router.replace("/feed");
           }}
         >
           <Text variant="micro" className="text-mist">

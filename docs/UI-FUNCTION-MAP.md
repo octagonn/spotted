@@ -336,3 +336,14 @@ DEFERRED / PLAN: story cube/slide transition (needs its own focused animation pa
 - Geofence: only dailies are geofenced; lift videos post from anywhere.
 - Story tags: "Tag friends" pill on the story review screen (reuses FriendsSheet) → story_tags rows on publish. The story viewer renders tappable "with @username" chips (lucide Users glyph) that close the viewer and open /user/<username>, consistent with post tags.
 - Schema: migration user_lifts_and_story_tags — user_lifts table (exercise/value/unit/post_id, RLS insert-self / select self-or-friends), story_tags table (story_id/user_id PK, RLS insert-delete-owner / select owner-or-friends), posts.lift_exercise/lift_value/lift_unit.
+
+## Addendum — 2026-07-21 design overhaul + My Workouts (Parts 1-5)
+
+- Tokens: `theme/tokens.ts` — semantic bg/border/text + gold (kept #E8B44C) + goldSubtle, radius {sm12,md16,lg24,pill}, space scale. Gold already single-sourced via colors.gold.
+- Sizing: tab icons 28px + 48px targets, camera FAB 76px / 1.5px border.strong ring + gold "posted" dot, notification bell 26px / 44px target, map nav icon → Dumbbell.
+- Feed: lift stat pill redesigned (gold Trophy glyph + title-case name + gold-mono value on translucent bg.base plate; removed last 🏆 UI emoji); stories row (84px avatars, 3px ring + 3px gap, gold/strong ring, 28px gold plus badge, Geist labels); post cards use a 16px bg.base gap (no hairline), username 15px, 14px location, tertiary timestamp/overflow; Segmented → 44px, radius.lg, white/black selected, text.secondary unselected.
+- Profile: Trophies button 52px radius.md bg.raised + gold icon + chevron; POSTS/TAGGED tabs Geist 600 12px caps, active text.primary + underline; empty states get an icon; grid already 2px gutters / real-posts-only.
+- Bugs: (5a) long-press own reaction → remove (scoped DELETE + optimistic); (5b) reaction avatars always render real pfp for emoji/text reactions; (5c) video posts show generated poster thumbnails + play badge (expo-video-thumbnails, posts.thumbnail_url), bg.subtle+play fallback for un-generated/old videos.
+- My Workouts: new default far-left tab on the Dumbbell nav; full builder at /workout (workouts table, ~150-exercise library, save→PR→trophy cascade). Video ungated at camera open (composer C3).
+
+DEFERRED: calendar (4a) finer tweaks; video poster backfill for pre-existing posts; full mono purge on untouched screens.

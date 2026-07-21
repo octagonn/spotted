@@ -17,13 +17,17 @@ type PrivacySettings = {
   discoverable: boolean;
   schedule_visibility: ScheduleVisibility;
   arrival_notifs_enabled: boolean;
+  show_activity: boolean;
+  dm_preview_enabled: boolean;
 };
 
 const defaultSettings: PrivacySettings = {
   ghost_mode: false,
   discoverable: true,
   schedule_visibility: "friends",
-  arrival_notifs_enabled: true
+  arrival_notifs_enabled: true,
+  show_activity: true,
+  dm_preview_enabled: true
 };
 
 const visibilityOptions: ScheduleVisibility[] = ["public", "friends", "private"];
@@ -59,7 +63,7 @@ export default function PrivacySettingsScreen() {
       }
       const { data, error } = await supabase
         .from("profiles")
-        .select("ghost_mode, discoverable, schedule_visibility, arrival_notifs_enabled")
+        .select("ghost_mode, discoverable, schedule_visibility, arrival_notifs_enabled, show_activity, dm_preview_enabled")
         .eq("id", userId as string)
         .maybeSingle();
       if (error) {
@@ -102,7 +106,7 @@ export default function PrivacySettingsScreen() {
 
   const settings = settingsQuery.data ?? defaultSettings;
 
-  function toggle(key: "ghost_mode" | "discoverable" | "arrival_notifs_enabled") {
+  function toggle(key: "ghost_mode" | "discoverable" | "arrival_notifs_enabled" | "show_activity" | "dm_preview_enabled") {
     updateSettings.mutate({ [key]: !settings[key] });
   }
 
@@ -129,6 +133,28 @@ export default function PrivacySettingsScreen() {
             </Text>
           </View>
           <Toggle value={settings.discoverable} onToggle={() => toggle("discoverable")} />
+        </View>
+
+        <View className="flex-row items-center border border-hairline-strong bg-ink p-4">
+          <View className="flex-1 pr-4">
+            <Text variant="body-strong">Show activity status</Text>
+            <Text variant="caption" className="mt-2">
+              Share when you were last active. Turning this off also hides
+              everyone else&apos;s status from you.
+            </Text>
+          </View>
+          <Toggle value={settings.show_activity} onToggle={() => toggle("show_activity")} />
+        </View>
+
+        <View className="flex-row items-center border border-hairline-strong bg-ink p-4">
+          <View className="flex-1 pr-4">
+            <Text variant="body-strong">Message previews</Text>
+            <Text variant="caption" className="mt-2">
+              Show sender name and a preview in new-message notifications. Off
+              shows only &ldquo;New message.&rdquo;
+            </Text>
+          </View>
+          <Toggle value={settings.dm_preview_enabled} onToggle={() => toggle("dm_preview_enabled")} />
         </View>
 
         <View className="border border-hairline-strong bg-ink p-4">

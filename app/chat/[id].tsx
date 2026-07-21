@@ -486,14 +486,20 @@ export default function ChatScreen() {
                         </Text>
                       </View>
                     ) : null}
-                    {message.reply_story_media ? (
-                      <StoryReplyPreview path={message.reply_story_media} mine={mine} />
-                    ) : null}
-                    {message.media_url ? (
-                      <ChatMediaBubble path={message.media_url} mine={mine} />
-                    ) : (
-                      <MessageBubble mine={mine} text={message.content ?? ""} />
-                    )}
+                    {/* Received messages show the sender's avatar to the left (#7). */}
+                    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}>
+                      {!mine ? <Avatar name={title} uri={profile.data?.avatar_url} size={26} /> : null}
+                      <View style={{ flex: 1 }}>
+                        {message.reply_story_media ? (
+                          <StoryReplyPreview path={message.reply_story_media} mine={mine} />
+                        ) : null}
+                        {message.media_url ? (
+                          <ChatMediaBubble path={message.media_url} mine={mine} />
+                        ) : (
+                          <MessageBubble mine={mine} text={message.content ?? ""} />
+                        )}
+                      </View>
+                    </View>
                     {emojis.length ? (
                       <View style={{ alignSelf: mine ? "flex-end" : "flex-start", flexDirection: "row", gap: 3, marginTop: -2, marginBottom: 2, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
                         {emojis.map((e) => (
@@ -504,10 +510,11 @@ export default function ChatScreen() {
                   </RNPressable>
                 );
               })}
-              {/* Read receipt under my most recent message once it's opened. */}
-              {lastMineRead ? (
+              {/* Delivery status under my most recent message (#5/#6):
+                  "Delivered" until opened, then "Seen {t}". */}
+              {lastMine && !lastMine.deleted_at ? (
                 <Text style={{ alignSelf: "flex-end", paddingRight: 4, paddingTop: 2, fontFamily: "GeistMono_400Regular", fontSize: 9.5, color: colors.fog }}>
-                  {`Seen ${seenLabel}`}
+                  {lastMineRead ? `Seen ${seenLabel}` : "Delivered"}
                 </Text>
               ) : null}
             </>

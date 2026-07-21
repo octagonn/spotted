@@ -230,6 +230,11 @@ export function useCommunityPosts(communityId?: string, enabled = true) {
 
 function invalidateCommunityCaches(queryClient: ReturnType<typeof useQueryClient>, communityId?: string) {
   void queryClient.invalidateQueries({ queryKey: ["my-communities"] });
+  // Joining/leaving changes what Discover should list and which crews have
+  // activity rows — refresh both so a just-joined community leaves Discover
+  // immediately.
+  void queryClient.invalidateQueries({ queryKey: ["discover-communities"] });
+  void queryClient.invalidateQueries({ queryKey: ["crew-activity"] });
   if (communityId) {
     void queryClient.invalidateQueries({ queryKey: ["community", communityId] });
   }

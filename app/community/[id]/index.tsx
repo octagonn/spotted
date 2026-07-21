@@ -27,6 +27,7 @@ import {
   useRespondJoinRequest,
   useSendCommunityMessage
 } from "@/hooks/queries/useCommunities";
+import { useMarkCommunityRead } from "@/hooks/queries/useCommunitiesHome";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { COMMUNITY_ICONS } from "@/lib/communityTypes";
 import { useAuthStore } from "@/stores/auth";
@@ -116,6 +117,13 @@ export default function CommunityScreen() {
   const requestToJoin = useRequestToJoin(id);
   const requests = useCommunityJoinRequests(id, isAdmin);
   const respond = useRespondJoinRequest(id);
+  const markRead = useMarkCommunityRead();
+
+  // Opening the community clears its unread dot on the Communities tab.
+  useEffect(() => {
+    if (id && isMember) markRead.mutate(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isMember]);
 
   const tabs: CommunityTab[] = isGym ? ["Posts", "Chat", "Rankings"] : ["Posts", "Chat"];
 

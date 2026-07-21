@@ -221,18 +221,21 @@ export type Database = {
           user_id: string
           joined_at: string
           role: string
+          last_read_at: string
         }
         Insert: {
           community_id: string
           user_id: string
           joined_at?: string
           role?: string
+          last_read_at?: string
         }
         Update: {
           community_id?: string
           user_id?: string
           joined_at?: string
           role?: string
+          last_read_at?: string
         }
         Relationships: [
           {
@@ -244,6 +247,42 @@ export type Database = {
           },
           {
             foreignKeyName: "community_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_nudges: {
+        Row: {
+          id: string
+          community_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          community_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          community_id?: string
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_nudges_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_nudges_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1417,6 +1456,8 @@ export type Database = {
       community_invite_code: { Args: { cid: string }; Returns: string | null }
       regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
       join_community_by_code: { Args: { code: string }; Returns: string | null }
+      nudge_community: { Args: { cid: string }; Returns: number }
+      wave_at_friend: { Args: { target: string; gym_name?: string | null }; Returns: undefined }
       can_read_post: {
         Args: { p_post_id: string; p_user_id: string }
         Returns: boolean
@@ -1520,6 +1561,8 @@ export type Database = {
         | "new_follower"
         | "community_invite"
         | "taunt"
+        | "wave"
+        | "community_nudge"
       schedule_visibility: "public" | "friends" | "private"
       subscription_tier: "free" | "plus"
     }
@@ -1662,6 +1705,8 @@ export const Constants = {
         "new_follower",
         "community_invite",
         "taunt",
+        "wave",
+        "community_nudge",
       ],
       schedule_visibility: ["public", "friends", "private"],
       subscription_tier: ["free", "plus"],

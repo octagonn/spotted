@@ -1,83 +1,84 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-  ArrowLeft,
   Camera,
-  Check,
-  ChevronDown,
   ChevronLeft,
-  ChevronUp,
+  ChevronRight,
   Dumbbell,
   Flame,
   Minus,
   Plus,
   Search,
-  Trash2,
   Trophy,
   X
 } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Confetti } from "@/components/workout/Confetti";
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import type { TrophyShareData } from "@/components/trophies/TrophyShareCard";
-import { useSaveWorkout, type CardioSet, type LiftSet, type WorkoutExercise } from "@/hooks/queries/useWorkouts";
-import { selectionHaptic } from "@/lib/haptics";
+import { useUserLifts } from "@/hooks/queries/useUserLifts";
 import {
-  BASE_LIBRARY,
-  FIELD_CFG,
-  fmtClock,
-  fmtMiles,
-  fmtWeight,
-  isCardioItem,
-  LIFT_MUSCLES,
-  MUSCLES,
-  type FieldKey,
-  type LibraryItem,
-  type Muscle
-} from "@/lib/workoutLibrary";
+  deriveExerciseBests,
+  isRepsGraded,
+  useSaveWorkout,
+  useWorkouts,
+  type CardioSet,
+  type LiftSet,
+  type SessionPR,
+  type WorkoutExercise
+} from "@/hooks/queries/useWorkouts";
+import { impactHaptic, successHaptic } from "@/lib/haptics";
+import { BASE_LIBRARY, fmtClock, isCardioItem, LIFT_MUSCLES, sessionTitle, type LibraryItem } from "@/lib/workoutLibrary";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
+import { useWorkoutSession } from "@/stores/workoutSession";
 import { colors } from "@/theme/colors";
 import { radius, tokens } from "@/theme/tokens";
 
-const DANGER = "#FF5C5C";
 const DISP = "Geist_700Bold";
 const NUM = "GeistMono_500Medium";
+/** Cardio accent (prototype #ff8a4c) — lifts stay on the app gold. */
+const CARDIO = "#FF8A4C";
+const CARDIO_TINT = "rgba(255,138,76,0.14)";
 
-type SheetState =
-  | null
-  | { type: "picker"; mode: "types" }
-  | { type: "picker"; mode: "list"; wtype: "lift" | "cardio" }
-  | { type: "editor"; exId: number; setId: number; field: FieldKey };
-
-type CustomState = { name: string; inc: boolean; muscle: Muscle } | null;
-
-let _id = 0;
+let _id = Date.now() % 10_000_000;
 const uid = () => ++_id;
 
-/** The pulsing "Live" dot in the header (prototype .pulse-dot). */
-function PulseDot() {
+/** The blinking LIVE dot (prototype `blink`). */
+function BlinkDot({ size = 9 }: { size?: number }) {
   const reduced = useReducedMotion();
   const o = useSharedValue(1);
   useEffect(() => {
-    if (reduced) {
-      o.value = 1;
-      return;
-    }
-    o.value = withRepeat(withTiming(0.35, { duration: 800, easing: Easing.inOut(Easing.ease) }), -1, true);
+    if (reduced) return;
+    o.value = withRepeat(withTiming(0.2, { duration: 700, easing: Easing.inOut(Easing.ease) }), -1, true);
   }, [reduced, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
-  return <Animated.View style={[{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: tokens.accent.gold }, style]} />;
+  return (
+    <Animated.View
+      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: tokens.accent.gold }, style]}
+    />
+  );
 }
 
-/** Tiny uppercase section label (an allowed caps case). */
+/** Tiny letterspaced caps label. */
 function Micro({ children, style }: { children: React.ReactNode; style?: object }) {
   return (
     <Text
       style={[
-        { fontFamily: "Geist_600SemiBold", fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", color: tokens.text.tertiary },
+        { fontFamily: "Geist_600SemiBold", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: tokens.text.tertiary },
         style
       ]}
     >
@@ -86,126 +87,150 @@ function Micro({ children, style }: { children: React.ReactNode; style?: object 
   );
 }
 
+function PrBadge({ label = "PR" }: { label?: string }) {
+  return (
+    <View style={{ backgroundColor: tokens.accent.gold, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+      <Text style={{ fontFamily: DISP, fontSize: 10, letterSpacing: 1, color: colors.black }}>{label}</Text>
+    </View>
+  );
+}
+
+type Celebration = { text: string };
+
+type Summary = {
+  title: string;
+  volume: number;
+  sets: number;
+  reps: number;
+  duration: number;
+  exCount: number;
+  prs: SessionPR[];
+  celebrations: TrophyShareData[];
+};
+
 export default function WorkoutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const userId = useAuthStore((s) => s.userId);
   const saveWorkout = useSaveWorkout();
 
-  const [name, setName] = useState("Workout");
-  const [startedAt] = useState(() => Date.now());
-  const [elapsed, setElapsed] = useState(0);
-  const [library, setLibrary] = useState<LibraryItem[]>(BASE_LIBRARY);
-  const [exercises, setExercises] = useState<WorkoutExercise[]>([]);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [sheet, setSheet] = useState<SheetState>(null);
-  const [custom, setCustom] = useState<CustomState>(null);
+  const session = useWorkoutSession();
+  const workouts = useWorkouts(userId);
+  const lifts = useUserLifts(userId);
+
+  // Start (or resume) the session on mount. Also prune empty entries left
+  // behind if the app closed mid-logger.
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    if (!useWorkoutSession.getState().active) {
+      useWorkoutSession.getState().start();
+    } else {
+      useWorkoutSession.getState().setExercises((prev) => prev.filter((ex) => ex.sets.length > 0));
+    }
+  }, []);
+
+  // Seed the PR detector with bests from history + canonical lifts.
+  const derivedBests = useMemo(
+    () => deriveExerciseBests(workouts.data, lifts.data),
+    [workouts.data, lifts.data]
+  );
+  useEffect(() => {
+    if (Object.keys(derivedBests).length > 0) session.seedBests(derivedBests);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedBests]);
+
+  // Live timer.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [summary, setSummary] = useState<Summary | null>(null);
+  useEffect(() => {
+    if (summary) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [summary]);
+  const elapsed = session.startedAt ? Math.max(0, Math.floor((nowMs - session.startedAt) / 1000)) : 0;
+
+  // Picker + logger state (local — the entry list itself lives in the store).
+  const [picker, setPicker] = useState<null | "lift" | "cardio">(null);
   const [query, setQuery] = useState("");
-  const [group, setGroup] = useState<string>("All");
-  const [rest, setRest] = useState<{ left: number; total: number } | null>(null);
-  const [finished, setFinished] = useState<{
-    dur: number;
-    vol: number;
-    sets: number;
-    cardioMin: number;
-    exCount: number;
-  } | null>(null);
-  const [draft, setDraft] = useState("");
-  const [celebrations, setCelebrations] = useState<TrophyShareData[]>([]);
+  const [group, setGroup] = useState("All");
+  const [customText, setCustomText] = useState("");
+  const [customItems, setCustomItems] = useState<LibraryItem[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [a, setA] = useState("0");
+  const [b, setB] = useState("0");
+
+  // PR celebration overlay.
+  const [celebrating, setCelebrating] = useState<Celebration | null>(null);
+  const [confKey, setConfKey] = useState(0);
+  const celebTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (celebTimer.current) clearTimeout(celebTimer.current);
+  }, []);
+
+  // Trophy cascade + summary volume count-up.
   const [celebrateIdx, setCelebrateIdx] = useState(0);
+  const [animVolume, setAnimVolume] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Elapsed clock.
-  useEffect(() => {
-    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
-    return () => clearInterval(t);
-  }, [startedAt]);
-
-  // Rest countdown.
-  useEffect(() => {
-    if (!rest) return;
-    if (rest.left <= 0) {
-      setRest(null);
-      return;
-    }
-    const t = setTimeout(() => setRest((r) => (r ? { ...r, left: r.left - 1 } : null)), 1000);
-    return () => clearTimeout(t);
-  }, [rest]);
+  const exercises = session.exercises;
+  const active = exercises.find((e) => e.id === activeId) ?? null;
+  const isLift = active ? active.kind === "lift" : picker === "lift";
 
   const totals = useMemo(() => {
     let vol = 0;
-    let done = 0;
-    let all = 0;
-    let cardioMin = 0;
-    exercises.forEach((ex) =>
-      ex.sets.forEach((s) => {
-        all += 1;
-        if (!s.done) return;
-        done += 1;
-        if (ex.kind === "cardio") cardioMin += (s as CardioSet).min;
-        else vol += (s as LiftSet).w * (s as LiftSet).r;
-      })
-    );
-    return { vol, done, all, cardioMin };
+    let sets = 0;
+    let reps = 0;
+    for (const ex of exercises) {
+      for (const s of ex.sets) {
+        sets += 1;
+        if (ex.kind === "lift") {
+          vol += (s as LiftSet).w * (s as LiftSet).r;
+          reps += (s as LiftSet).r;
+        }
+      }
+    }
+    return { vol, sets, reps };
   }, [exercises]);
 
-  const liftCount = useMemo(() => library.filter((l) => !isCardioItem(l)).length, [library]);
-  const cardioCount = library.length - liftCount;
+  const library = useMemo(() => [...BASE_LIBRARY, ...customItems], [customItems]);
+  const pickerResults = useMemo(() => {
+    if (!picker) return [];
+    const q = query.trim().toLowerCase();
+    const pool = library.filter((l) => (picker === "cardio") === isCardioItem(l));
+    if (q) return pool.filter((l) => l.name.toLowerCase().includes(q));
+    if (picker === "lift" && group !== "All") return pool.filter((l) => l.muscle === group);
+    return pool;
+  }, [picker, query, group, library]);
 
-  const patchSet = (exId: number, setId: number, fn: (s: LiftSet | CardioSet) => LiftSet | CardioSet) =>
-    setExercises((xs) =>
-      xs.map((x) =>
-        x.id !== exId ? x : ({ ...x, sets: x.sets.map((s) => (s.id !== setId ? s : fn(s))) } as WorkoutExercise)
-      )
-    );
-
-  const toggleDone = (exId: number, setId: number) => {
-    let turnedOn = false;
-    patchSet(exId, setId, (s) => {
-      turnedOn = !s.done;
-      return { ...s, done: !s.done };
-    });
-    void selectionHaptic();
-    if (turnedOn) setRest({ left: 90, total: 90 });
+  const suggestWeight = (name: string, fallback: number) => {
+    const best = session.bests[name] ?? 0;
+    if (best > 0 && !isRepsGraded(name)) return Math.max(45, Math.round((best * 0.75) / 5) * 5);
+    return fallback;
   };
 
-  const addSet = (ex: WorkoutExercise) => {
-    setExercises((xs) =>
-      xs.map((x) => {
-        if (x.id !== ex.id) return x;
-        const last = x.sets[x.sets.length - 1];
-        if (x.kind === "cardio") {
-          const l = last as CardioSet | undefined;
-          const s: CardioSet = {
-            id: uid(),
-            min: l ? l.min : x.defMin,
-            mi: l ? l.mi : x.defMi,
-            ...(x.hasInc ? { inc: l ? l.inc : x.defInc } : {}),
-            done: false
-          };
-          return { ...x, sets: [...x.sets, s] };
-        }
-        const l = last as LiftSet | undefined;
-        const s: LiftSet = { id: uid(), w: l ? l.w : x.defW, r: l ? l.r : x.defR, done: false };
-        return { ...x, sets: [...x.sets, s] };
-      })
-    );
+  const openLogger = (entry: WorkoutExercise) => {
+    if (entry.kind === "lift") {
+      setA(String(suggestWeight(entry.name, entry.defW)));
+      setB(String(entry.defR || 8));
+    } else {
+      setA(String(entry.defMi || 2));
+      setB(String(entry.defMin || 12));
+    }
+    setActiveId(entry.id);
+    setPicker(null);
   };
 
-  const removeSet = (exId: number, setId: number) => {
-    setExercises((xs) =>
-      xs.map((x) => (x.id !== exId ? x : ({ ...x, sets: x.sets.filter((s) => s.id !== setId) } as WorkoutExercise)))
-    );
-    setSheet(null);
-  };
-
-  const removeExercise = (exId: number) => setExercises((xs) => xs.filter((x) => x.id !== exId));
-
-  const addExercise = (item: LibraryItem) => {
-    const cardio = isCardioItem(item);
-    setExercises((xs) => [
-      ...xs,
-      cardio
+  const pick = (item: LibraryItem) => {
+    const kind = isCardioItem(item) ? "cardio" : "lift";
+    const existing = exercises.find((e) => e.name === item.name && e.kind === kind);
+    if (existing) {
+      openLogger(existing);
+      return;
+    }
+    const entry: WorkoutExercise =
+      kind === "cardio"
         ? {
             id: uid(),
             name: item.name,
@@ -215,56 +240,131 @@ export default function WorkoutScreen() {
             defMi: item.mi ?? 0,
             hasInc: item.inc !== undefined,
             defInc: item.inc,
-            sets: [{ id: uid(), min: item.min ?? 20, mi: item.mi ?? 0, ...(item.inc !== undefined ? { inc: item.inc } : {}), done: false }]
+            sets: []
           }
-        : {
-            id: uid(),
-            name: item.name,
-            muscle: item.muscle,
-            kind: "lift",
-            defW: item.w ?? 45,
-            defR: item.r ?? 10,
-            sets: [{ id: uid(), w: item.w ?? 45, r: item.r ?? 10, done: false }]
-          }
-    ]);
-    setSheet(null);
-    setQuery("");
-    setCustom(null);
-    setGroup("All");
+        : { id: uid(), name: item.name, muscle: item.muscle, kind: "lift", defW: item.w ?? 45, defR: item.r ?? 10, sets: [] };
+    session.setExercises((prev) => [...prev, entry]);
+    openLogger(entry);
   };
 
-  const createCustom = () => {
-    if (!custom || !custom.name.trim()) return;
-    const cardio = custom.muscle === "Cardio";
-    const item: LibraryItem = cardio
-      ? { name: custom.name.trim(), muscle: "Cardio", min: 20, mi: 0, ...(custom.inc ? { inc: 1 } : {}), custom: true }
-      : { name: custom.name.trim(), muscle: custom.muscle, w: 45, r: 10, custom: true };
-    setLibrary((lib) => [...lib, item]);
-    addExercise(item);
+  const addCustom = () => {
+    const name = customText.trim();
+    if (!name) return;
+    const item: LibraryItem =
+      picker === "cardio"
+        ? { name, muscle: "Cardio", min: 20, mi: 2, custom: true }
+        : { name, muscle: "Full Body", w: 45, r: 10, custom: true };
+    setCustomItems((prev) => (prev.some((c) => c.name === name) ? prev : [...prev, item]));
+    setCustomText("");
+    pick(item);
   };
 
-  const finishWorkout = async () => {
-    if (totals.done === 0 || !userId || saving) return;
+  const sanitizeDec = (v: string) => {
+    const clean = v.replace(/[^0-9.]/g, "");
+    const dot = clean.indexOf(".");
+    return dot === -1 ? clean : clean.slice(0, dot + 1) + clean.slice(dot + 1).replace(/\./g, "");
+  };
+
+  const step = (setter: (fn: (v: string) => string) => void, delta: number) =>
+    setter((v) => {
+      let n = (parseFloat(v) || 0) + delta;
+      n = Math.round(n * 100) / 100;
+      return String(Math.max(0, n));
+    });
+
+  const closeLogger = () => {
+    const entry = active;
+    if (entry && entry.sets.length === 0) {
+      session.setExercises((prev) => prev.filter((e) => e.id !== entry.id));
+    }
+    setActiveId(null);
+  };
+
+  const logSet = () => {
+    const entry = active;
+    if (!entry) return;
+    let isPR = false;
+    let prInfo: SessionPR | null = null;
+    let newBest = 0;
+
+    if (entry.kind === "lift") {
+      const w = parseFloat(a) || 0;
+      const r = parseInt(b, 10) || 0;
+      if (r <= 0) return;
+      const repsGraded = isRepsGraded(entry.name);
+      const metric = repsGraded ? r : w;
+      const cur = session.bests[entry.name] ?? 0;
+      if (metric > cur && metric > 0) {
+        isPR = true;
+        newBest = metric;
+        prInfo = {
+          name: entry.name,
+          value: repsGraded ? `${r} reps` : `${w} lb`,
+          was: cur > 0 ? (repsGraded ? `was ${cur} reps` : `was ${cur} lb`) : "first log"
+        };
+      }
+      const set: LiftSet = { id: uid(), w, r, done: true, ...(isPR ? { pr: true } : {}) };
+      session.setExercises((prev) =>
+        prev.map((e) => (e.id === entry.id ? ({ ...e, sets: [...e.sets, set] } as WorkoutExercise) : e))
+      );
+    } else {
+      const mi = parseFloat(a) || 0;
+      const min = parseInt(b, 10) || 0;
+      if (min <= 0) return;
+      const cur = session.bests[entry.name] ?? 0;
+      if (mi > cur && mi > 0) {
+        isPR = true;
+        newBest = mi;
+        prInfo = { name: entry.name, value: `${mi} mi`, was: cur > 0 ? `was ${cur} mi` : "first log" };
+      }
+      const set: CardioSet = { id: uid(), min, mi, done: true, ...(isPR ? { pr: true } : {}) };
+      session.setExercises((prev) =>
+        prev.map((e) => (e.id === entry.id ? ({ ...e, sets: [...e.sets, set] } as WorkoutExercise) : e))
+      );
+    }
+
+    if (isPR && prInfo) {
+      session.recordPR(prInfo, entry.name, newBest);
+      setCelebrating({ text: `${entry.name} · ${prInfo.value}` });
+      setConfKey((k) => k + 1);
+      if (celebTimer.current) clearTimeout(celebTimer.current);
+      celebTimer.current = setTimeout(() => setCelebrating(null), 1600);
+      void successHaptic();
+    } else {
+      void impactHaptic();
+    }
+  };
+
+  const finish = async () => {
+    if (totals.sets === 0 || !userId || saving) return;
     setSaving(true);
-    const summary = {
-      dur: elapsed,
-      vol: totals.vol,
-      sets: totals.done,
-      cardioMin: totals.cardioMin,
-      exCount: exercises.filter((e) => e.sets.some((s) => s.done)).length
-    };
-    setRest(null);
+    const hasLift = exercises.some((e) => e.kind === "lift" && e.sets.length > 0);
+    const hasCardio = exercises.some((e) => e.kind === "cardio" && e.sets.length > 0);
+    const title = sessionTitle(hasLift, hasCardio);
+    const logged = exercises.filter((e) => e.sets.length > 0);
     try {
       const result = await saveWorkout.mutateAsync({
         userId,
-        name,
-        startedAt,
+        name: title,
+        startedAt: session.startedAt,
         durationSeconds: elapsed,
-        exercises
+        exercises: logged,
+        sessionPRs: session.sessionPRs
       });
-      setCelebrations(result.celebrations);
+      setSummary({
+        title,
+        volume: totals.vol,
+        sets: totals.sets,
+        reps: totals.reps,
+        duration: elapsed,
+        exCount: logged.length,
+        prs: session.sessionPRs,
+        celebrations: result.celebrations
+      });
       setCelebrateIdx(0);
-      setFinished(summary);
+      setConfKey((k) => k + 1);
+      setActiveId(null);
+      setPicker(null);
     } catch {
       showToast("Couldn't save your workout — check your connection");
     } finally {
@@ -272,772 +372,672 @@ export default function WorkoutScreen() {
     }
   };
 
-  const resetWorkout = () => {
-    setExercises([]);
-    setFinished(null);
-    setRest(null);
-    setCollapsed({});
-    setCelebrations([]);
+  // Summary volume count-up (prototype `volTween`, cubic ease-out over 900ms).
+  useEffect(() => {
+    if (!summary) return;
+    const target = summary.volume;
+    if (target <= 0) {
+      setAnimVolume(0);
+      return;
+    }
+    const start = Date.now();
+    const t = setInterval(() => {
+      const p = Math.min(1, (Date.now() - start) / 900);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setAnimVolume(Math.round(target * eased));
+      if (p >= 1) clearInterval(t);
+    }, 24);
+    return () => clearInterval(t);
+  }, [summary]);
+
+  const done = () => {
+    session.clear();
     router.back();
   };
 
-  const openPicker = (wtype: "lift" | "cardio" | null) => {
-    setSheet(wtype ? { type: "picker", mode: "list", wtype } : { type: "picker", mode: "types" });
-    setQuery("");
-    setGroup("All");
-    setCustom(null);
-  };
-  const closeSheet = () => {
-    setSheet(null);
-    setCustom(null);
-    setQuery("");
-    setGroup("All");
-  };
-  const openCustom = () =>
-    setCustom({
-      name: query.trim(),
-      inc: false,
-      muscle: sheet && sheet.type === "picker" && sheet.mode === "list" && sheet.wtype === "cardio" ? "Cardio" : "Chest"
-    });
+  /* ------------------------------- pieces -------------------------------- */
 
-  const pickerList = sheet && sheet.type === "picker" && sheet.mode === "list" ? sheet : null;
-  const results = useMemo(() => {
-    if (!pickerList) return [];
-    const q = query.trim().toLowerCase();
-    const pool = library.filter((l) => (pickerList.wtype === "cardio") === isCardioItem(l));
-    if (q) return pool.filter((l) => l.name.toLowerCase().includes(q));
-    if (pickerList.wtype === "lift" && group !== "All") return pool.filter((l) => l.muscle === group);
-    return pool;
-  }, [query, library, pickerList, group]);
-
-  const editing = useMemo(() => {
-    if (!sheet || sheet.type !== "editor") return null;
-    const ex = exercises.find((x) => x.id === sheet.exId);
-    if (!ex) return null;
-    const idx = ex.sets.findIndex((s) => s.id === sheet.setId);
-    if (idx < 0) return null;
-    return { ex, set: ex.sets[idx], idx };
-  }, [sheet, exercises]);
-
-  const cfg = sheet && sheet.type === "editor" ? FIELD_CFG[sheet.field] : null;
-
-  const applyVal = (v: number) => {
-    if (!editing || !sheet || sheet.type !== "editor") return;
-    const field = sheet.field;
-    patchSet(editing.ex.id, editing.set.id, (s) => ({ ...s, [field]: v }));
-    setDraft(String(v));
-  };
-  const bump = (delta: number) => {
-    if (!editing || !cfg || !sheet || sheet.type !== "editor") return;
-    const current = (editing.set as unknown as Record<string, number>)[sheet.field] ?? 0;
-    applyVal(Math.max(cfg.min, Math.round((current + delta) * 10) / 10));
-  };
-  const typeVal = (raw: string) => {
-    if (!editing || !cfg || !sheet || sheet.type !== "editor") return;
-    const intOnly = sheet.field === "r" || sheet.field === "min";
-    let clean = raw.replace(intOnly ? /[^0-9]/g : /[^0-9.]/g, "");
-    const dot = clean.indexOf(".");
-    if (dot !== -1) clean = clean.slice(0, dot + 1) + clean.slice(dot + 1).replace(/\./g, "");
-    clean = clean.replace(/^0+(?=\d)/, "");
-    if (clean.length > 6) clean = clean.slice(0, 6);
-    setDraft(clean);
-    const n = parseFloat(clean);
-    if (!isNaN(n) && n >= cfg.min) {
-      const field = sheet.field;
-      patchSet(editing.ex.id, editing.set.id, (s) => ({ ...s, [field]: Math.round(n * 10) / 10 }));
+  const entrySummary = (e: WorkoutExercise) => {
+    if (e.sets.length === 0) return "No sets yet";
+    if (e.kind === "lift") {
+      const best = Math.max(...e.sets.map((s) => (s as LiftSet).w));
+      return `${e.sets.length} ${e.sets.length === 1 ? "set" : "sets"} · top ${best} lb`;
     }
+    const min = e.sets.reduce((acc, s) => acc + (s as CardioSet).min, 0);
+    return `${e.sets.length} ${e.sets.length === 1 ? "interval" : "intervals"} · ${min} min`;
   };
 
-  const editorKey = sheet && sheet.type === "editor" ? `${sheet.exId}:${sheet.setId}:${sheet.field}` : null;
-  useEffect(() => {
-    if (editorKey && editing && sheet && sheet.type === "editor") {
-      setDraft(String((editing.set as unknown as Record<string, number>)[sheet.field]));
+  const entryMetric = (e: WorkoutExercise) => {
+    if (e.kind === "lift") {
+      return e.sets.reduce((acc, s) => acc + (s as LiftSet).w * (s as LiftSet).r, 0).toLocaleString();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorKey]);
+    return e.sets.reduce((acc, s) => acc + (s as CardioSet).mi, 0).toFixed(1);
+  };
 
-  const SECTIONS = [
-    {
-      key: "lift" as const,
-      title: "Weightlifting",
-      Icon: Dumbbell,
-      stat: `${totals.vol.toLocaleString()} lb`,
-      addLabel: "Add lift",
-      sub: `${liftCount} lifts · lb × reps`
-    },
-    {
-      key: "cardio" as const,
-      title: "Cardio",
-      Icon: Flame,
-      stat: `${totals.cardioMin} min`,
-      addLabel: "Add cardio",
-      sub: `${cardioCount} activities · min × mi`
-    }
-  ];
-
-  // ---- pieces ----
-
-  const renderCard = (ex: WorkoutExercise) => {
-    const cardio = ex.kind === "cardio";
-    const inc = cardio && ex.hasInc;
+  const setRow = (e: WorkoutExercise, s: LiftSet | CardioSet, i: number) => {
+    const pr = Boolean(s.pr);
+    const text =
+      e.kind === "lift"
+        ? `${(s as LiftSet).w} lb × ${(s as LiftSet).r}`
+        : `${(s as CardioSet).mi} mi · ${(s as CardioSet).min} min`;
+    const sub =
+      e.kind === "lift"
+        ? `${(s as LiftSet).w * (s as LiftSet).r} lb`
+        : `${(s as CardioSet).mi > 0 ? ((s as CardioSet).min / (s as CardioSet).mi).toFixed(1) : "0"} min/mi`;
     return (
-      <View key={ex.id} style={{ marginBottom: 12, backgroundColor: tokens.bg.raised, borderWidth: 1, borderColor: tokens.border.default, borderRadius: radius.md }}>
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ fontFamily: DISP, fontSize: 16, color: tokens.text.primary }}>
-              {ex.name}
-            </Text>
-            <Micro style={{ marginTop: 2 }}>{ex.muscle}</Micro>
-          </View>
-          <Pressable accessibilityLabel={`Remove ${ex.name}`} onPress={() => removeExercise(ex.id)} hitSlop={8} style={{ padding: 6 }}>
-            <Trash2 size={16} color={tokens.text.tertiary} />
-          </Pressable>
+      <View
+        key={s.id}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          backgroundColor: pr ? tokens.accent.goldSubtle : tokens.bg.subtle,
+          borderWidth: 1,
+          borderColor: pr ? "rgba(232,180,76,0.4)" : tokens.border.default,
+          borderRadius: radius.md,
+          paddingVertical: 12,
+          paddingHorizontal: 15
+        }}
+      >
+        <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: tokens.bg.base, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontFamily: NUM, fontSize: 13, color: tokens.text.secondary }}>{i + 1}</Text>
         </View>
-
-        {/* column heads */}
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 4 }}>
-          <Micro style={{ width: 32 }}>{cardio ? "Int" : "Set"}</Micro>
-          <View style={{ flex: 1, alignItems: "center" }}><Micro>{cardio ? "Min" : "Lb"}</Micro></View>
-          <View style={{ flex: 1, alignItems: "center" }}><Micro>{cardio ? "Mi" : "Reps"}</Micro></View>
-          {inc ? <View style={{ flex: 1, alignItems: "center" }}><Micro>Inc %</Micro></View> : null}
-          <View style={{ width: 46 }} />
-        </View>
-
-        {ex.sets.map((s, i) => {
-          const a = ex.kind === "cardio" ? (s as CardioSet).min : fmtWeight((s as LiftSet).w);
-          const b = ex.kind === "cardio" ? fmtMiles((s as CardioSet).mi, true) : (s as LiftSet).r;
-          const valColor = s.done ? tokens.text.tertiary : tokens.text.primary;
-          const cell = (label: React.ReactNode, field: FieldKey) => (
-            <Pressable
-              onPress={() => setSheet({ type: "editor", exId: ex.id, setId: s.id, field })}
-              style={{ flex: 1, marginHorizontal: 4, paddingVertical: 7, borderRadius: radius.sm, backgroundColor: tokens.bg.subtle, alignItems: "center" }}
-            >
-              <Text style={{ fontFamily: NUM, fontSize: inc ? 18 : 20, color: valColor }}>{label}</Text>
-            </Pressable>
-          );
-          return (
-            <View
-              key={s.id}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 16,
-                paddingVertical: 4,
-                borderTopWidth: 1,
-                borderTopColor: tokens.border.default,
-                backgroundColor: s.done ? tokens.accent.goldSubtle : "transparent"
-              }}
-            >
-              <Text style={{ width: 32, fontFamily: NUM, fontSize: 15, color: tokens.text.tertiary }}>{i + 1}</Text>
-              {cell(cardio ? (s as CardioSet).min : a, cardio ? "min" : "w")}
-              {cell(cardio ? fmtMiles((s as CardioSet).mi, true) : b, cardio ? "mi" : "r")}
-              {inc ? cell(fmtMiles((s as CardioSet).inc ?? 0, false), "inc") : null}
-              <View style={{ width: 46, alignItems: "flex-end" }}>
-                <Pressable
-                  accessibilityLabel={s.done ? "Unlog set" : "Log set"}
-                  onPress={() => toggleDone(ex.id, s.id)}
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: radius.pill,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: s.done ? tokens.accent.gold : "transparent",
-                    borderWidth: s.done ? 0 : 1.5,
-                    borderColor: tokens.border.strong
-                  }}
-                >
-                  <Check size={18} strokeWidth={3} color={s.done ? colors.black : tokens.text.tertiary} />
-                </Pressable>
-              </View>
-            </View>
-          );
-        })}
-
-        <Pressable
-          onPress={() => addSet(ex)}
-          style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderTopWidth: 1, borderTopColor: tokens.border.default }}
-        >
-          <Plus size={15} color={tokens.text.primary} />
-          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: tokens.text.primary }}>
-            {cardio ? "Add interval" : "Add set"}
-          </Text>
-        </Pressable>
+        <Text style={{ flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.text.primary }}>{text}</Text>
+        {pr ? <PrBadge /> : null}
+        <Text style={{ fontFamily: NUM, fontSize: 13, color: tokens.text.tertiary }}>{sub}</Text>
       </View>
     );
   };
 
-  const typeTile = (def: (typeof SECTIONS)[number], big: boolean) => {
-    const Icon = def.Icon;
+  const categoryCard = (kind: "lift" | "cardio") => {
+    const Icon = kind === "lift" ? Dumbbell : Flame;
     return (
       <Pressable
-        key={def.key}
-        onPress={() => openPicker(def.key)}
+        key={kind}
+        onPress={() => {
+          setPicker(kind);
+          setQuery("");
+          setGroup("All");
+          setCustomText("");
+        }}
         style={{
           flex: 1,
-          overflow: "hidden",
-          alignItems: "center",
-          paddingVertical: big ? 22 : 18,
-          paddingHorizontal: 12,
-          backgroundColor: tokens.bg.raised,
+          gap: 12,
           borderWidth: 1,
           borderColor: tokens.border.default,
-          borderRadius: radius.lg
+          backgroundColor: tokens.bg.raised,
+          borderRadius: radius.lg,
+          paddingVertical: 20,
+          paddingHorizontal: 18
         }}
       >
-        <View
-          style={{
-            width: big ? 52 : 46,
-            height: big ? 52 : 46,
-            borderRadius: radius.pill,
-            borderWidth: 1.5,
-            borderColor: tokens.accent.gold,
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <Icon size={big ? 22 : 19} color={tokens.accent.gold} strokeWidth={1.9} />
+        <View style={{ width: 52, height: 52, borderRadius: radius.pill, borderWidth: 2, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
+          <Icon size={kind === "lift" ? 26 : 24} color={tokens.accent.gold} strokeWidth={1.7} />
         </View>
-        <Text style={{ marginTop: 12, fontFamily: DISP, fontSize: big ? 18 : 16, color: tokens.text.primary }}>{def.title}</Text>
-        <Text style={{ marginTop: 4, fontSize: 12, color: tokens.text.secondary }}>{def.sub}</Text>
+        <View>
+          <Text style={{ fontFamily: DISP, fontSize: 19, color: tokens.text.primary }}>
+            {kind === "lift" ? "Weightlifting" : "Cardio"}
+          </Text>
+          <Text style={{ marginTop: 3, fontSize: 13, color: tokens.text.tertiary }}>
+            {kind === "lift"
+              ? `${library.filter((l) => !isCardioItem(l)).length} lifts · lb × reps`
+              : `${library.filter(isCardioItem).length} activities · min × mi`}
+          </Text>
+        </View>
       </Pressable>
     );
   };
 
-  // ---- UI ----
+  /* -------------------------------- render ------------------------------- */
+
+  if (summary) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.black }}>
+        <LinearGradient
+          colors={["#1C1608", colors.black]}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: 360 }}
+        />
+        <ScrollView contentContainerStyle={{ paddingTop: insets.top + 36, paddingBottom: insets.bottom + 24, flexGrow: 1 }}>
+          <View style={{ paddingHorizontal: 26, alignItems: "center" }}>
+            <Micro style={{ color: tokens.accent.gold, letterSpacing: 3 }}>Workout complete</Micro>
+            <Text style={{ marginTop: 10, fontFamily: DISP, fontSize: 32, lineHeight: 36, color: tokens.text.primary, textAlign: "center" }}>
+              {summary.prs.length > 0
+                ? `${summary.prs.length} personal ${summary.prs.length === 1 ? "record" : "records"} smashed.`
+                : "Solid session logged."}
+            </Text>
+          </View>
+
+          {summary.prs.length > 0 ? (
+            <View style={{ paddingHorizontal: 26, paddingTop: 30, gap: 12 }}>
+              {summary.prs.map((pr) => (
+                <View
+                  key={pr.name}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 14,
+                    borderWidth: 1,
+                    borderColor: "rgba(232,180,76,0.35)",
+                    backgroundColor: tokens.accent.goldSubtle,
+                    borderRadius: radius.lg,
+                    paddingVertical: 16,
+                    paddingHorizontal: 18
+                  }}
+                >
+                  <Trophy size={38} color={tokens.accent.gold} strokeWidth={1.6} />
+                  <View style={{ flex: 1 }}>
+                    <Micro style={{ color: tokens.accent.gold }}>New PR</Micro>
+                    <Text style={{ marginTop: 1, fontFamily: DISP, fontSize: 18, color: tokens.text.primary }}>{pr.name}</Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ fontFamily: NUM, fontSize: 20, color: tokens.text.primary }}>{pr.value}</Text>
+                    <Text style={{ fontSize: 11, color: "#9A8A5A" }}>{pr.was}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={{ paddingHorizontal: 26, paddingTop: 26, flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            {[
+              { v: animVolume.toLocaleString(), l: "Volume · lb" },
+              { v: `${summary.sets}`, l: `Sets · reps ${summary.reps}` },
+              { v: fmtClock(summary.duration), l: "Duration" },
+              { v: `${summary.exCount}`, l: "Exercises" }
+            ].map((st) => (
+              <View
+                key={st.l}
+                style={{
+                  width: "48%",
+                  flexGrow: 1,
+                  borderWidth: 1,
+                  borderColor: tokens.border.default,
+                  backgroundColor: tokens.bg.raised,
+                  borderRadius: radius.lg,
+                  padding: 20
+                }}
+              >
+                <Text style={{ fontFamily: NUM, fontSize: 32, lineHeight: 34, color: tokens.text.primary }}>{st.v}</Text>
+                <Micro style={{ marginTop: 6 }}>{st.l}</Micro>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ marginTop: "auto", paddingHorizontal: 26, paddingTop: 24 }}>
+            <Pressable
+              onPress={done}
+              style={{ paddingVertical: 19, borderRadius: radius.pill, backgroundColor: tokens.text.primary, alignItems: "center" }}
+            >
+              <Text style={{ fontFamily: DISP, fontSize: 18, color: colors.black }}>Done</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                session.clear();
+                router.replace("/camera");
+              }}
+              style={{ marginTop: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, paddingVertical: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: tokens.border.strong }}
+            >
+              <Camera size={16} color={tokens.text.primary} />
+              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: tokens.text.primary }}>Post today&apos;s SPOTTED</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+
+        <Confetti seed={confKey} />
+        <TrophyUnlockModal
+          data={celebrateIdx < summary.celebrations.length ? summary.celebrations[celebrateIdx] : null}
+          visible={celebrateIdx < summary.celebrations.length}
+          onClose={() => setCelebrateIdx((i) => i + 1)}
+        />
+      </View>
+    );
+  }
 
   return (
-    <View style={{ flex: 1, backgroundColor: tokens.bg.base, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: tokens.bg.base }}>
       {/* header */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: tokens.border.default }}>
-        <Pressable accessibilityLabel="Back" onPress={() => router.back()} hitSlop={10} style={{ padding: 4, marginLeft: -4 }}>
-          <ChevronLeft size={24} color={tokens.text.secondary} />
-        </Pressable>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            accessibilityLabel="Workout name"
-            style={{ fontFamily: DISP, fontSize: 22, color: tokens.text.primary, padding: 0 }}
-          />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-            <PulseDot />
-            <Micro style={{ color: tokens.text.secondary }}>Live</Micro>
-            <Micro>· {fmtClock(elapsed)}</Micro>
-          </View>
+      <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: tokens.border.default }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Pressable accessibilityLabel="Back to My Workouts" onPress={() => router.back()} hitSlop={10} style={{ marginLeft: -6, padding: 2 }}>
+            <ChevronLeft size={28} color={tokens.text.secondary} />
+          </Pressable>
+          <Text style={{ fontFamily: DISP, fontSize: 28, letterSpacing: -0.6, color: tokens.text.primary }}>Workout</Text>
         </View>
-        <Text allowFontScaling={false} style={{ fontFamily: "Boldonse_400Regular", fontSize: 12, letterSpacing: 0.5, color: tokens.text.primary }}>
-          SPOTTED
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 9, paddingLeft: 36, marginTop: 6 }}>
+          <BlinkDot />
+          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, letterSpacing: 1.5, color: tokens.text.secondary }}>
+            LIVE · <Text style={{ fontFamily: NUM, color: tokens.text.primary }}>{fmtClock(elapsed)}</Text>
+          </Text>
+        </View>
       </View>
 
-      {/* scroll */}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+        <View style={{ flexDirection: "row", gap: 14 }}>
+          {categoryCard("lift")}
+          {categoryCard("cardio")}
+        </View>
+
         {exercises.length === 0 ? (
-          <View style={{ paddingTop: 40, alignItems: "center" }}>
-            <Text style={{ fontFamily: DISP, fontSize: 26, lineHeight: 32, color: tokens.text.primary, textAlign: "center" }}>
-              Hit a lift to{"\n"}start today's log.
+          <View style={{ paddingTop: 46, paddingHorizontal: 10, alignItems: "center" }}>
+            <Text style={{ fontFamily: DISP, fontSize: 30, lineHeight: 34, letterSpacing: -0.8, color: tokens.text.primary, textAlign: "center" }}>
+              Hit a lift to{"\n"}start today&apos;s log.
             </Text>
-            <Text style={{ marginTop: 12, fontSize: 14, color: tokens.text.secondary, textAlign: "center" }}>
+            <Text style={{ marginTop: 16, fontSize: 15, color: tokens.text.tertiary, textAlign: "center" }}>
               Lifts log in sets. Cardio logs in intervals.
             </Text>
-            <View style={{ flexDirection: "row", gap: 12, marginTop: 28, alignSelf: "stretch" }}>
-              {SECTIONS.map((def) => typeTile(def, true))}
-            </View>
           </View>
         ) : (
-          SECTIONS.map((def) => {
-            const items = exercises.filter((x) => x.kind === def.key);
-            const isCollapsed = collapsed[def.key];
-            const Icon = def.Icon;
-            return (
-              <View key={def.key} style={{ marginBottom: 20 }}>
+          <View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 26, marginBottom: 12, paddingHorizontal: 2 }}>
+              <Micro style={{ letterSpacing: 3 }}>Today&apos;s log</Micro>
+              <Micro style={{ color: tokens.accent.gold, letterSpacing: 1 }}>
+                {totals.sets} {totals.sets === 1 ? "set" : "sets"} logged
+              </Micro>
+            </View>
+            <View style={{ gap: 12 }}>
+              {exercises.map((e) => (
                 <Pressable
-                  onPress={() => items.length && setCollapsed((c) => ({ ...c, [def.key]: !c[def.key] }))}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, paddingBottom: 8 }}
+                  key={e.id}
+                  onPress={() => openLogger(e)}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: tokens.border.default,
+                    backgroundColor: tokens.bg.raised,
+                    borderRadius: radius.lg,
+                    padding: 16
+                  }}
                 >
-                  <Icon size={15} color={tokens.text.primary} strokeWidth={1.9} />
-                  <Text style={{ fontFamily: DISP, fontSize: 16, color: tokens.text.primary }}>{def.title}</Text>
-                  <View style={{ flex: 1 }} />
-                  {items.length > 0 ? (
-                    <>
-                      <Micro>{def.stat}</Micro>
-                      {isCollapsed ? <ChevronDown size={15} color={tokens.text.tertiary} /> : <ChevronUp size={15} color={tokens.text.tertiary} />}
-                    </>
-                  ) : null}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 13 }}>
+                    <View
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: radius.sm,
+                        backgroundColor: e.kind === "lift" ? tokens.accent.goldSubtle : CARDIO_TINT,
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      {e.kind === "lift" ? (
+                        <Dumbbell size={20} color={tokens.accent.gold} strokeWidth={1.8} />
+                      ) : (
+                        <Flame size={19} color={CARDIO} strokeWidth={1.7} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text numberOfLines={1} style={{ fontFamily: DISP, fontSize: 17, color: tokens.text.primary }}>
+                          {e.name}
+                        </Text>
+                        {e.sets.some((s) => s.pr) ? <PrBadge /> : null}
+                      </View>
+                      <Text style={{ marginTop: 2, fontSize: 13, color: tokens.text.tertiary }}>{entrySummary(e)}</Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={{ fontFamily: NUM, fontSize: 18, color: tokens.text.primary }}>{entryMetric(e)}</Text>
+                      <Micro style={{ marginTop: 1, letterSpacing: 0.5 }}>{e.kind === "lift" ? "lb vol" : "miles"}</Micro>
+                    </View>
+                  </View>
                 </Pressable>
-
-                {!isCollapsed ? items.map(renderCard) : null}
-
-                {!isCollapsed ? (
-                  <Pressable
-                    onPress={() => openPicker(def.key)}
-                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: radius.md, borderWidth: 1.5, borderColor: tokens.border.strong, borderStyle: "dashed" }}
-                  >
-                    <Plus size={15} color={tokens.text.secondary} />
-                    <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: tokens.text.secondary }}>{def.addLabel}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            );
-          })
+              ))}
+            </View>
+          </View>
         )}
       </ScrollView>
 
-      {/* rest pill */}
-      {rest && !finished ? (
-        <Pressable
-          onPress={() => setRest(null)}
-          style={{ position: "absolute", left: 16, right: 16, bottom: insets.bottom + 96, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.pill, backgroundColor: tokens.bg.raised, borderWidth: 1, borderColor: tokens.border.default }}
-        >
-          <Micro style={{ color: tokens.text.secondary }}>Rest</Micro>
-          <View style={{ flex: 1, height: 4, borderRadius: radius.pill, overflow: "hidden", backgroundColor: tokens.bg.subtle }}>
-            <View style={{ height: 4, borderRadius: radius.pill, width: `${(rest.left / rest.total) * 100}%`, backgroundColor: tokens.accent.gold }} />
-          </View>
-          <Text style={{ fontFamily: NUM, fontSize: 16, color: tokens.text.primary }}>{fmtClock(rest.left)}</Text>
-          <Micro>Skip</Micro>
-        </Pressable>
-      ) : null}
-
-      {/* bottom bar */}
-      <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom > 0 ? insets.bottom : 16, backgroundColor: tokens.bg.base, borderTopWidth: 1, borderTopColor: tokens.border.default }}>
+      {/* bottom totals bar */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 16,
+          borderTopWidth: 1,
+          borderTopColor: tokens.border.default,
+          backgroundColor: colors.black,
+          paddingHorizontal: 22,
+          paddingTop: 16,
+          paddingBottom: insets.bottom > 0 ? insets.bottom + 6 : 22
+        }}
+      >
         <View>
-          <Text style={{ fontFamily: NUM, fontSize: 22, color: tokens.text.primary }}>{totals.vol.toLocaleString()}</Text>
-          <Micro style={{ marginTop: 2 }}>Volume · lb</Micro>
+          <Text style={{ fontFamily: NUM, fontSize: 26, lineHeight: 27, color: tokens.text.primary }}>{totals.vol.toLocaleString()}</Text>
+          <Micro style={{ marginTop: 4, letterSpacing: 1.5 }}>Volume · lb</Micro>
         </View>
         <View>
-          <Text style={{ fontFamily: NUM, fontSize: 22, color: tokens.text.primary }}>
-            {totals.done}
-            <Text style={{ color: tokens.text.tertiary, fontSize: 15 }}>/{totals.all}</Text>
+          <Text style={{ fontFamily: NUM, fontSize: 26, lineHeight: 27, color: tokens.text.primary }}>
+            {totals.sets}
+            <Text style={{ color: tokens.text.tertiary }}>/{exercises.length}</Text>
           </Text>
-          <Micro style={{ marginTop: 2 }}>Sets</Micro>
+          <Micro style={{ marginTop: 4, letterSpacing: 1.5 }}>Sets</Micro>
         </View>
-        {totals.cardioMin > 0 ? (
-          <View>
-            <Text style={{ fontFamily: NUM, fontSize: 22, color: tokens.text.primary }}>{totals.cardioMin}</Text>
-            <Micro style={{ marginTop: 2 }}>Cardio</Micro>
-          </View>
-        ) : null}
         <Pressable
-          onPress={() => void finishWorkout()}
-          disabled={totals.done === 0 || saving}
-          style={{ flex: 1, paddingVertical: 14, borderRadius: radius.pill, backgroundColor: tokens.text.primary, opacity: totals.done === 0 || saving ? 0.3 : 1, alignItems: "center" }}
+          onPress={() => void finish()}
+          disabled={totals.sets === 0 || saving}
+          style={{
+            marginLeft: "auto",
+            paddingVertical: 16,
+            paddingHorizontal: 26,
+            borderRadius: radius.pill,
+            backgroundColor: totals.sets > 0 ? tokens.text.primary : tokens.bg.subtle
+          }}
         >
-          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.black }}>{saving ? "Saving…" : "Finish workout"}</Text>
+          <Text style={{ fontFamily: DISP, fontSize: 16, color: totals.sets > 0 ? colors.black : tokens.text.tertiary }}>
+            {saving ? "Saving…" : "Finish workout"}
+          </Text>
         </Pressable>
       </View>
 
-      <PickerSheet
-        sheet={sheet && sheet.type === "picker" && !finished ? sheet : null}
-        custom={custom}
-        query={query}
-        group={group}
-        results={results}
-        insets={insets}
-        onClose={closeSheet}
-        onBackToTypes={() => openPicker(null)}
-        onPickType={(w) => openPicker(w)}
-        onQuery={setQuery}
-        onGroup={setGroup}
-        onAdd={addExercise}
-        onOpenCustom={openCustom}
-        setCustom={setCustom}
-        onCreateCustom={createCustom}
-      />
-
-      <EditorSheet
-        open={Boolean(sheet && sheet.type === "editor" && editing && cfg && !finished)}
-        label={cfg?.label ?? ""}
-        exName={editing?.ex.name ?? ""}
-        kind={editing?.ex.kind ?? "lift"}
-        idx={editing?.idx ?? 0}
-        draft={draft}
-        chips={cfg?.chips ?? []}
-        chipMode={cfg?.chipMode ?? "set"}
-        step={cfg?.step ?? 1}
-        insets={insets}
-        onType={typeVal}
-        onBump={bump}
-        onChip={(c) => (cfg?.chipMode === "bump" ? bump(c) : applyVal(c))}
-        onDone={() => setSheet(null)}
-        onRemove={() => editing && removeSet(editing.ex.id, editing.set.id)}
-      />
-
-      {/* finish summary */}
-      {finished ? (
-        <View style={{ position: "absolute", inset: 0, backgroundColor: tokens.bg.base }}>
-          <ScrollView contentContainerStyle={{ paddingTop: insets.top + 40, paddingHorizontal: 24, paddingBottom: 24, alignItems: "center" }}>
-            <View style={{ width: 68, height: 68, borderRadius: radius.pill, backgroundColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
-              <Check size={30} strokeWidth={3} color={colors.black} />
-            </View>
-            <Text style={{ marginTop: 20, fontFamily: DISP, fontSize: 26, lineHeight: 30, color: tokens.text.primary, textAlign: "center" }}>
-              {name.trim() || "Workout"} logged.
-            </Text>
-            <Micro style={{ marginTop: 8 }}>
-              {fmtClock(finished.dur)} · {finished.exCount} exercises
-            </Micro>
-
-            <Text style={{ marginTop: 32, fontFamily: NUM, fontSize: 56, color: tokens.text.primary }}>
-              {(finished.vol > 0 ? finished.vol : finished.cardioMin).toLocaleString()}
-            </Text>
-            <Micro style={{ marginTop: 4 }}>{finished.vol > 0 ? "Total volume · lb" : "Cardio · min"}</Micro>
-
-            <View style={{ flexDirection: "row", justifyContent: "center", gap: 32, marginTop: 28 }}>
-              <View style={{ alignItems: "center" }}>
-                <Text style={{ fontFamily: NUM, fontSize: 26, color: tokens.text.primary }}>{finished.sets}</Text>
-                <Micro style={{ marginTop: 2 }}>Sets</Micro>
+      {/* ---------------------------- picker sheet --------------------------- */}
+      <Modal visible={Boolean(picker) && !activeId} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={() => setPicker(null)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              marginTop: "auto",
+              maxHeight: "82%",
+              backgroundColor: tokens.bg.raised,
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              borderTopWidth: 1,
+              borderColor: "rgba(255,255,255,0.1)",
+              overflow: "hidden"
+            }}
+          >
+            <View style={{ alignSelf: "center", marginTop: 14, marginBottom: 6, width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.border.strong }} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 12 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
+                {picker === "cardio" ? <Flame size={18} color={tokens.accent.gold} strokeWidth={1.7} /> : <Dumbbell size={19} color={tokens.accent.gold} strokeWidth={1.8} />}
               </View>
-              {finished.vol > 0 && finished.cardioMin > 0 ? (
-                <View style={{ alignItems: "center" }}>
-                  <Text style={{ fontFamily: NUM, fontSize: 26, color: tokens.text.primary }}>{finished.cardioMin}</Text>
-                  <Micro style={{ marginTop: 2 }}>Cardio · min</Micro>
-                </View>
+              <View>
+                <Text style={{ fontFamily: DISP, fontSize: 22, color: tokens.text.primary }}>
+                  {picker === "cardio" ? "Cardio" : "Weightlifting"}
+                </Text>
+                <Text style={{ fontSize: 13, color: tokens.text.tertiary }}>
+                  {picker === "cardio" ? "Pick an activity · logs in intervals" : "Pick a lift · logs in sets"}
+                </Text>
+              </View>
+            </View>
+
+            {/* search + muscle chips */}
+            <View style={{ paddingHorizontal: 18, paddingBottom: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 9, borderRadius: radius.md, backgroundColor: tokens.bg.base, borderWidth: 1, borderColor: tokens.border.default }}>
+                <Search size={15} color={tokens.text.tertiary} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={picker === "cardio" ? "Search cardio" : "Search lifts"}
+                  placeholderTextColor={tokens.text.tertiary}
+                  style={{ flex: 1, fontSize: 14, color: tokens.text.primary, padding: 0 }}
+                />
+                {query ? (
+                  <Pressable accessibilityLabel="Clear search" onPress={() => setQuery("")} hitSlop={8}>
+                    <X size={14} color={tokens.text.tertiary} />
+                  </Pressable>
+                ) : null}
+              </View>
+              {picker === "lift" && !query ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 10 }}>
+                  {["All", ...LIFT_MUSCLES].map((m) => {
+                    const sel = group === m;
+                    return (
+                      <Pressable
+                        key={m}
+                        onPress={() => setGroup(m)}
+                        style={{ paddingHorizontal: 13, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: sel ? tokens.text.primary : tokens.bg.subtle }}
+                      >
+                        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: sel ? colors.black : tokens.text.secondary }}>{m}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               ) : null}
             </View>
 
-            {celebrations.length > 0 ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 32 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: tokens.accent.goldSubtle, borderWidth: 1, borderColor: tokens.accent.gold }}>
-                  <Trophy size={14} color={tokens.accent.gold} strokeWidth={1.9} />
-                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: tokens.text.primary }}>
-                    {celebrations.length} new {celebrations.length > 1 ? "trophies" : "trophy"}
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: insets.bottom + 16 }}>
+              <View style={{ gap: 8 }}>
+                {pickerResults.map((item) => {
+                  const best = session.bests[item.name] ?? 0;
+                  const meta =
+                    picker === "cardio"
+                      ? best > 0
+                        ? `best ${best} mi`
+                        : `${item.min ?? 20} min · ${item.mi ?? 0} mi`
+                      : best > 0
+                        ? isRepsGraded(item.name)
+                          ? `PR ${best} reps`
+                          : `PR ${best} lb`
+                        : `${item.w === 0 ? "BW" : `${item.w ?? 45} lb`} × ${item.r ?? 10}`;
+                  return (
+                    <Pressable
+                      key={item.name}
+                      onPress={() => pick(item)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 13,
+                        borderWidth: 1,
+                        borderColor: tokens.border.default,
+                        backgroundColor: tokens.bg.subtle,
+                        borderRadius: radius.md,
+                        paddingVertical: 14,
+                        paddingHorizontal: 16
+                      }}
+                    >
+                      {picker === "cardio" ? (
+                        <Flame size={18} color={tokens.accent.gold} strokeWidth={1.7} />
+                      ) : (
+                        <Dumbbell size={19} color={tokens.accent.gold} strokeWidth={1.8} />
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.text.primary }}>
+                          {item.name}
+                          {item.custom ? <Text style={{ fontSize: 10, color: tokens.text.tertiary }}>{"  Custom"}</Text> : null}
+                        </Text>
+                        <Text style={{ marginTop: 1, fontSize: 12, color: tokens.text.tertiary }}>{meta}</Text>
+                      </View>
+                      <ChevronRight size={17} color={tokens.text.tertiary} />
+                    </Pressable>
+                  );
+                })}
+                {pickerResults.length === 0 ? (
+                  <Text style={{ paddingVertical: 16, fontSize: 13.5, color: tokens.text.tertiary, textAlign: "center" }}>
+                    Nothing matches — add it as a custom {picker === "cardio" ? "activity" : "lift"} below.
+                  </Text>
+                ) : null}
+              </View>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+                <TextInput
+                  value={customText}
+                  onChangeText={setCustomText}
+                  placeholder={picker === "cardio" ? "Add custom activity…" : "Add custom lift…"}
+                  placeholderTextColor={tokens.text.tertiary}
+                  onSubmitEditing={addCustom}
+                  style={{
+                    flex: 1,
+                    backgroundColor: tokens.bg.base,
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.1)",
+                    borderRadius: radius.md,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    fontSize: 15,
+                    color: tokens.text.primary
+                  }}
+                />
+                <Pressable
+                  onPress={addCustom}
+                  disabled={!customText.trim()}
+                  style={{
+                    justifyContent: "center",
+                    borderRadius: radius.md,
+                    paddingHorizontal: 20,
+                    backgroundColor: tokens.accent.gold,
+                    opacity: customText.trim() ? 1 : 0.4
+                  }}
+                >
+                  <Text style={{ fontFamily: DISP, fontSize: 15, color: colors.black }}>Add</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ---------------------------- logger sheet --------------------------- */}
+      <Modal visible={Boolean(active)} transparent animationType="slide" onRequestClose={closeLogger}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.62)" }} onPress={closeLogger}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              marginTop: "auto",
+              maxHeight: "88%",
+              backgroundColor: tokens.bg.raised,
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              borderTopWidth: 1,
+              borderColor: "rgba(255,255,255,0.1)",
+              overflow: "hidden"
+            }}
+          >
+            <View style={{ alignSelf: "center", marginTop: 14, marginBottom: 6, width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.border.strong }} />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24, paddingTop: 6, paddingBottom: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
+                  {isLift ? <Dumbbell size={20} color={tokens.accent.gold} strokeWidth={1.8} /> : <Flame size={19} color={tokens.accent.gold} strokeWidth={1.7} />}
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ fontFamily: DISP, fontSize: 22, color: tokens.text.primary }}>
+                    {active?.name ?? ""}
+                  </Text>
+                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: tokens.accent.gold }}>
+                    {active
+                      ? (() => {
+                          const best = session.bests[active.name] ?? 0;
+                          if (best <= 0) return "No PR yet — set one today";
+                          if (active.kind === "cardio") return `Best · ${best} mi`;
+                          return isRepsGraded(active.name) ? `Current PR · ${best} reps` : `Current PR · ${best} lb`;
+                        })()
+                      : ""}
                   </Text>
                 </View>
               </View>
-            ) : null}
-          </ScrollView>
+              <Pressable accessibilityLabel="Close logger" onPress={closeLogger} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: tokens.bg.subtle, alignItems: "center", justifyContent: "center" }}>
+                <X size={17} color={tokens.text.secondary} strokeWidth={2} />
+              </Pressable>
+            </View>
 
-          <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 20 }}>
-            <Pressable
-              onPress={() => router.replace("/camera")}
-              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 16, borderRadius: radius.pill, backgroundColor: tokens.text.primary }}
-            >
-              <Camera size={17} color={colors.black} />
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.black }}>Post today's SPOTTED</Text>
-            </Pressable>
-            <Pressable onPress={resetWorkout} style={{ marginTop: 10, paddingVertical: 14, borderRadius: radius.pill, backgroundColor: tokens.bg.subtle, borderWidth: 1, borderColor: tokens.border.default, alignItems: "center" }}>
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: tokens.text.primary }}>Done</Text>
-            </Pressable>
-          </View>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 26 }}>
+              {/* steppers */}
+              <View style={{ flexDirection: "row", gap: 14, paddingHorizontal: 22 }}>
+                {(
+                  [
+                    {
+                      label: isLift ? "Weight · lb" : "Distance · mi",
+                      value: a,
+                      onText: (v: string) => setA(sanitizeDec(v)),
+                      dec: () => step(setA, isLift ? -5 : -0.5),
+                      inc: () => step(setA, isLift ? 5 : 0.5)
+                    },
+                    {
+                      label: isLift ? "Reps" : "Minutes",
+                      value: b,
+                      onText: (v: string) => setB(v.replace(/[^0-9]/g, "")),
+                      dec: () => step(setB, -1),
+                      inc: () => step(setB, 1)
+                    }
+                  ] as const
+                ).map((f) => (
+                  <View key={f.label} style={{ flex: 1, backgroundColor: tokens.bg.subtle, borderWidth: 1, borderColor: tokens.border.default, borderRadius: radius.lg, padding: 16 }}>
+                    <Micro style={{ textAlign: "center", letterSpacing: 1.5 }}>{f.label}</Micro>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+                      <Pressable accessibilityLabel={`Decrease ${f.label}`} onPress={f.dec} style={{ width: 40, height: 40, borderRadius: radius.sm, backgroundColor: tokens.bg.base, alignItems: "center", justifyContent: "center" }}>
+                        <Minus size={20} color={tokens.text.primary} />
+                      </Pressable>
+                      <TextInput
+                        value={f.value}
+                        onChangeText={f.onText}
+                        keyboardType="decimal-pad"
+                        selectTextOnFocus
+                        accessibilityLabel={f.label}
+                        style={{ width: 76, textAlign: "center", fontFamily: NUM, fontSize: 28, color: tokens.text.primary, padding: 0 }}
+                      />
+                      <Pressable accessibilityLabel={`Increase ${f.label}`} onPress={f.inc} style={{ width: 40, height: 40, borderRadius: radius.sm, backgroundColor: tokens.bg.base, alignItems: "center", justifyContent: "center" }}>
+                        <Plus size={20} color={tokens.text.primary} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
 
-          {/* trophy unlock stack, over the summary */}
-          <TrophyUnlockModal
-            data={celebrateIdx < celebrations.length ? celebrations[celebrateIdx] : null}
-            visible={celebrateIdx < celebrations.length}
-            onClose={() => setCelebrateIdx((i) => i + 1)}
-          />
-        </View>
-      ) : null}
+              <View style={{ paddingHorizontal: 22, paddingTop: 14 }}>
+                <Pressable
+                  onPress={logSet}
+                  style={{ paddingVertical: 17, borderRadius: radius.md, backgroundColor: tokens.accent.gold, alignItems: "center" }}
+                >
+                  <Text style={{ fontFamily: DISP, fontSize: 17, color: colors.black }}>{isLift ? "Log set" : "Log interval"}</Text>
+                </Pressable>
+              </View>
+
+              {/* logged sets */}
+              <View style={{ paddingHorizontal: 22, paddingTop: 18, gap: 8 }}>
+                {active && active.sets.length > 0 ? (
+                  active.sets.map((s, i) => setRow(active, s, i))
+                ) : (
+                  <Text style={{ textAlign: "center", paddingVertical: 20, fontSize: 14, color: tokens.text.tertiary }}>
+                    {isLift ? "Dial in weight × reps, then log your set." : "Set distance & time, then log the interval."}
+                  </Text>
+                )}
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+
+        {/* PR celebration renders over the logger too */}
+        {celebrating ? <PrCelebration text={celebrating.text} confKey={confKey} /> : null}
+      </Modal>
+
+      {/* PR celebration (when logger is closed) */}
+      {celebrating && !active ? <PrCelebration text={celebrating.text} confKey={confKey} /> : null}
     </View>
   );
 }
 
-/* ------------------------------ picker sheet ------------------------------ */
-
-function PickerSheet({
-  sheet,
-  custom,
-  query,
-  group,
-  results,
-  insets,
-  onClose,
-  onBackToTypes,
-  onPickType,
-  onQuery,
-  onGroup,
-  onAdd,
-  onOpenCustom,
-  setCustom,
-  onCreateCustom
-}: {
-  sheet: { type: "picker"; mode: "types" } | { type: "picker"; mode: "list"; wtype: "lift" | "cardio" } | null;
-  custom: CustomState;
-  query: string;
-  group: string;
-  results: LibraryItem[];
-  insets: { bottom: number };
-  onClose: () => void;
-  onBackToTypes: () => void;
-  onPickType: (w: "lift" | "cardio") => void;
-  onQuery: (q: string) => void;
-  onGroup: (g: string) => void;
-  onAdd: (item: LibraryItem) => void;
-  onOpenCustom: () => void;
-  setCustom: (fn: (c: CustomState) => CustomState) => void;
-  onCreateCustom: () => void;
-}) {
-  const list = sheet && sheet.mode === "list" ? sheet : null;
-  const grouped = list && list.wtype === "lift" && group === "All" && !query.trim();
-
+/** Full-screen PR flash: gold badge pop + confetti (prototype `celebrating`). */
+function PrCelebration({ text, confKey }: { text: string; confKey: number }) {
+  const scale = useSharedValue(0.4);
+  const flash = useSharedValue(0);
+  useEffect(() => {
+    scale.value = withSpring(1, { damping: 9, stiffness: 200 });
+    flash.value = withSequence(withTiming(0.5, { duration: 130 }), withTiming(0, { duration: 970 }));
+  }, [scale, flash]);
+  const badgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
   return (
-    <Modal visible={Boolean(sheet)} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.72)" }} onPress={onClose}>
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{ marginTop: "auto", maxHeight: "88%", backgroundColor: tokens.bg.raised, borderTopWidth: 1, borderColor: tokens.border.default, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg }}
+    <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 70 }}>
+      <Animated.View
+        style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: tokens.accent.gold }, flashStyle]}
+      />
+      <Animated.View style={[{ position: "absolute", top: "32%", left: 0, right: 0, alignItems: "center" }, badgeStyle]}>
+        <View
+          style={{
+            width: 96,
+            height: 96,
+            borderRadius: 48,
+            backgroundColor: tokens.accent.gold,
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: tokens.accent.gold,
+            shadowOpacity: 0.7,
+            shadowRadius: 24,
+            elevation: 12
+          }}
         >
-          <View style={{ alignSelf: "center", marginTop: 10, width: 36, height: 4, borderRadius: radius.pill, backgroundColor: tokens.border.strong }} />
-
-          {/* type chooser */}
-          {sheet && sheet.mode === "types" && !custom ? (
-            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom + 24 }}>
-              <Text style={{ fontFamily: DISP, fontSize: 19, color: tokens.text.primary }}>Add exercise</Text>
-              <Micro style={{ marginTop: 4 }}>Choose a section</Micro>
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
-                <TypeTileMini title="Weightlifting" Icon={Dumbbell} onPress={() => onPickType("lift")} />
-                <TypeTileMini title="Cardio" Icon={Flame} onPress={() => onPickType("cardio")} />
-              </View>
-            </View>
-          ) : null}
-
-          {/* list */}
-          {list && !custom ? (
-            <View style={{ flex: 1 }}>
-              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Pressable accessibilityLabel="Back to sections" onPress={onBackToTypes} hitSlop={8} style={{ padding: 4, marginLeft: -4 }}>
-                    <ArrowLeft size={18} color={tokens.text.secondary} />
-                  </Pressable>
-                  {list.wtype === "cardio" ? <Flame size={16} color={tokens.text.primary} strokeWidth={1.9} /> : <Dumbbell size={16} color={tokens.text.primary} strokeWidth={1.9} />}
-                  <Text style={{ flex: 1, fontFamily: DISP, fontSize: 19, color: tokens.text.primary }}>
-                    {list.wtype === "cardio" ? "Cardio" : "Weightlifting"}
-                  </Text>
-                  <Pressable onPress={onOpenCustom} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: tokens.text.primary }}>
-                    <Plus size={13} strokeWidth={3} color={colors.black} />
-                    <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12, color: colors.black }}>Custom</Text>
-                  </Pressable>
-                </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: radius.pill, backgroundColor: tokens.bg.subtle, borderWidth: 1, borderColor: tokens.border.default }}>
-                  <Search size={16} color={tokens.text.tertiary} />
-                  <TextInput
-                    autoFocus
-                    value={query}
-                    onChangeText={onQuery}
-                    placeholder={list.wtype === "cardio" ? "Search cardio" : "Search lifts"}
-                    placeholderTextColor={tokens.text.tertiary}
-                    style={{ flex: 1, fontSize: 14, color: tokens.text.primary, padding: 0 }}
-                  />
-                  {query ? (
-                    <Pressable accessibilityLabel="Clear search" onPress={() => onQuery("")} hitSlop={8}>
-                      <X size={15} color={tokens.text.tertiary} />
-                    </Pressable>
-                  ) : null}
-                </View>
-                {list.wtype === "lift" && !query ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 12 }}>
-                    {["All", ...LIFT_MUSCLES].map((m) => {
-                      const sel = group === m;
-                      return (
-                        <Pressable
-                          key={m}
-                          onPress={() => onGroup(m)}
-                          style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: sel ? tokens.text.primary : tokens.bg.subtle, borderWidth: 1, borderColor: sel ? tokens.text.primary : tokens.border.default }}
-                        >
-                          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: sel ? colors.black : tokens.text.secondary }}>{m}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                ) : null}
-              </View>
-
-              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 28 }}>
-                {grouped ? (
-                  LIFT_MUSCLES.map((m) => {
-                    const items = results.filter((l) => l.muscle === m);
-                    if (!items.length) return null;
-                    return (
-                      <View key={m} style={{ marginBottom: 16 }}>
-                        <Micro style={{ marginBottom: 6 }}>{m}</Micro>
-                        {items.map((item) => (
-                          <ExerciseRow key={item.name} item={item} showMuscle={false} onPress={() => onAdd(item)} />
-                        ))}
-                      </View>
-                    );
-                  })
-                ) : (
-                  results.map((item) => (
-                    <ExerciseRow key={item.name} item={item} showMuscle={list.wtype === "lift"} onPress={() => onAdd(item)} />
-                  ))
-                )}
-                {results.length === 0 ? (
-                  <View style={{ paddingVertical: 24, alignItems: "center" }}>
-                    <Text style={{ fontSize: 14, color: tokens.text.secondary, textAlign: "center" }}>
-                      &quot;{query}&quot; isn&apos;t in the library yet.
-                    </Text>
-                    <Pressable onPress={onOpenCustom} style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: radius.pill, backgroundColor: tokens.text.primary }}>
-                      <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Create &quot;{query.trim()}&quot;</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </ScrollView>
-            </View>
-          ) : null}
-
-          {/* custom form */}
-          {custom ? (
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom + 24 }}>
-              <Pressable onPress={() => setCustom(() => null)} style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
-                <ArrowLeft size={14} color={tokens.text.secondary} />
-                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: tokens.text.secondary }}>Back to library</Text>
-              </Pressable>
-              <Text style={{ fontFamily: DISP, fontSize: 19, color: tokens.text.primary }}>Custom exercise</Text>
-
-              <Micro style={{ marginTop: 16, marginBottom: 6 }}>Name</Micro>
-              <TextInput
-                autoFocus
-                value={custom.name}
-                onChangeText={(t) => setCustom((c) => (c ? { ...c, name: t } : c))}
-                placeholder="e.g. Zercher Squat"
-                placeholderTextColor={tokens.text.tertiary}
-                style={{ paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.pill, backgroundColor: tokens.bg.subtle, borderWidth: 1, borderColor: tokens.border.default, fontSize: 14, color: tokens.text.primary }}
-              />
-
-              <Micro style={{ marginTop: 16, marginBottom: 6 }}>Category</Micro>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {MUSCLES.map((m) => {
-                  const sel = custom.muscle === m;
-                  return (
-                    <Pressable key={m} onPress={() => setCustom((c) => (c ? { ...c, muscle: m } : c))} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: sel ? tokens.text.primary : tokens.bg.subtle, borderWidth: 1, borderColor: sel ? tokens.text.primary : tokens.border.default }}>
-                      <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: sel ? colors.black : tokens.text.secondary }}>{m}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {custom.muscle === "Cardio" ? (
-                <>
-                  <Micro style={{ marginTop: 16, marginBottom: 6 }}>Incline</Micro>
-                  <View style={{ flexDirection: "row", gap: 6 }}>
-                    {[{ v: false, l: "Off" }, { v: true, l: "On — track incline %" }].map((o) => {
-                      const sel = custom.inc === o.v;
-                      return (
-                        <Pressable key={o.l} onPress={() => setCustom((c) => (c ? { ...c, inc: o.v } : c))} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: sel ? tokens.text.primary : tokens.bg.subtle, borderWidth: 1, borderColor: sel ? tokens.text.primary : tokens.border.default }}>
-                          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: sel ? colors.black : tokens.text.secondary }}>{o.l}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </>
-              ) : null}
-
-              <Pressable onPress={onCreateCustom} disabled={!custom.name.trim()} style={{ marginTop: 24, paddingVertical: 14, borderRadius: radius.pill, backgroundColor: tokens.text.primary, opacity: custom.name.trim() ? 1 : 0.3, alignItems: "center" }}>
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Add to workout</Text>
-              </Pressable>
-            </ScrollView>
-          ) : null}
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-function TypeTileMini({ title, Icon, onPress }: { title: string; Icon: typeof Dumbbell; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingVertical: 18, paddingHorizontal: 12, backgroundColor: tokens.bg.subtle, borderWidth: 1, borderColor: tokens.border.default, borderRadius: radius.lg }}>
-      <View style={{ width: 46, height: 46, borderRadius: radius.pill, borderWidth: 1.5, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
-        <Icon size={19} color={tokens.accent.gold} strokeWidth={1.9} />
-      </View>
-      <Text style={{ marginTop: 12, fontFamily: DISP, fontSize: 16, color: tokens.text.primary }}>{title}</Text>
-    </Pressable>
-  );
-}
-
-function ExerciseRow({ item, showMuscle, onPress }: { item: LibraryItem; showMuscle: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: tokens.border.default }}>
-      <Text style={{ flex: 1, fontFamily: "Geist_500Medium", fontSize: 15, color: tokens.text.primary }}>
-        {item.name}
-        {item.custom ? <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 10, color: tokens.text.tertiary }}>  Custom</Text> : null}
-      </Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        {showMuscle ? <Micro>{item.muscle}</Micro> : null}
-        <Plus size={16} color={tokens.text.primary} />
-      </View>
-    </Pressable>
-  );
-}
-
-/* ------------------------------ editor sheet ------------------------------ */
-
-function EditorSheet({
-  open,
-  label,
-  exName,
-  kind,
-  idx,
-  draft,
-  chips,
-  chipMode,
-  step,
-  insets,
-  onType,
-  onBump,
-  onChip,
-  onDone,
-  onRemove
-}: {
-  open: boolean;
-  label: string;
-  exName: string;
-  kind: "lift" | "cardio";
-  idx: number;
-  draft: string;
-  chips: number[];
-  chipMode: "bump" | "set";
-  step: number;
-  insets: { bottom: number };
-  onType: (raw: string) => void;
-  onBump: (delta: number) => void;
-  onChip: (c: number) => void;
-  onDone: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onDone}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.72)" }} onPress={onDone}>
-        <Pressable onPress={(e) => e.stopPropagation()} style={{ marginTop: "auto", backgroundColor: tokens.bg.raised, borderTopWidth: 1, borderColor: tokens.border.default, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg }}>
-          <View style={{ alignSelf: "center", marginTop: 10, width: 36, height: 4, borderRadius: radius.pill, backgroundColor: tokens.border.strong }} />
-          <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: insets.bottom + 24 }}>
-            <Micro style={{ textAlign: "center" }}>
-              {exName} · {kind === "cardio" ? "Interval" : "Set"} {idx + 1}
-            </Micro>
-            <TextInput
-              value={draft}
-              onChangeText={onType}
-              keyboardType="decimal-pad"
-              selectTextOnFocus
-              accessibilityLabel={label}
-              style={{ fontFamily: NUM, fontSize: 64, textAlign: "center", marginTop: 4, color: tokens.text.primary, padding: 0 }}
-            />
-            <Micro style={{ textAlign: "center", marginTop: 8 }}>{label} · tap the number to type</Micro>
-
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 32, marginTop: 20 }}>
-              <Pressable accessibilityLabel="Decrease" onPress={() => onBump(-step)} style={{ width: 56, height: 56, borderRadius: radius.pill, backgroundColor: tokens.bg.subtle, borderWidth: 1, borderColor: tokens.border.default, alignItems: "center", justifyContent: "center" }}>
-                <Minus size={22} color={tokens.text.primary} />
-              </Pressable>
-              <Pressable accessibilityLabel="Increase" onPress={() => onBump(step)} style={{ width: 56, height: 56, borderRadius: radius.pill, backgroundColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
-                <Plus size={22} color={colors.black} />
-              </Pressable>
-            </View>
-
-            <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 20 }}>
-              {chips.map((c) => (
-                <Pressable key={c} onPress={() => onChip(c)} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: tokens.bg.subtle, borderWidth: 1, borderColor: tokens.border.default }}>
-                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: tokens.text.primary }}>{chipMode === "bump" && c > 0 ? `+${c}` : c}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable onPress={onDone} style={{ marginTop: 24, paddingVertical: 14, borderRadius: radius.pill, backgroundColor: tokens.text.primary, alignItems: "center" }}>
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Done</Text>
-            </Pressable>
-            <Pressable onPress={onRemove} style={{ marginTop: 8, paddingVertical: 10, alignItems: "center" }}>
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: DANGER }}>Remove {kind === "cardio" ? "interval" : "set"}</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+          <Trophy size={48} color={colors.black} strokeWidth={1.8} />
+        </View>
+        <Text style={{ marginTop: 16, fontFamily: DISP, fontSize: 30, letterSpacing: -0.5, color: tokens.text.primary }}>NEW PR!</Text>
+        <Text style={{ marginTop: 4, fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.accent.gold }}>{text}</Text>
+      </Animated.View>
+      <Confetti seed={confKey} />
+    </View>
   );
 }

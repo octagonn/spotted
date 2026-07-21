@@ -6,9 +6,20 @@ import { LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/
 import type { TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import type { Json } from "@/types/database";
 
-/** A single logged set (lift) or interval (cardio). */
-export type LiftSet = { id: number; w: number; r: number; done: boolean };
-export type CardioSet = { id: number; min: number; mi: number; inc?: number; done: boolean };
+/** A single logged set (lift) or interval (cardio). `pr` marks a set that beat
+ *  the user's best at the moment it was logged (gold-highlighted everywhere). */
+export type LiftSet = { id: number; w: number; r: number; done: boolean; pr?: boolean };
+export type CardioSet = { id: number; min: number; mi: number; inc?: number; done: boolean; pr?: boolean };
+
+/** A personal record earned during a session (summary/detail trophy rows). */
+export type SessionPR = {
+  /** Exercise name, e.g. "Bench Press". */
+  name: string;
+  /** Display value, e.g. "185 lb" or "3.4 mi". */
+  value: string;
+  /** Display context, e.g. "was 170 lb" or "first log". */
+  was: string;
+};
 
 export type WorkoutExercise =
   | { id: number; name: string; muscle: Muscle; kind: "lift"; defW: number; defR: number; sets: LiftSet[] }
@@ -36,8 +47,23 @@ export type WorkoutRow = {
   cardioMinutes: number;
   exerciseCount: number;
   exercises: WorkoutExercise[];
+  /** PRs earned in this session (empty for legacy rows). */
+  prs: SessionPR[];
   postId: string | null;
 };
+
+/** `data` is either the legacy bare exercises array or the current envelope. */
+function parseWorkoutData(data: unknown): { exercises: WorkoutExercise[]; prs: SessionPR[] } {
+  if (Array.isArray(data)) return { exercises: data as unknown as WorkoutExercise[], prs: [] };
+  if (data && typeof data === "object") {
+    const obj = data as { exercises?: unknown; prs?: unknown };
+    return {
+      exercises: Array.isArray(obj.exercises) ? (obj.exercises as unknown as WorkoutExercise[]) : [],
+      prs: Array.isArray(obj.prs) ? (obj.prs as unknown as SessionPR[]) : []
+    };
+  }
+  return { exercises: [], prs: [] };
+}
 
 /** Recent workouts for a user (self or a friend, per RLS). Newest first. */
 export function useWorkouts(userId?: string | null) {
@@ -56,19 +82,23 @@ export function useWorkouts(userId?: string | null) {
         .order("started_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []).map((row) => ({
-        id: row.id,
-        userId: row.user_id,
-        name: row.name,
-        startedAt: row.started_at,
-        durationSeconds: row.duration_seconds,
-        totalVolume: row.total_volume,
-        totalSets: row.total_sets,
-        cardioMinutes: row.cardio_minutes,
-        exerciseCount: row.exercise_count,
-        exercises: Array.isArray(row.data) ? (row.data as unknown as WorkoutExercise[]) : [],
-        postId: row.post_id
-      }));
+      return (data ?? []).map((row) => {
+        const parsed = parseWorkoutData(row.data);
+        return {
+          id: row.id,
+          userId: row.user_id,
+          name: row.name,
+          startedAt: row.started_at,
+          durationSeconds: row.duration_seconds,
+          totalVolume: row.total_volume,
+          totalSets: row.total_sets,
+          cardioMinutes: row.cardio_minutes,
+          exerciseCount: row.exercise_count,
+          exercises: parsed.exercises,
+          prs: parsed.prs,
+          postId: row.post_id
+        };
+      });
     }
   });
 }
@@ -89,6 +119,7 @@ export function useWorkout(workoutId?: string | null) {
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
+      const parsed = parseWorkoutData(data.data);
       return {
         id: data.id,
         userId: data.user_id,
@@ -99,11 +130,49 @@ export function useWorkout(workoutId?: string | null) {
         totalSets: data.total_sets,
         cardioMinutes: data.cardio_minutes,
         exerciseCount: data.exercise_count,
-        exercises: Array.isArray(data.data) ? (data.data as unknown as WorkoutExercise[]) : [],
+        exercises: parsed.exercises,
+        prs: parsed.prs,
         postId: data.post_id
       };
     }
   });
+}
+
+/** Whether PRs for this exercise are graded on reps (bodyweight canonicals). */
+export function isRepsGraded(name: string): boolean {
+  const canonical = CANONICAL_LIFT[name];
+  return canonical ? CANONICAL_IS_REPS[canonical] : false;
+}
+
+/**
+ * Best-known value per exercise name, derived from workout history plus the
+ * canonical user_lifts bests. Lifts grade on weight (reps for bodyweight
+ * canonicals); cardio grades on distance. Seeds the in-session PR detector.
+ */
+export function deriveExerciseBests(
+  workouts: WorkoutRow[] | undefined,
+  canonicalBests: Record<string, number> | undefined
+): Record<string, number> {
+  const bests: Record<string, number> = {};
+  const bump = (name: string, value: number) => {
+    if (value > 0) bests[name] = Math.max(bests[name] ?? 0, value);
+  };
+  for (const workout of workouts ?? []) {
+    for (const ex of workout.exercises) {
+      for (const s of ex.sets) {
+        if (!s.done) continue;
+        if (ex.kind === "cardio") bump(ex.name, (s as CardioSet).mi);
+        else bump(ex.name, isRepsGraded(ex.name) ? (s as LiftSet).r : (s as LiftSet).w);
+      }
+    }
+  }
+  if (canonicalBests) {
+    for (const [name, canonical] of Object.entries(CANONICAL_LIFT)) {
+      const value = canonicalBests[canonical];
+      if (typeof value === "number") bump(name, value);
+    }
+  }
+  return bests;
 }
 
 export type SaveWorkoutInput = {
@@ -113,6 +182,8 @@ export type SaveWorkoutInput = {
   startedAt: number;
   durationSeconds: number;
   exercises: WorkoutExercise[];
+  /** In-session PRs (persisted for the summary/detail trophy rows). */
+  sessionPRs?: SessionPR[];
 };
 
 export type SaveWorkoutResult = {
@@ -172,7 +243,7 @@ export function useSaveWorkout() {
           total_sets: totalSets,
           cardio_minutes: cardioMinutes,
           exercise_count: exerciseCount,
-          data: input.exercises as unknown as Json
+          data: { exercises: input.exercises, prs: input.sessionPRs ?? [] } as unknown as Json
         })
         .select("id")
         .single();

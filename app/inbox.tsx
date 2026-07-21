@@ -47,6 +47,10 @@ function notificationText(n: AppNotification): string {
       return `roasted you: "${String(n.payload?.text ?? "…")}"`;
     case "community_invite":
       return `invited you to ${String(n.payload?.community_name ?? "a community")}`;
+    case "wave":
+      return n.payload?.gymName ? `waved at you 👋 — they're at ${String(n.payload.gymName)}` : "waved at you 👋";
+    case "community_nudge":
+      return `nudged ${String(n.payload?.communityName ?? "your crew")} — it's been quiet`;
     default:
       return "sent you an update";
   }
@@ -296,6 +300,8 @@ export default function InboxScreen() {
                     if (n.type === "dm" && n.actorId) router.push(`/chat/${n.actorId}`);
                     else if (n.type === "community_invite" && n.payload?.community_id) {
                       router.push(`/community/${String(n.payload.community_id)}`);
+                    } else if (n.type === "community_nudge" && n.payload?.communityId) {
+                      router.push(`/community/${String(n.payload.communityId)}`);
                     } else if (n.actorUsername) router.push(`/user/${n.actorUsername}`);
                   }}
                 >

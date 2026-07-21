@@ -213,6 +213,13 @@ export const FIELD_CFG: Record<
 };
 
 export const fmtClock = (s: number): string => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/** Session display title (prototype `sessionTitle`). */
+export const sessionTitle = (hasLift: boolean, hasCardio: boolean): string => {
+  if (hasLift && hasCardio) return "Mixed workout";
+  if (hasCardio) return "Cardio session";
+  return "Lifting session";
+};
 export const fmtWeight = (w: number): string | number => (w === 0 ? "BW" : w);
 export const fmtMiles = (v: number, dash?: boolean): string | number =>
   v === 0 ? (dash ? "—" : "0") : Number.isInteger(v) ? v : Number(v.toFixed(1));

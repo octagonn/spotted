@@ -927,10 +927,11 @@ export default function CameraScreen() {
     if (mode === "lift") setMode("daily");
     let uri: string | undefined;
     try {
-      // Full-quality still (no skipProcessing → keep iOS image processing) in
-      // picture mode = best resolution the device offers. No automatic crop —
-      // the photo keeps its full frame; cropping is user-driven in the editor.
-      const photo = await cameraRef.current?.takePictureAsync({ quality: 1 });
+      // skipProcessing cuts the biggest capture-latency source (EXIF/orientation
+      // post-processing) so the shutter feels instant; quality stays high (0.95)
+      // so photos are still sharp. No automatic crop — the photo keeps its full
+      // frame; cropping is user-driven in the editor.
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.95, skipProcessing: true });
       if (photo?.uri) {
         // The OS un-mirrors front-camera captures; flip back so the saved photo
         // matches the mirrored selfie preview. Single near-lossless re-encode.
@@ -1301,6 +1302,7 @@ export default function CameraScreen() {
             <ShutterButton
               recording={recording}
               locked={recordLocked}
+              progress={recordSeconds / 60}
               onTap={() => void capturePhoto()}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}

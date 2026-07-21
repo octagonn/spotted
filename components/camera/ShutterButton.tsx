@@ -2,9 +2,37 @@ import { Lock } from "lucide-react-native";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Svg, { Circle } from "react-native-svg";
 
 import { Pressable } from "@/components/ui/Pressable";
+import { selectionHaptic } from "@/lib/haptics";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
+
+const RING = 76;
+const STROKE = 4;
+const R = (RING - STROKE) / 2;
+const CIRC = 2 * Math.PI * R;
+
+/** Gold arc around the button showing recording progress toward max duration. */
+function ProgressRing({ progress }: { progress: number }) {
+  return (
+    <Svg width={RING} height={RING} style={{ position: "absolute" }}>
+      <Circle
+        cx={RING / 2}
+        cy={RING / 2}
+        r={R}
+        stroke={tokens.accent.gold}
+        strokeWidth={STROKE}
+        fill="none"
+        strokeLinecap="round"
+        strokeDasharray={CIRC}
+        strokeDashoffset={CIRC * (1 - Math.max(0, Math.min(1, progress)))}
+        transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+      />
+    </Svg>
+  );
+}
 
 /** Slide this far left (px) onto the lock to keep recording hands-free. */
 const LOCK_DISTANCE = 74;
@@ -20,6 +48,7 @@ export function ShutterButton({
   recording,
   locked,
   disabled = false,
+  progress = 0,
   onTap,
   onStartRecording,
   onStopRecording,
@@ -28,6 +57,8 @@ export function ShutterButton({
   recording: boolean;
   locked: boolean;
   disabled?: boolean;
+  /** Recording progress 0–1 (elapsed / max duration) for the gold ring. */
+  progress?: number;
   onTap: () => void;
   onStartRecording: () => void;
   onStopRecording: () => void;
@@ -41,6 +72,9 @@ export function ShutterButton({
   const tap = Gesture.Tap()
     .enabled(!disabled && !recording)
     .maxDuration(260)
+    // Haptic on touch-down so capture feels instant even though the photo fires
+    // on release (release = the tap-vs-hold disambiguation point).
+    .onBegin(() => runOnJS(selectionHaptic)())
     .onEnd(() => runOnJS(onTap)());
 
   const hold = Gesture.Pan()
@@ -102,11 +136,16 @@ export function ShutterButton({
       {locked ? (
         // Locked: recording continues hands-free — tap to stop.
         <Pressable onPress={onStopRecording} accessibilityRole="button" accessibilityLabel="Stop recording">
-          <ShutterRing recording locked />
+          <View>
+            {recording ? <ProgressRing progress={progress} /> : null}
+            <ShutterRing recording locked />
+          </View>
         </Pressable>
       ) : (
         <GestureDetector gesture={composed}>
-          <Animated.View style={puckStyle}>
+          {/* Generous hit area (16px all sides) so grazes register. */}
+          <Animated.View style={[{ padding: 16 }, puckStyle]}>
+            {recording ? <ProgressRing progress={progress} /> : null}
             <ShutterRing recording={recording} locked={false} />
           </Animated.View>
         </GestureDetector>

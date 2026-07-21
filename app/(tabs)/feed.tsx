@@ -3,7 +3,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { Bell } from "lucide-react-native";
 import { useMemo, useRef, useState } from "react";
-import { RefreshControl, Text as RNText, View } from "react-native";
+import { ActivityIndicator, RefreshControl, Text as RNText, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LockOverlay } from "@/components/post/LockOverlay";
@@ -103,7 +103,7 @@ export default function HomeScreen() {
   // Friends tab: you + your crew. Public tab: ONLY people you haven't added
   // (discovery) — your friends' content stays in the Friends tab. No fixtures.
   const posts = useMemo(() => {
-    const rows = feed.data ?? [];
+    const rows = feed.data?.pages.flat() ?? [];
     if (tab === "Friends") {
       // Home feed is strictly reverse-chronological — newest post always at the
       // top. No ranking, no engagement weighting, no shuffle (BeReal-style).
@@ -211,6 +211,18 @@ export default function HomeScreen() {
         }
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        // Keyset pagination: pull older posts as the user scrolls down (F1).
+        onEndReached={() => {
+          if (feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
+        }}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={
+          feed.isFetchingNextPage ? (
+            <View style={{ paddingVertical: 20, alignItems: "center" }}>
+              <ActivityIndicator color={colors.fog} />
+            </View>
+          ) : null
+        }
         renderItem={({ item }: { item: FeedMockPost }) => (
           <PostCard post={item} locked={locked} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
         )}

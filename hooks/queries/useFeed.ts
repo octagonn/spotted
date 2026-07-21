@@ -1,10 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { rankFeed } from "@/lib/feedRanking";
 import { mockFeed } from "@/lib/mockData";
 import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import type { FeedPost, Gym, Post, Profile } from "@/types/domain";
+
+/** Feed page size — keyset pagination cursors on created_at (F1). */
+const FEED_PAGE = 24;
 
 type FeedRow = Post & {
   profiles: Pick<Profile, "id" | "username" | "display_name" | "avatar_url" | "avatar_blurred_url"> | null;
@@ -56,39 +58,39 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
   };
 }
 
+/**
+ * Feed pages, keyset-paginated on created_at DESC (F1) — strictly
+ * reverse-chronological, no ranking or offset (offset duplicates/skips rows
+ * when new posts land mid-scroll on a daily-post app). Each page fetches the
+ * next FEED_PAGE posts older than the previous page's last post.
+ */
 export function useFeed() {
   const userId = useAuthStore((state) => state.userId);
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["feed", userId],
-    // Refetch on every app open/foreground (focusManager is wired to AppState).
     refetchOnWindowFocus: "always",
-    queryFn: async (): Promise<FeedPost[]> => {
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }): Promise<FeedPost[]> => {
       if (!isSupabaseConfigured) {
-        return mockFeed;
+        return pageParam ? [] : mockFeed;
       }
-      const { data: auth } = await supabase.auth.getUser();
-      const viewerId = auth.user?.id ?? null;
-      const [postsResult, viewsResult] = await Promise.all([
-        supabase
-          .from("posts")
-          .select(
-            "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username))"
-          )
-          .gt("expires_at", new Date().toISOString())
-          .order("created_at", { ascending: false })
-          .limit(200),
-        viewerId
-          ? supabase.from("post_views").select("post_id").eq("viewer_id", viewerId)
-          : Promise.resolve({ data: [], error: null })
-      ]);
-      if (postsResult.error) {
-        throw postsResult.error;
-      }
-      const rows = (postsResult.data ?? []) as unknown as FeedRow[];
-      const posts = await Promise.all(rows.map(rowToFeedPost));
-      const viewedPostIds = new Set((viewsResult.data ?? []).map((view: { post_id: string }) => view.post_id));
-      return rankFeed(posts, { viewerId, viewedPostIds });
-    }
+      let query = supabase
+        .from("posts")
+        .select(
+          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username))"
+        )
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(FEED_PAGE);
+      // Keyset cursor: everything strictly older than the last row we have.
+      if (pageParam) query = query.lt("created_at", pageParam);
+      const { data, error } = await query;
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as FeedRow[];
+      return Promise.all(rows.map(rowToFeedPost));
+    },
+    getNextPageParam: (lastPage) =>
+      lastPage.length < FEED_PAGE ? undefined : lastPage[lastPage.length - 1]?.created_at ?? undefined
   });
 }
 

@@ -28,10 +28,17 @@ import { colors } from "@/theme/colors";
 type Tool = "none" | "draw" | "text" | "sticker" | "crop";
 
 type Stroke = { id: string; d: string; color: string; width: number };
-type TextItem = { id: string; text: string; color: string; x: number; y: number };
+type TextItem = { id: string; text: string; color: string; font: string; x: number; y: number };
 type StickerItem = { id: string; emoji: string; x: number; y: number };
 
 const PEN_COLORS = ["#FAFAFA", "#000000", "#E8B44C", "#EF4444", "#3B82F6", "#22C55E", "#EC4899"];
+// Text overlay fonts (#18) — all already loaded at app start.
+const TEXT_FONTS: { label: string; family: string }[] = [
+  { label: "Bold", family: "Geist_700Bold" },
+  { label: "Display", family: "Boldonse_400Regular" },
+  { label: "Mono", family: "GeistMono_500Medium" },
+  { label: "Light", family: "Geist_400Regular" }
+];
 const PEN_WIDTHS = [4, 8, 14];
 const EMOJIS = ["🔥", "💪", "🏋️", "😤", "🥵", "🎯", "🏆", "⚡", "💯", "🙌", "😮‍💨", "🧠"];
 
@@ -160,6 +167,7 @@ export function PhotoEditor({
 
   const [tool, setTool] = useState<Tool>("none");
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
+  const [textFont, setTextFont] = useState(TEXT_FONTS[0].family);
   const [penWidth, setPenWidth] = useState(PEN_WIDTHS[1]);
   // Base image (crop/rotate now happen as a live transform, baked on export).
   const [workingUri] = useState(uri);
@@ -277,10 +285,10 @@ export function PhotoEditor({
     setComposing(false);
     setDraft("");
     if (editingTextId) {
-      // Re-edit: save the new content/color, or delete if cleared.
+      // Re-edit: save the new content/color/font, or delete if cleared.
       setTexts((prev) =>
         text
-          ? prev.map((t) => (t.id === editingTextId ? { ...t, text, color: penColor } : t))
+          ? prev.map((t) => (t.id === editingTextId ? { ...t, text, color: penColor, font: textFont } : t))
           : prev.filter((t) => t.id !== editingTextId)
       );
       setEditingTextId(null);
@@ -288,7 +296,7 @@ export function PhotoEditor({
       return;
     }
     if (!text) return;
-    setTexts((prev) => [...prev, { id: uid(), text, color: penColor, x: width / 2 - 60, y: height / 2 - 20 }]);
+    setTexts((prev) => [...prev, { id: uid(), text, color: penColor, font: textFont, x: width / 2 - 60, y: height / 2 - 20 }]);
     setTool("none");
   };
 
@@ -309,6 +317,7 @@ export function PhotoEditor({
     setEditingTextId(item.id);
     setDraft(item.text);
     setPenColor(item.color);
+    setTextFont(item.font);
     setComposing(true);
   };
 
@@ -370,7 +379,7 @@ export function PhotoEditor({
           >
             <Text
               style={{
-                fontFamily: "Geist_700Bold",
+                fontFamily: t.font,
                 fontSize: 30,
                 color: t.color,
                 textShadowColor: "rgba(0,0,0,0.5)",
@@ -502,8 +511,28 @@ export function PhotoEditor({
               autoFocus
               multiline
               blurOnSubmit
-              style={{ minWidth: 200, fontFamily: "Geist_700Bold", fontSize: 30, color: penColor, textAlign: "center" }}
+              style={{ minWidth: 200, fontFamily: textFont, fontSize: 30, color: penColor, textAlign: "center" }}
             />
+            {/* Font picker (#18) — colors come from the pen palette below. */}
+            <View style={{ marginTop: 18, flexDirection: "row", justifyContent: "center", gap: 8 }}>
+              {TEXT_FONTS.map((f) => {
+                const on = textFont === f.family;
+                return (
+                  <Pressable key={f.family} onPress={() => setTextFont(f.family)} accessibilityLabel={`Font ${f.label}`}>
+                    <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: on ? colors.white : "rgba(0,0,0,0.4)", borderWidth: 1, borderColor: on ? colors.white : "rgba(255,255,255,0.35)" }}>
+                      <Text style={{ fontFamily: f.family, fontSize: 13, color: on ? colors.black : colors.white }}>{f.label}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ marginTop: 12, flexDirection: "row", justifyContent: "center", gap: 10 }}>
+              {PEN_COLORS.map((c) => (
+                <Pressable key={c} onPress={() => setPenColor(c)} accessibilityLabel={`Color ${c}`}>
+                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c, borderWidth: penColor === c ? 3 : 1, borderColor: penColor === c ? colors.white : "rgba(255,255,255,0.5)" }} />
+                </Pressable>
+              ))}
+            </View>
             <Text style={{ marginTop: 14, textAlign: "center", fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1, color: "rgba(255,255,255,0.6)" }}>
               TAP ANYWHERE TO FINISH
             </Text>

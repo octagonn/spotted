@@ -36,6 +36,7 @@ import {
   useJoinCommunity,
   useJoinGymCommunity,
   useMyCommunities,
+  useMyPendingJoinRequests,
   type CommunitySummary
 } from "@/hooks/queries/useCommunities";
 import {
@@ -302,6 +303,7 @@ export default function MapTabScreen() {
   );
   const crewActivity = useCrewActivity(crewIds);
   const recentNudges = useMyRecentNudges();
+  const pendingRequests = useMyPendingJoinRequests();
   const nudge = useNudgeCommunity();
   const wave = useWave();
   const markRead = useMarkCommunityRead();
@@ -726,6 +728,44 @@ export default function MapTabScreen() {
                 );
               })
           )}
+
+          {/* REQUESTED — private communities you asked to join, awaiting approval. */}
+          {(pendingRequests.data ?? []).map((request) => (
+            <Pressable
+              key={request.communityId}
+              onPress={() => router.push(`/community/${request.communityId}` as Href)}
+              style={{ marginHorizontal: 18, marginBottom: 8 }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  borderWidth: 1,
+                  borderColor: colors.iron,
+                  borderRadius: radius.sm,
+                  paddingVertical: 10,
+                  paddingHorizontal: 11,
+                  opacity: 0.85
+                }}
+              >
+                <View style={{ width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
+                  <Users size={15} color={colors.mist} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.bone }}>
+                    {request.name}
+                  </Text>
+                  <Text style={{ marginTop: 1, fontSize: 11, color: colors.fog }}>
+                    Waiting on approval · asked {relDay(request.requestedAt)}
+                  </Text>
+                </View>
+                <View style={{ paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.iron }}>
+                  <Text style={{ fontSize: 10.5, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Requested</Text>
+                </View>
+              </View>
+            </Pressable>
+          ))}
 
           {/* CREATE — dashed border = an action, not a thing (spec). */}
           <Pressable onPress={() => router.push("/community-new" as Href)} style={{ marginHorizontal: 18, marginBottom: 8 }}>

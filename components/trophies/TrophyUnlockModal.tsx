@@ -1,10 +1,12 @@
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { Share2, X } from "lucide-react-native";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, Share, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 import { captureRef } from "react-native-view-shot";
 
+import { Confetti } from "@/components/workout/Confetti";
 import { TrophyIcon } from "@/components/trophies/TrophyIcon";
 import { TrophyShareCard, type TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import { formatEarnedDate } from "@/components/trophies/trophyFormat";
@@ -28,9 +30,12 @@ export function TrophyUnlockModal({
   onClose: () => void;
 }) {
   const shareRef = useRef<View>(null);
+  // Re-fire the confetti burst each time the modal opens.
+  const [confettiKey, setConfettiKey] = useState(0);
 
   useEffect(() => {
     if (visible) {
+      setConfettiKey((k) => k + 1);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
   }, [visible]);
@@ -74,33 +79,56 @@ export function TrophyUnlockModal({
         <Animated.View
           entering={FadeIn.duration(160)}
           exiting={FadeOut.duration(120)}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.66)" }}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.74)" }}
         />
-        <Animated.View entering={ZoomIn.springify().damping(15).mass(0.7)} exiting={FadeOut.duration(120)}>
+        {/* Gold burst behind everything — this is a moment. */}
+        <Confetti seed={confettiKey} />
+        <Animated.View entering={ZoomIn.springify().damping(13).mass(0.7)} exiting={FadeOut.duration(120)}>
           <Pressable
             onPress={(e) => e.stopPropagation()}
             style={{
-              width: 300,
-              paddingVertical: 30,
-              paddingHorizontal: 24,
+              width: 308,
               borderRadius: 24,
+              overflow: "hidden",
               backgroundColor: colors.graphite,
               borderWidth: 1,
-              borderColor: premium ? colors.gold : colors.iron,
-              alignItems: "center"
+              borderColor: premium ? colors.gold : "rgba(232,180,76,0.45)"
             }}
           >
-            <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", top: 12, right: 12 }}>
+            {/* Warm gold wash from the top — reads as a celebration, not a dialog. */}
+            <LinearGradient
+              colors={["rgba(232,180,76,0.22)", "rgba(232,180,76,0)"]}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, height: 150 }}
+            />
+            <View style={{ paddingVertical: 30, paddingHorizontal: 24, alignItems: "center" }}>
+            <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}>
               <X size={18} color={colors.fog} strokeWidth={2.4} />
             </Pressable>
 
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 2, textTransform: "uppercase", color: colors.gold }}>
+            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 3, textTransform: "uppercase", color: colors.gold }}>
               Trophy Unlocked
             </Text>
 
-            <View style={{ marginTop: 16, width: 84, height: 84, borderRadius: 42, backgroundColor: colors.goldSoft, alignItems: "center", justifyContent: "center" }}>
-              <TrophyIcon iconKey={data.icon} earned size={40} />
-            </View>
+            <Animated.View
+              entering={ZoomIn.springify().damping(9).stiffness(180).delay(120)}
+              style={{
+                marginTop: 18,
+                width: 96,
+                height: 96,
+                borderRadius: 48,
+                backgroundColor: colors.goldSoft,
+                borderWidth: 2,
+                borderColor: colors.gold,
+                alignItems: "center",
+                justifyContent: "center",
+                shadowColor: colors.gold,
+                shadowOpacity: 0.6,
+                shadowRadius: 22,
+                elevation: 10
+              }}
+            >
+              <TrophyIcon iconKey={data.icon} earned size={46} />
+            </Animated.View>
 
             {data.familyName ? (
               <Text style={{ marginTop: 14, fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.fog }}>
@@ -135,6 +163,7 @@ export function TrophyUnlockModal({
               <Share2 size={16} color={colors.black} strokeWidth={2.4} />
               <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.black }}>Share</Text>
             </Pressable>
+            </View>
           </Pressable>
         </Animated.View>
       </Pressable>

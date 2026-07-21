@@ -2,13 +2,16 @@ import { useMemo, useState } from "react";
 import { Text, View, useWindowDimensions } from "react-native";
 
 import { EarnedTrophyCard } from "@/components/trophies/EarnedTrophyCard";
+import { PersonalRecordsSection } from "@/components/trophies/PersonalRecordsSection";
 import { TrophyCategorySection } from "@/components/trophies/TrophyCategorySection";
 import { TrophyDetailSheet } from "@/components/trophies/TrophyDetailSheet";
 import { TrophyGrid, trophyCardWidth } from "@/components/trophies/TrophyGrid";
 import { TrophySegmentedControl, type TrophyTab } from "@/components/trophies/TrophySegmentedControl";
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
+import { usePersonalRecords } from "@/hooks/usePersonalRecords";
 import { useTrophies } from "@/hooks/useTrophies";
+import { useMyProfile } from "@/hooks/queries/useProfile";
 import { type TrophyCardModel } from "@/lib/trophySelectors";
 import { colors } from "@/theme/colors";
 
@@ -21,6 +24,9 @@ import { colors } from "@/theme/colors";
 export function TrophyCase({ userId }: { userId?: string | null }) {
   const { width } = useWindowDimensions();
   const { sections, earned, ladderFor, newlyEarned, dismissNewlyEarned } = useTrophies(userId);
+  // Workout-session PRs (any exercise) — they belong in the case too.
+  const myId = useMyProfile().data?.id ?? null;
+  const personalRecords = usePersonalRecords(userId ?? myId);
   const [tab, setTab] = useState<TrophyTab>("Categories");
   const [openId, setOpenId] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<TrophyShareData | null>(null);
@@ -49,10 +55,13 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
       <TrophySegmentedControl value={tab} onChange={setTab} />
 
       {tab === "Categories" ? (
-        sections.map((section) => (
-          <TrophyCategorySection key={section.category} section={section} cardWidth={cardWidth} onOpen={setOpenId} />
-        ))
-      ) : earned.length === 0 ? (
+        <>
+          <PersonalRecordsSection records={personalRecords.records} />
+          {sections.map((section) => (
+            <TrophyCategorySection key={section.category} section={section} cardWidth={cardWidth} onOpen={setOpenId} />
+          ))}
+        </>
+      ) : earned.length === 0 && personalRecords.records.length === 0 ? (
         <View style={{ alignItems: "center", paddingTop: 48, paddingHorizontal: 40 }}>
           <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.fog, textAlign: "center" }}>
             No trophies earned yet. Post, check in, and hit the gym to start your case.
@@ -60,6 +69,7 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
         </View>
       ) : (
         <View style={{ paddingTop: 6 }}>
+          <PersonalRecordsSection records={personalRecords.records} />
           <TrophyGrid>
             {earned.map((entry) => (
               <EarnedTrophyCard key={entry.key} entry={entry} width={cardWidth} onPress={() => setOpenId(entry.def.id)} />

@@ -25,6 +25,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 
+import { MessageActionMenu, type MessageAction } from "@/components/chat/MessageActionMenu";
 import { MessageBubble, TimeSeparator } from "@/components/friends/ChatBubbles";
 import { ForwardSheet } from "@/components/friends/ForwardSheet";
 import { PresenceLine } from "@/components/friends/PresenceLine";
@@ -399,25 +400,26 @@ export default function ChatScreen() {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   };
 
-  // Long-press action sheet on a message: react, reply, copy, unsend (own,
-  // <15m), delete-for-me.
-  const messageActions = (message: ChatMessage, mine: boolean) => {
+  // Long-press menu on a message: iMessage-style emoji quick-bar (any emoji
+  // via the full picker) + actions — replaces the old alert with three
+  // hardcoded reactions.
+  const [actionTarget, setActionTarget] = useState<{ message: ChatMessage; mine: boolean } | null>(null);
+  const messageActions = (message: ChatMessage, mine: boolean) => setActionTarget({ message, mine });
+  const actionMenuItems = (): MessageAction[] => {
+    if (!actionTarget) return [];
+    const { message, mine } = actionTarget;
     const withinWindow = Date.now() - new Date(message.sent_at).getTime() < 15 * 60_000;
-    const options: { text: string; style?: "cancel" | "destructive"; onPress?: () => void }[] = [
-      { text: "React 🔥", onPress: () => react.mutate({ messageId: message.id, emoji: "🔥" }) },
-      { text: "React ❤️", onPress: () => react.mutate({ messageId: message.id, emoji: "❤️" }) },
-      { text: "React 😂", onPress: () => react.mutate({ messageId: message.id, emoji: "😂" }) },
-      { text: "Reply", onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine }) }
+    const items: MessageAction[] = [
+      { label: "Reply", onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine }) }
     ];
     if (message.content) {
-      options.push({ text: "Forward", onPress: () => sheet.open(<ForwardSheet content={message.content ?? ""} />) });
+      items.push({ label: "Forward", onPress: () => sheet.open(<ForwardSheet content={message.content ?? ""} />) });
     }
     if (mine && withinWindow && message.media_url === null) {
-      options.push({ text: "Unsend for everyone", style: "destructive", onPress: () => unsend.mutate(message.id) });
+      items.push({ label: "Unsend for everyone", destructive: true, onPress: () => unsend.mutate(message.id) });
     }
-    options.push({ text: "Delete for me", style: "destructive", onPress: () => hide.mutate(message.id) });
-    options.push({ text: "Cancel", style: "cancel" });
-    Alert.alert("Message", undefined, options);
+    items.push({ label: "Delete for me", destructive: true, onPress: () => hide.mutate(message.id) });
+    return items;
   };
 
   const openThreadMenu = () => {
@@ -732,6 +734,16 @@ export default function ChatScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* iMessage-style reaction + action menu (long-press on a message). */}
+      <MessageActionMenu
+        visible={actionTarget !== null}
+        onClose={() => setActionTarget(null)}
+        onReact={(emoji) => {
+          if (actionTarget) react.mutate({ messageId: actionTarget.message.id, emoji });
+        }}
+        actions={actionMenuItems()}
+      />
     </View>
   );
 }

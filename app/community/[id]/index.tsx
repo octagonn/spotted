@@ -210,9 +210,16 @@ export default function CommunityScreen() {
               {info.name}
             </Text>
             <View style={{ marginTop: 4, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 }}>
-              <Text style={{ fontSize: 12, color: colors.fog }}>
-                {`${info.memberCount} member${info.memberCount === 1 ? "" : "s"}`}
-              </Text>
+              {/* Tappable — the full member list lives one tap away. */}
+              <Pressable
+                onPress={() => router.push(`/community/${id}/members` as Href)}
+                accessibilityLabel="See all members"
+                hitSlop={6}
+              >
+                <Text style={{ fontSize: 12, fontFamily: "Geist_600SemiBold", color: colors.mist, textDecorationLine: "underline" }}>
+                  {`${info.memberCount} member${info.memberCount === 1 ? "" : "s"}`}
+                </Text>
+              </Pressable>
               <Text style={{ fontSize: 12, color: colors.iron }}>·</Text>
               {isPrivate ? <Lock size={11} color={colors.fog} strokeWidth={2} /> : <Globe size={11} color={colors.fog} strokeWidth={2} />}
               <Text style={{ fontSize: 12, color: colors.fog }}>{isPrivate ? "Private" : "Public"}</Text>
@@ -372,14 +379,34 @@ export default function CommunityScreen() {
                   ) : (
                     <>
                       <TimeSeparator label="Chat" />
-                      {(messages.data ?? []).map((message) => (
-                        <MessageBubble
-                          key={message.id}
-                          mine={message.sender_id === userId}
-                          senderFirst={message.sender_id === userId ? undefined : message.sender?.display_name?.split(" ")[0] ?? message.sender?.username}
-                          text={message.content}
-                        />
-                      ))}
+                      {(messages.data ?? []).map((message, index, list) => {
+                        const mine = message.sender_id === userId;
+                        // Show identity on the first message of each sender run.
+                        const firstOfRun = index === 0 || list[index - 1].sender_id !== message.sender_id;
+                        const senderName = message.sender?.display_name ?? message.sender?.username ?? "Member";
+                        const openSender = () => {
+                          if (!message.sender?.username) return;
+                          router.push(`/user/${message.sender.username}` as Href);
+                        };
+                        return (
+                          <View key={message.id} style={{ marginTop: firstOfRun && index > 0 ? 10 : 0 }}>
+                            {!mine && firstOfRun ? (
+                              /* Who's talking — avatar + name, both open the profile. */
+                              <Pressable onPress={openSender} accessibilityLabel={`Open ${senderName}'s profile`}>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 2, paddingBottom: 4 }}>
+                                  <Avatar name={senderName} uri={message.sender?.avatar_url ?? null} size={28} />
+                                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.bone }}>
+                                    {senderName}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            ) : null}
+                            <View style={{ paddingLeft: mine ? 0 : 36 }}>
+                              <MessageBubble mine={mine} text={message.content} />
+                            </View>
+                          </View>
+                        );
+                      })}
                     </>
                   )}
                 </View>

@@ -40,7 +40,7 @@ export type CommunityMessage = {
   sender_id: string;
   content: string;
   sent_at: string;
-  sender: { username: string; display_name: string } | null;
+  sender: { username: string; display_name: string; avatar_url: string | null } | null;
 };
 
 export type CommunityPost = {
@@ -148,7 +148,7 @@ export function useCommunityMessages(communityId?: string, enabled = true) {
     queryFn: async (): Promise<CommunityMessage[]> => {
       const { data, error } = await supabase
         .from("community_messages")
-        .select("id, community_id, sender_id, content, sent_at, sender:sender_id(username, display_name)")
+        .select("id, community_id, sender_id, content, sent_at, sender:sender_id(username, display_name, avatar_url)")
         .eq("community_id", communityId as string)
         .order("sent_at", { ascending: true })
         .limit(200);
@@ -224,6 +224,54 @@ export function useCommunityPosts(communityId?: string, enabled = true) {
         });
       }
       return rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    }
+  });
+}
+
+export type CommunityMember = {
+  user_id: string;
+  role: string;
+  joined_at: string;
+  profile: Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> | null;
+};
+
+/** Everyone in a community — admins first, then longest-standing members. */
+export function useCommunityMembers(communityId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ["community-members", communityId],
+    enabled: isSupabaseConfigured && Boolean(communityId) && enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<CommunityMember[]> => {
+      const { data, error } = await supabase
+        .from("community_members")
+        .select("user_id, role, joined_at, profile:user_id(id, username, display_name, avatar_url)")
+        .eq("community_id", communityId as string)
+        .order("joined_at", { ascending: true })
+        .limit(500);
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as CommunityMember[];
+      return rows.sort((a, b) => (a.role === "admin" ? 0 : 1) - (b.role === "admin" ? 0 : 1));
+    }
+  });
+}
+
+/** Pending private-community join requests for the signed-in user, with names. */
+export function useMyPendingJoinRequests() {
+  const userId = useAuthStore((state) => state.userId);
+  return useQuery({
+    queryKey: ["my-join-requests", userId],
+    enabled: isSupabaseConfigured && Boolean(userId),
+    staleTime: 30_000,
+    queryFn: async (): Promise<{ communityId: string; name: string; requestedAt: string }[]> => {
+      const { data, error } = await supabase
+        .from("community_join_requests")
+        .select("community_id, requested_at, community:community_id(name)")
+        .eq("user_id", userId as string)
+        .order("requested_at", { ascending: false });
+      if (error) throw error;
+      return ((data ?? []) as unknown as { community_id: string; requested_at: string; community: { name: string } | null }[]).map(
+        (row) => ({ communityId: row.community_id, name: row.community?.name ?? "Community", requestedAt: row.requested_at })
+      );
     }
   });
 }

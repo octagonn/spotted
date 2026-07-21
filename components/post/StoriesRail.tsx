@@ -1,5 +1,7 @@
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Plus } from "lucide-react-native";
+import { useEffect } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
@@ -22,6 +24,14 @@ export function StoriesRail() {
 
   const me = groups.find((g) => g.isMe) ?? null;
   const others = groups.filter((g) => !g.isMe);
+
+  // Warm the cache so tapping a ring opens instantly (4a — no blank flash).
+  useEffect(() => {
+    for (const g of stories.data ?? []) {
+      const first = g.stories[0]?.mediaUrl;
+      if (first) void Image.prefetch(first);
+    }
+  }, [stories.data]);
   // Until the profile resolves we don't know the name OR the picture, so show a
   // neutral skeleton instead of the "You" fallback initial (that was the "y"
   // that flashed before the pfp loaded).

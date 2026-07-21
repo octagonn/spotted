@@ -131,6 +131,23 @@ export default function StoryViewer() {
   const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
   const toggleLike = useToggleStoryLike();
 
+  // No blank flash on open (4a): show a spinner until the media decodes, and
+  // prefetch the next segment + the next person's first story ahead of time.
+  const [mediaLoaded, setMediaLoaded] = useState(false);
+  useEffect(() => {
+    setMediaLoaded(false);
+  }, [story?.id]);
+  useEffect(() => {
+    if (!queue) return;
+    const g = queue[gi];
+    const urls: string[] = [];
+    const nextInGroup = g?.stories[si + 1]?.mediaUrl;
+    if (nextInGroup) urls.push(nextInGroup);
+    const nextPersonFirst = queue[gi + 1]?.stories[0]?.mediaUrl;
+    if (nextPersonFirst) urls.push(nextPersonFirst);
+    for (const u of urls) void Image.prefetch(u);
+  }, [queue, gi, si]);
+
   // Any open overlay pauses the story; closing them all resumes it.
   const closeOverlays = () => {
     setMenuOpen(false);
@@ -353,13 +370,20 @@ export default function StoryViewer() {
         style={{ flex: 1, backgroundColor: colors.black }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        {/* Spinner behind the media so opening a story never flashes blank. */}
+        {story.mediaUrl && !mediaLoaded ? (
+          <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+            <ActivityIndicator color="rgba(255,255,255,0.7)" />
+          </View>
+        ) : null}
         {story.mediaUrl ? (
           <Image
             source={{ uri: story.mediaUrl }}
             contentFit="contain"
-            transition={0}
+            transition={150}
             cachePolicy="memory-disk"
             priority="high"
+            onLoad={() => setMediaLoaded(true)}
             // Reuse one decoded surface across stories (no reload flash) and let
             // expo-image downscale big photos to the view — the main viewer cost.
             recyclingKey={story.id}

@@ -8,7 +8,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
 import { StreakPopup } from "@/components/profile/StreakPopup";
 import { Avatar } from "@/components/ui/Avatar";
+import { TauntPickerSheet } from "@/components/friends/TauntPickerSheet";
 import { Button, RelButton } from "@/components/ui/Button";
+import { useSheet } from "@/components/ui/Sheet";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { useMutualFriends } from "@/hooks/queries/useFollowing";
@@ -42,6 +44,7 @@ function backendState(status: ReturnType<typeof useFriendshipStatus>["data"]): R
 export default function UserProfileScreen() {
   const { username = "" } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
+  const sheet = useSheet();
   const insets = useSafeAreaInsets();
   const profileQuery = useProfileByUsername(username);
   const profile = profileQuery.data;
@@ -187,6 +190,15 @@ export default function UserProfileScreen() {
           <RelButton label={button.label} kind={button.kind} disabled={button.disabled} onPress={advance} />
           {isFriend && profile ? (
             <RelButton label="Message" kind="quiet" onPress={() => router.push(`/chat/${profile.id}`)} />
+          ) : null}
+          {/* Taunt (spec B) — server enforces eligibility/limits; the sheet is
+              the canned-line picker with trophy-gated extras. */}
+          {isFriend && profile ? (
+            <RelButton
+              label="Taunt 😈"
+              kind="quiet"
+              onPress={() => sheet.open(<TauntPickerSheet targetId={profile.id} name={profile.display_name} />)}
+            />
           ) : null}
           <RelButton label="Share" kind="quiet" onPress={shareProfile} />
         </View>

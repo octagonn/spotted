@@ -237,6 +237,20 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         />
       </MediaFrame>
 
+      {/* "Answered the Call" — posted within 3h of a taunt (spec B). */}
+      {post.answeredCall ? (
+        <View style={[{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 10 }, textBlur]}>
+          <Pressable onPress={() => !locked && router.push(`/user/${post.answeredCall}`)}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(232,180,76,0.45)", backgroundColor: "rgba(232,180,76,0.12)", paddingVertical: 5, paddingHorizontal: 12 }}>
+              <Text style={{ fontSize: 11 }}>🫡</Text>
+              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 11.5, color: colors.gold }}>
+                Answered the Call · @{post.answeredCall}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* Public-feed context chips */}
       {post.ctx?.length ? (
         <View style={[{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 18, paddingTop: 10 }, textBlur]}>

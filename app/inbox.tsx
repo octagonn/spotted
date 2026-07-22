@@ -53,6 +53,12 @@ function notificationText(n: AppNotification): string {
       return `nudged ${String(n.payload?.communityName ?? "your crew")} — it's been quiet`;
     case "tagged":
       return `tagged you in their ${n.payload?.kind === "story" ? "story" : "post"}`;
+    case "taunt_answered":
+      return "answered your taunt 🫡 — they posted";
+    case "claim_approved":
+      return `approved your ${String(n.payload?.trophy_id ?? "lift")} claim ✅ — trophy unlocked`;
+    case "claim_rejected":
+      return `rejected your ${String(n.payload?.trophy_id ?? "lift")} claim: ${String(n.payload?.reason ?? "not verifiable")}`;
     default:
       return "sent you an update";
   }
@@ -304,6 +310,10 @@ export default function InboxScreen() {
                       router.push(`/community/${String(n.payload.community_id)}`);
                     } else if (n.type === "community_nudge" && n.payload?.communityId) {
                       router.push(`/community/${String(n.payload.communityId)}`);
+                    } else if (n.type === "taunt_answered" && n.payload?.post_id) {
+                      router.push(`/post/${String(n.payload.post_id)}`);
+                    } else if (n.type === "claim_approved" || n.type === "claim_rejected") {
+                      router.push("/profile-section/trophies");
                     } else if (n.type === "tagged" && n.payload?.post_id) {
                       router.push(`/post/${String(n.payload.post_id)}`);
                     } else if (n.type === "tagged" && n.actorUsername) {

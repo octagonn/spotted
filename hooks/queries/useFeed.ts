@@ -13,6 +13,7 @@ type FeedRow = Post & {
   gyms: Pick<Gym, "id" | "name" | "latitude" | "longitude"> | null;
   post_tags?: { profile: { username: string } | null }[] | null;
   photo_tags?: { x: number; y: number; profile: { username: string } | null }[] | null;
+  answered_taunts?: { sender: { username: string } | null }[] | null;
 };
 
 async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
@@ -45,7 +46,7 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
       })
     );
   }
-  const { profiles: _profiles, gyms: _gyms, post_tags: _tags, photo_tags: _ptags, ...post } = row;
+  const { profiles: _profiles, gyms: _gyms, post_tags: _tags, photo_tags: _ptags, answered_taunts: _ans, ...post } = row;
   return {
     ...post,
     media_url: mediaUrl,
@@ -58,7 +59,9 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
       .filter((username): username is string => Boolean(username)),
     photo_tags: (row.photo_tags ?? [])
       .filter((t) => t.profile?.username)
-      .map((t) => ({ username: t.profile!.username, x: t.x, y: t.y }))
+      .map((t) => ({ username: t.profile!.username, x: t.x, y: t.y })),
+    // "Answered the Call" (spec B): who taunted this poster into showing up.
+    answered_call: (row.answered_taunts ?? []).map((t) => t.sender?.username).find(Boolean) ?? null
   };
 }
 
@@ -81,7 +84,7 @@ export function useFeed() {
       let query = supabase
         .from("posts")
         .select(
-          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username)), photo_tags(x, y, profile:user_id(username))"
+          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username)), photo_tags(x, y, profile:user_id(username)), answered_taunts:taunts!taunts_answered_post_id_fkey(sender:sender_id(username))"
         )
         .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })

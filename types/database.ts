@@ -254,6 +254,108 @@ export type Database = {
           },
         ]
       }
+      taunts: {
+        Row: {
+          id: string
+          sender_id: string
+          target_id: string
+          line_id: string
+          sent_at: string
+          answered_post_id: string | null
+        }
+        Insert: {
+          id?: string
+          sender_id: string
+          target_id: string
+          line_id: string
+          sent_at?: string
+          answered_post_id?: string | null
+        }
+        Update: {
+          id?: string
+          sender_id?: string
+          target_id?: string
+          line_id?: string
+          sent_at?: string
+          answered_post_id?: string | null
+        }
+        Relationships: []
+      }
+      trophy_events: {
+        Row: {
+          id: string
+          user_id: string
+          icon: string
+          name: string
+          family_name: string | null
+          rarity_pct: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          icon: string
+          name: string
+          family_name?: string | null
+          rarity_pct?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          icon?: string
+          name?: string
+          family_name?: string | null
+          rarity_pct?: number | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      trophy_claims: {
+        Row: {
+          id: string
+          user_id: string
+          post_id: string | null
+          trophy_id: string
+          claimed_value: number
+          status: string
+          reviewer_id: string | null
+          reason_id: string | null
+          reviewed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          post_id?: string | null
+          trophy_id: string
+          claimed_value: number
+          status?: string
+          reviewer_id?: string | null
+          reason_id?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          post_id?: string | null
+          trophy_id?: string
+          claimed_value?: number
+          status?: string
+          reviewer_id?: string | null
+          reason_id?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      admin_users: {
+        Row: { user_id: string }
+        Insert: { user_id: string }
+        Update: { user_id?: string }
+        Relationships: []
+      }
       community_nudges: {
         Row: {
           id: string
@@ -1189,6 +1291,7 @@ export type Database = {
           show_activity: boolean
           dm_preview_enabled: boolean
           split_public: boolean
+          featured_trophies: Json
           avatar_blurred_url: string | null
           avatar_url: string | null
           bio: string | null
@@ -1216,6 +1319,7 @@ export type Database = {
           show_activity?: boolean
           dm_preview_enabled?: boolean
           split_public?: boolean
+          featured_trophies?: Json
           avatar_blurred_url?: string | null
           avatar_url?: string | null
           bio?: string | null
@@ -1243,6 +1347,7 @@ export type Database = {
           show_activity?: boolean
           dm_preview_enabled?: boolean
           split_public?: boolean
+          featured_trophies?: Json
           avatar_blurred_url?: string | null
           avatar_url?: string | null
           bio?: string | null
@@ -1460,6 +1565,14 @@ export type Database = {
       regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
       join_community_by_code: { Args: { code: string }; Returns: string | null }
       nudge_community: { Args: { cid: string }; Returns: number }
+      send_taunt_line: {
+        Args: { p_target: string; p_line_id: string; p_line_text: string; p_since: string }
+        Returns: string
+      }
+      review_trophy_claim: {
+        Args: { p_claim: string; p_approve: boolean; p_reason?: string | null }
+        Returns: undefined
+      }
       wave_at_friend: { Args: { target: string; gym_name?: string | null }; Returns: undefined }
       search_profiles_fuzzy: {
         Args: { q: string; max_rows?: number }

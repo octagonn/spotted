@@ -341,6 +341,8 @@ export type FeedMockPost = {
   taggedFriends?: { handle: string; name: string }[];
   /** Positional photo tags (M1) — overlaid on the media at normalized coords. */
   photoTags?: { username: string; x: number; y: number }[];
+  /** Username whose taunt this post answered ("Answered the Call" tag). */
+  answeredCall?: string | null;
   reactions: FeedMockReactor[];
   comments: FeedMockComment[];
 };

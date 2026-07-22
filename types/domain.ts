@@ -26,6 +26,8 @@ export type FeedPost = Post & {
   tag_usernames?: string[];
   /** Positional photo tags (M1) — normalized 0–1 coords + username. */
   photo_tags?: { username: string; x: number; y: number }[];
+  /** Username of the friend whose taunt this post answered (spec B). */
+  answered_call?: string | null;
 };
 
 export type FriendSuggestion = Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> & {

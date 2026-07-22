@@ -638,14 +638,28 @@ export default function MapTabScreen() {
             </Text>
           )}
 
-          {/* YOUR CREWS */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 }}>
+          {/* YOUR CREWS — "+ New" lives in the header now; the old dashed
+              create-card was one more box in an already crowded stack. */}
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 }}>
             <Micro>Your crews</Micro>
+            <Pressable
+              accessibilityLabel="Start a crew"
+              onPress={() => router.push("/community-new" as Href)}
+              hitSlop={8}
+              style={{ marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <Plus size={12} color={colors.silver} strokeWidth={2.4} />
+              <Text style={{ fontSize: 11, fontFamily: "Geist_600SemiBold", color: colors.silver }}>New</Text>
+            </Pressable>
           </View>
           {communities.isLoading ? (
             <View style={{ paddingVertical: 16, alignItems: "center" }}>
               <ActivityIndicator color={colors.mist} />
             </View>
+          ) : myCommunities.filter((c) => c.id !== hub.data?.communityId).length === 0 ? (
+            <Text style={{ paddingHorizontal: 20, paddingBottom: 4, fontSize: 12, color: colors.fog }}>
+              No crews yet — tap New to start one with your gym friends.
+            </Text>
           ) : (
             myCommunities
               .filter((c) => c.id !== hub.data?.communityId)
@@ -767,32 +781,6 @@ export default function MapTabScreen() {
             </Pressable>
           ))}
 
-          {/* CREATE — dashed border = an action, not a thing (spec). */}
-          <Pressable onPress={() => router.push("/community-new" as Href)} style={{ marginHorizontal: 18, marginBottom: 8 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                borderWidth: 1,
-                borderStyle: "dashed",
-                borderColor: colors.slate,
-                borderRadius: radius.sm,
-                paddingVertical: 10,
-                paddingHorizontal: 11
-              }}
-            >
-              <View style={{ width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
-                <Plus size={16} color={colors.mist} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>Start a crew</Text>
-                <Text style={{ marginTop: 1, fontSize: 11, color: colors.fog }}>Your gym friends, your split, your rules</Text>
-              </View>
-              <ChevronRight size={15} color={colors.fog} />
-            </View>
-          </Pressable>
-
           {/* DISCOVER · NEAR YOU — hidden entirely when no gym has a friend (spec). */}
           {(nearbyGyms.data ?? []).length > 0 ? (
             <View>
@@ -872,18 +860,19 @@ export default function MapTabScreen() {
             </View>
           ) : null}
 
-          {/* MORE — invite code + public community discovery (existing features). */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 8 }}>
+          {/* MORE — public discovery; the invite-code entry is a small header
+              link instead of a full-width button. */}
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 }}>
             <Micro>More communities</Micro>
-          </View>
-          <View style={{ paddingHorizontal: 18, paddingBottom: 10 }}>
-            <Button
-              variant="ghost"
-              icon={<KeyRound size={16} color={colors.bone} />}
+            <Pressable
+              accessibilityLabel="Enter invite code"
               onPress={() => sheet.open(<InviteCodeSheet />)}
+              hitSlop={8}
+              style={{ marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 5 }}
             >
-              Enter invite code
-            </Button>
+              <KeyRound size={12} color={colors.silver} strokeWidth={2.2} />
+              <Text style={{ fontSize: 11, fontFamily: "Geist_600SemiBold", color: colors.silver }}>Have a code?</Text>
+            </Pressable>
           </View>
           <View style={{ paddingHorizontal: 18, paddingBottom: 10 }}>
             <SearchBar value={discoverQuery} onChangeText={setDiscoverQuery} placeholder="Search public communities" />
@@ -897,7 +886,7 @@ export default function MapTabScreen() {
               {discoverQuery.trim() ? "No public communities match that name." : "Nothing else to discover yet."}
             </Text>
           ) : (
-            (discover.data ?? []).slice(0, 15).map((community) => (
+            (discover.data ?? []).slice(0, 10).map((community) => (
               <DiscoverCard key={community.id} community={community} />
             ))
           )}

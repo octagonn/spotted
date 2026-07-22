@@ -226,6 +226,10 @@ export default function WorkoutScreen() {
   const [celebrateIdx, setCelebrateIdx] = useState(0);
   const [animSets, setAnimSets] = useState(0);
   const [saving, setSaving] = useState(false);
+  // Optional custom workout name set DURING the session (pencil in the
+  // header). Empty = default sessionTitle at save time.
+  const [customName, setCustomName] = useState("");
+  const [namingLive, setNamingLive] = useState(false);
 
   const exercises = session.exercises;
   const active = exercises.find((e) => e.id === activeId) ?? null;
@@ -421,7 +425,7 @@ export default function WorkoutScreen() {
     setSaving(true);
     const hasLift = exercises.some((e) => e.kind === "lift" && e.sets.length > 0);
     const hasCardio = exercises.some((e) => e.kind === "cardio" && e.sets.length > 0);
-    const title = sessionTitle(hasLift, hasCardio);
+    const title = customName.trim() || sessionTitle(hasLift, hasCardio);
     const logged = exercises.filter((e) => e.sets.length > 0);
     try {
       const result = await saveWorkout.mutateAsync({
@@ -741,7 +745,28 @@ export default function WorkoutScreen() {
           <Pressable accessibilityLabel="Back to My Workouts" onPress={() => router.back()} hitSlop={10} style={{ marginLeft: -6, padding: 2 }}>
             <ChevronLeft size={28} color={tokens.text.secondary} />
           </Pressable>
-          <Text style={{ fontFamily: DISP, fontSize: 28, letterSpacing: -0.6, color: tokens.text.primary }}>Workout</Text>
+          {namingLive ? (
+            <TextInput
+              autoFocus
+              value={customName}
+              onChangeText={setCustomName}
+              maxLength={60}
+              placeholder="Name this workout"
+              placeholderTextColor={tokens.text.tertiary}
+              onSubmitEditing={() => setNamingLive(false)}
+              onBlur={() => setNamingLive(false)}
+              style={{ flex: 1, fontFamily: DISP, fontSize: 24, color: tokens.text.primary, borderBottomWidth: 1, borderBottomColor: tokens.accent.gold, paddingVertical: 2 }}
+            />
+          ) : (
+            <>
+              <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: DISP, fontSize: 28, letterSpacing: -0.6, color: tokens.text.primary }}>
+                {customName.trim() || "Workout"}
+              </Text>
+              <Pressable accessibilityLabel="Name this workout" onPress={() => setNamingLive(true)} hitSlop={10}>
+                <Pencil size={16} color={tokens.text.tertiary} strokeWidth={2} />
+              </Pressable>
+            </>
+          )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 9, paddingLeft: 36, marginTop: 6 }}>
           {session.active ? (

@@ -39,6 +39,26 @@ export default function AccountSettingsScreen() {
 
   const email = session?.user.email ?? null;
   const username = profileQuery.data?.username ?? null;
+  const [resetSent, setResetSent] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  async function handlePasswordReset() {
+    if (!email || resetting || resetSent) return;
+    setResetting(true);
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+      }
+      setResetSent(true);
+    } catch (error) {
+      logger.error("password_reset_failed", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      setResetting(false);
+    }
+  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -86,6 +106,12 @@ export default function AccountSettingsScreen() {
       </View>
 
       <View className="mt-6 gap-3">
+        <Button variant="ghost" onPress={() => router.push("/edit-profile")}>
+          Edit profile
+        </Button>
+        <Button variant="ghost" loading={resetting} disabled={!email || resetSent} onPress={() => void handlePasswordReset()}>
+          {resetSent ? "Reset link sent — check your email" : "Change password"}
+        </Button>
         <Button variant="ghost" loading={signingOut} onPress={handleSignOut}>
           Sign Out
         </Button>

@@ -168,8 +168,7 @@ export default function CommunityScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader
-        title={info.name}
-        sub={`${info.type[0].toUpperCase()}${info.type.slice(1)} community`}
+        title="Community"
         right={
           isMember ? (
             <View style={{ flexDirection: "row", gap: 8 }}>
@@ -250,7 +249,7 @@ export default function CommunityScreen() {
           {isMember ? (
             <>
             <Button variant="ghost" onPress={() => leave.mutate(info.id, { onSuccess: () => showToast(`Left ${info.name}`) })} loading={leave.isPending}>
-              Joined ✓ — leave
+              Leave
             </Button>
             <Button
               variant="ghost"

@@ -84,7 +84,6 @@ import { logger } from "@/lib/logger";
 import { publishDailyPost, publishLiftVideo } from "@/lib/posts";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
-import { usePostedState } from "@/hooks/queries/usePostedState";
 import { markPostedToday, showToast, triggerFlash } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
@@ -164,45 +163,6 @@ function StepPill({ children }: { children: ReactNode }) {
   );
 }
 
-function ModePill({
-  active,
-  disabled,
-  children,
-  onPress
-}: {
-  active: boolean;
-  disabled?: boolean;
-  children: ReactNode;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} pressScale={0.96}>
-      <View
-        style={{
-          paddingVertical: 8,
-          paddingHorizontal: 16,
-          borderRadius: 999,
-          borderWidth: active ? 1 : 0,
-          borderColor: colors.slate,
-          backgroundColor: active ? "rgba(0,0,0,0.5)" : "transparent",
-          opacity: disabled ? 0.35 : 1
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "GeistMono_400Regular",
-            fontSize: 11,
-            letterSpacing: 11 * 0.12,
-            textTransform: "uppercase",
-            color: active ? colors.white : colors.fog
-          }}
-        >
-          {children}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
 
 function IconTile({ children, round = false }: { children: ReactNode; round?: boolean }) {
   return (
@@ -670,7 +630,6 @@ export default function CameraScreen() {
   const insets = useSafeAreaInsets();
   const sheet = useSheet();
   const queryClient = useQueryClient();
-  const { postedToday } = usePostedState();
   const keyboardVisible = useKeyboardVisible();
   const userId = useAuthStore((state) => state.userId);
   const postStory = usePostStory();
@@ -686,9 +645,10 @@ export default function CameraScreen() {
 
   // Capture starts on Story or Daily; video is now always a hold-to-record
   // action on the shutter, so there's no separate Video mode to start in.
-  const [mode, setMode] = useState<Mode>(() =>
-    params.mode === "story" ? "story" : postedToday ? "story" : "daily"
-  );
+  // The camera page posts STORIES by default. The daily post is a distinct
+  // flow reached only via ?mode=daily (the "Post today's SPOTTED" button in the
+  // home-feed lock overlay) — there's no in-camera Daily/Story selector.
+  const [mode, setMode] = useState<Mode>(() => (params.mode === "daily" ? "daily" : "story"));
   const [dailyStep, setDailyStep] = useState<DailyStep>("capture");
   const [liftStep, setLiftStep] = useState<LiftStep>("record");
   const [videoUri, setVideoUri] = useState<string>();
@@ -1013,26 +973,6 @@ export default function CameraScreen() {
     .map((friend) => ({ id: friend.id, name: friend.display_name, handle: `@${friend.username}` }));
   const selectedCommunities = (myCommunities.data ?? []).filter((community) => communities.includes(community.id));
 
-  const switchMode = (next: Mode) => {
-    if (next === "daily" && postedToday) return;
-    // Video (lift) is a peer option from the moment the camera opens — no longer
-    // gated behind posting the daily photo first (composer spec C3).
-    setRecording(false);
-    setRecordSeconds(0);
-    setExtraPhotos([]);
-    setMode(next);
-    if (next === "daily" || next === "story") {
-      setDailyStep("capture");
-    } else {
-      setLiftStep("record");
-      setFacing("back");
-      // Ask for the mic up front so the first recording has sound. Denied is
-      // fine — we record muted rather than block.
-      if (!micPermission?.granted && micPermission?.canAskAgain) {
-        void requestMicPermission();
-      }
-    }
-  };
 
   /** Flip front/back, debounced so spamming can't outrun the camera session.
    *  Allowed mid-recording (#8) — expo-camera keeps the clip going across the
@@ -1635,19 +1575,9 @@ export default function CameraScreen() {
               {recordLocked ? "TAP TO STOP" : "SLIDE TO LOCK"}
             </Text>
           ) : (
-            <>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                <ModePill active={mode === "story"} onPress={() => switchMode("story")}>
-                  Story
-                </ModePill>
-                <ModePill active={mode === "daily"} disabled={postedToday} onPress={() => switchMode("daily")}>
-                  {postedToday ? "Daily \u2713" : "Daily"}
-                </ModePill>
-              </View>
-              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.55)" }}>
-                TAP FOR PHOTO {"\u00b7"} HOLD FOR VIDEO
-              </Text>
-            </>
+            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.55)" }}>
+              {mode === "daily" ? "TAP TO CAPTURE TODAY'S SPOTTED" : "TAP FOR PHOTO \u00b7 HOLD FOR VIDEO"}
+            </Text>
           )}
         </View>
 

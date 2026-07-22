@@ -167,7 +167,7 @@ export function LockOverlay({
 
           {/* Animated gold CTA. */}
           <Animated.View style={[{ marginTop: 26, alignSelf: "stretch" }, ctaStyle]}>
-            <Pressable onPress={() => router.push("/camera")} accessibilityLabel="Post today's SPOTTED">
+            <Pressable onPress={() => router.push("/camera?mode=daily")} accessibilityLabel="Post today's SPOTTED">
               <LinearGradient
                 colors={["#F2C25A", tokens.accent.gold, "#D89A2E"]}
                 start={{ x: 0, y: 0 }}

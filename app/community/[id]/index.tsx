@@ -175,7 +175,7 @@ export default function CommunityScreen() {
             <View style={{ flexDirection: "row", gap: 8 }}>
               {/* Post directly to this community (16) — existing camera flow with
                   this community pre-selected; gym rules still apply there. */}
-              <Pressable onPress={() => router.push(`/camera?community=${info.id}` as Href)} accessibilityLabel="Post to this community" hitSlop={8}>
+              <Pressable onPress={() => router.push(`/camera?mode=daily&community=${info.id}` as Href)} accessibilityLabel="Post to this community" hitSlop={8}>
                 <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
                   <Camera size={17} color={colors.mist} strokeWidth={2} />
                 </View>

@@ -608,7 +608,7 @@ export default function WorkoutScreen() {
             <Pressable
               onPress={() => {
                 session.clear();
-                router.replace("/camera");
+                router.replace("/camera?mode=daily");
               }}
               style={{ marginTop: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, paddingVertical: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: tokens.border.strong }}
             >

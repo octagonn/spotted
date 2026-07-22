@@ -13,6 +13,7 @@ import Animated, {
 
 import { MuteIndicator } from "@/components/post/MuteIndicator";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
+import { WorkoutSlideCard } from "@/components/post/WorkoutSlideCard";
 import { LiftTag, PlayBadge, VChip, VidDur } from "@/components/ui/Chips";
 import { useAudioStore } from "@/stores/audio";
 import type { FeedMockPost } from "@/lib/redesignData";
@@ -550,10 +551,72 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
   );
 }
 
+/**
+ * Photo(s) + attached workout cards in one swipeable stack. Slide 0 = the
+ * daily photo (or a photo carousel), slides after = each workout the user
+ * did that day (2nd+ workouts appended later). Blurred/locked = photo only.
+ */
+function PostStack({ post, blurRadius }: MediaProps) {
+  const photos = (post.mediaUris?.length ?? 0) > 1 ? (post.mediaUris as string[]) : post.mediaUri ? [post.mediaUri] : [];
+  const workouts = post.workouts ?? [];
+  const [index, setIndex] = useState(0);
+  const [width, setWidth] = useState(0);
+  const total = photos.length + workouts.length;
+  return (
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
+      {width > 0 ? (
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          // Locked feed = photo only, no swiping into the workout data.
+          scrollEnabled={blurRadius === undefined}
+          onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+          style={{ flex: 1 }}
+        >
+          {photos.map((uri) => (
+            <View key={uri} style={{ width, height: "100%" }}>
+              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} />
+            </View>
+          ))}
+          {blurRadius === undefined
+            ? workouts.map((w) => (
+                <View key={w.id} style={{ width, height: "100%" }}>
+                  <WorkoutSlideCard workout={w} />
+                </View>
+              ))
+            : null}
+        </ScrollView>
+      ) : null}
+      <View pointerEvents="none" style={{ position: "absolute", top: 12, right: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.6)" }}>
+        <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 10.5, color: colors.white }}>{`${index + 1}/${total}`}</Text>
+      </View>
+      <View pointerEvents="none" style={{ position: "absolute", bottom: 10, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 }}>
+        {Array.from({ length: total }).map((_, i) => (
+          <View
+            key={i}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              // Workout dots tint gold so you know there's training data ahead.
+              backgroundColor: i === index ? colors.white : i >= photos.length ? "rgba(232,180,76,0.55)" : "rgba(255,255,255,0.4)"
+            }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /** Media router (§4.3) — picks the media kind for a post. */
 export function PostMedia({ post, blurRadius, active, onRegisterTap }: MediaProps) {
   if (post.video) {
     return <RealVideoMedia post={post} blurRadius={blurRadius} active={active} onRegisterTap={onRegisterTap} />;
+  }
+  // Daily photo posts with attached workouts render as a photo + workout stack.
+  if ((post.workouts?.length ?? 0) > 0 && !post.video) {
+    return <PostStack post={post} blurRadius={blurRadius} />;
   }
   if ((post.mediaUris?.length ?? 0) > 1) {
     return <CarouselMedia post={post} blurRadius={blurRadius} />;

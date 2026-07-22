@@ -14,6 +14,7 @@ type FeedRow = Post & {
   post_tags?: { profile: { username: string } | null }[] | null;
   photo_tags?: { x: number; y: number; profile: { username: string } | null }[] | null;
   answered_taunts?: { sender: { username: string } | null }[] | null;
+  attached_workouts?: { id: string; name: string; duration_seconds: number; started_at: string; data: unknown }[] | null;
 };
 
 async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
@@ -46,7 +47,7 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
       })
     );
   }
-  const { profiles: _profiles, gyms: _gyms, post_tags: _tags, photo_tags: _ptags, answered_taunts: _ans, ...post } = row;
+  const { profiles: _profiles, gyms: _gyms, post_tags: _tags, photo_tags: _ptags, answered_taunts: _ans, attached_workouts: _wk, ...post } = row;
   return {
     ...post,
     media_url: mediaUrl,
@@ -61,7 +62,25 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
       .filter((t) => t.profile?.username)
       .map((t) => ({ username: t.profile!.username, x: t.x, y: t.y })),
     // "Answered the Call" (spec B): who taunted this poster into showing up.
-    answered_call: (row.answered_taunts ?? []).map((t) => t.sender?.username).find(Boolean) ?? null
+    answered_call: (row.answered_taunts ?? []).map((t) => t.sender?.username).find(Boolean) ?? null,
+    // Workouts attached to this daily post — rendered as extra feed slides.
+    attached_workouts: (row.attached_workouts ?? [])
+      .slice()
+      .sort((a, b) => a.started_at.localeCompare(b.started_at))
+      .map((w, i) => ({
+        id: w.id,
+        name: w.name,
+        durationSeconds: w.duration_seconds,
+        exercises: (() => {
+          const d = w.data as { exercises?: unknown } | unknown[] | null;
+          if (Array.isArray(d)) return d as never;
+          return (d && typeof d === "object" && Array.isArray((d as { exercises?: unknown }).exercises)
+            ? (d as { exercises: unknown }).exercises
+            : []) as never;
+        })(),
+        // A second+ workout of the day (attached after the post) gets a badge.
+        isSecond: i > 0
+      }))
   };
 }
 
@@ -84,7 +103,7 @@ export function useFeed() {
       let query = supabase
         .from("posts")
         .select(
-          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username)), photo_tags(x, y, profile:user_id(username)), answered_taunts:taunts!taunts_answered_post_id_fkey(sender:sender_id(username))"
+          "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username)), photo_tags(x, y, profile:user_id(username)), answered_taunts:taunts!taunts_answered_post_id_fkey(sender:sender_id(username)), attached_workouts:workouts!workouts_post_id_fkey(id, name, duration_seconds, started_at, data)"
         )
         .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })

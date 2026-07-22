@@ -80,6 +80,15 @@ function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
       : undefined,
     photoTags: post.photo_tags?.length ? post.photo_tags : undefined,
     answeredCall: post.answered_call ?? undefined,
+    workouts: post.attached_workouts?.length
+      ? post.attached_workouts.map((w) => ({
+          id: w.id,
+          name: w.name,
+          durationSeconds: w.durationSeconds,
+          exercises: w.exercises as never,
+          isSecond: w.isSecond
+        }))
+      : undefined,
     reactions: [],
     comments: []
   };

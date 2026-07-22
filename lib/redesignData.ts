@@ -343,6 +343,8 @@ export type FeedMockPost = {
   photoTags?: { username: string; x: number; y: number }[];
   /** Username whose taunt this post answered ("Answered the Call" tag). */
   answeredCall?: string | null;
+  /** Workouts attached to this daily post — rendered as extra swipe slides. */
+  workouts?: import("@/components/post/WorkoutSlideCard").FeedWorkout[];
   reactions: FeedMockReactor[];
   comments: FeedMockComment[];
 };

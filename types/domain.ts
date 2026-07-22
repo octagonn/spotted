@@ -28,6 +28,8 @@ export type FeedPost = Post & {
   photo_tags?: { username: string; x: number; y: number }[];
   /** Username of the friend whose taunt this post answered (spec B). */
   answered_call?: string | null;
+  /** Workouts attached to this daily post (rendered as extra feed slides). */
+  attached_workouts?: { id: string; name: string; durationSeconds: number; exercises: unknown[]; isSecond: boolean }[];
 };
 
 export type FriendSuggestion = Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> & {

@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { Bell, Camera, Lock } from "lucide-react-native";
+import { Bell, Camera, Dumbbell, Lock } from "lucide-react-native";
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, {
@@ -189,6 +189,19 @@ export function LockOverlay({
               </LinearGradient>
             </Pressable>
           </Animated.View>
+
+          {/* Log a workout first — it rides along with your daily photo as a
+              feed slide. */}
+          <Pressable
+            onPress={() => router.push("/workout?daily=1")}
+            accessibilityLabel="Start a workout for your daily"
+            style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, alignSelf: "stretch", paddingVertical: 13, borderRadius: 999, borderWidth: 1, borderColor: colors.slate }}
+          >
+            <Dumbbell size={16} color={colors.white} strokeWidth={2.2} />
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
+              Log a workout with it
+            </Text>
+          </Pressable>
 
           <Text style={{ marginTop: 12, fontSize: 11.5, color: colors.fog, textAlign: "center" }}>
             Resets at midnight. One drop unlocks the feed.

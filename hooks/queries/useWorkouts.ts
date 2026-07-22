@@ -175,6 +175,57 @@ export function deriveExerciseBests(
   return bests;
 }
 
+/** Today's daily post id for a user, or null (drives the "add to daily" CTA). */
+export function useTodayDailyPost(userId?: string | null) {
+  return useQuery({
+    queryKey: ["today-daily-post", userId],
+    enabled: isSupabaseConfigured && Boolean(userId),
+    staleTime: 30_000,
+    queryFn: async (): Promise<string | null> => {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from("posts")
+        .select("id")
+        .eq("user_id", userId as string)
+        .gte("created_at", start.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.id ?? null;
+    }
+  });
+}
+
+/**
+ * Attach a finished workout to today's daily post so it appears as a feed
+ * slide. If it's a SECOND workout (the post already has one attached), notify
+ * the user's friends.
+ */
+export function useAttachWorkoutToDaily() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workoutId, postId, workoutName }: { workoutId: string; postId: string; workoutName: string }) => {
+      // Is this the first workout on the post? (If not, it's a 2nd+ → notify.)
+      const { count } = await supabase
+        .from("workouts")
+        .select("id", { count: "exact", head: true })
+        .eq("post_id", postId);
+      const { error } = await supabase.from("workouts").update({ post_id: postId }).eq("id", workoutId);
+      if (error) throw error;
+      if ((count ?? 0) > 0) {
+        try {
+          await supabase.rpc("notify_second_workout", { p_post: postId, p_name: workoutName });
+        } catch {
+          // Notifying friends is best-effort — the attach already succeeded.
+        }
+      }
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["feed"] })
+  });
+}
+
 export type SaveWorkoutInput = {
   userId: string;
   name: string;

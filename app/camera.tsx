@@ -626,7 +626,7 @@ function CommunitySheet({
 
 export default function CameraScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: string; community?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; community?: string; workout?: string }>();
   const insets = useSafeAreaInsets();
   const sheet = useSheet();
   const queryClient = useQueryClient();
@@ -1316,6 +1316,16 @@ export default function CameraScreen() {
         if (photoTagError) {
           logger.warn("photo_tags_insert_failed", { message: photoTagError.message });
         }
+      }
+      // Attach the workout logged just before this daily (workout-first flow) so
+      // it rides along as a feed slide.
+      if (typeof params.workout === "string" && params.workout) {
+        const { error: attachError } = await supabase
+          .from("workouts")
+          .update({ post_id: postId })
+          .eq("id", params.workout)
+          .eq("user_id", userId);
+        if (attachError) logger.warn("workout_attach_failed", { message: attachError.message });
       }
       // Cross-post to the chosen communities (best-effort — the post itself is live).
       const crossPosts = selectedCommunities

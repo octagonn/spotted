@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Camera,
   ChevronLeft,
@@ -34,7 +34,9 @@ import { useUserLifts } from "@/hooks/queries/useUserLifts";
 import {
   deriveExerciseBests,
   isRepsGraded,
+  useAttachWorkoutToDaily,
   useSaveWorkout,
+  useTodayDailyPost,
   useWorkouts,
   type CardioSet,
   type LiftSet,
@@ -113,12 +115,20 @@ type Summary = {
 export default function WorkoutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // daily=1 → this workout is tied to today's daily post: finishing prompts
+  // the daily photo, and publishing attaches this workout as a feed slide.
+  const params = useLocalSearchParams<{ daily?: string }>();
+  const dailyTied = params.daily === "1";
   const userId = useAuthStore((s) => s.userId);
   const saveWorkout = useSaveWorkout();
 
   const session = useWorkoutSession();
   const workouts = useWorkouts(userId);
   const lifts = useUserLifts(userId);
+  const todayDaily = useTodayDailyPost(userId);
+  const attachToDaily = useAttachWorkoutToDaily();
+  const [savedWorkoutId, setSavedWorkoutId] = useState<string | null>(null);
+  const [attached, setAttached] = useState(false);
 
   // Start (or resume) the session on mount. Also prune empty entries left
   // behind if the app closed mid-logger. The timer does NOT auto-start —
@@ -386,6 +396,7 @@ export default function WorkoutScreen() {
         exercises: logged,
         sessionPRs: session.sessionPRs
       });
+      setSavedWorkoutId(result.workoutId);
       setSummary({
         title,
         volume: totals.vol,
@@ -599,22 +610,56 @@ export default function WorkoutScreen() {
           </View>
 
           <View style={{ marginTop: "auto", paddingHorizontal: 26, paddingTop: 24 }}>
-            <Pressable
-              onPress={done}
-              style={{ paddingVertical: 19, borderRadius: radius.pill, backgroundColor: tokens.text.primary, alignItems: "center" }}
-            >
-              <Text style={{ fontFamily: DISP, fontSize: 18, color: colors.black }}>Done</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                session.clear();
-                router.replace("/camera?mode=daily");
-              }}
-              style={{ marginTop: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, paddingVertical: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: tokens.border.strong }}
-            >
-              <Camera size={16} color={tokens.text.primary} />
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: tokens.text.primary }}>Post today&apos;s SPOTTED</Text>
-            </Pressable>
+            {dailyTied || !todayDaily.data ? (
+              // Workout-first daily (or no daily yet today): finishing prompts the
+              // daily photo; publishing attaches this workout as slide 2.
+              <>
+                <Pressable
+                  onPress={() => {
+                    session.clear();
+                    const suffix = savedWorkoutId ? `&workout=${savedWorkoutId}` : "";
+                    router.replace(`/camera?mode=daily${suffix}` as never);
+                  }}
+                  style={{ paddingVertical: 19, borderRadius: radius.pill, backgroundColor: tokens.accent.gold, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8 }}
+                >
+                  <Camera size={18} color={colors.black} />
+                  <Text style={{ fontFamily: DISP, fontSize: 17, color: colors.black }}>Take your daily photo</Text>
+                </Pressable>
+                <Pressable onPress={done} style={{ marginTop: 10, paddingVertical: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: tokens.border.strong, alignItems: "center" }}>
+                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: tokens.text.primary }}>Not now</Text>
+                </Pressable>
+              </>
+            ) : (
+              // Second workout of the day — the daily is already posted. Offer to
+              // append this workout to it (notifies friends).
+              <>
+                <Pressable
+                  onPress={() => {
+                    if (attached || !savedWorkoutId || !todayDaily.data) return;
+                    attachToDaily.mutate(
+                      { workoutId: savedWorkoutId, postId: todayDaily.data, workoutName: summary.title },
+                      {
+                        onSuccess: () => {
+                          setAttached(true);
+                          showToast("Added to today's post — your crew's been notified");
+                        },
+                        onError: () => showToast("Couldn't add it — try again")
+                      }
+                    );
+                  }}
+                  disabled={attached || attachToDaily.isPending}
+                  style={{ paddingVertical: 19, borderRadius: radius.pill, backgroundColor: attached ? tokens.bg.subtle : tokens.accent.gold, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8 }}
+                >
+                  <Plus size={18} color={attached ? tokens.text.tertiary : colors.black} />
+                  <Text style={{ fontFamily: DISP, fontSize: 17, color: attached ? tokens.text.tertiary : colors.black }}>
+                    {attached ? "Added to today's post" : "Add to today's daily post"}
+                  </Text>
+                </Pressable>
+                <Pressable onPress={done} style={{ marginTop: 10, paddingVertical: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: tokens.border.strong, alignItems: "center" }}>
+                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: tokens.text.primary }}>Done</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </ScrollView>
 

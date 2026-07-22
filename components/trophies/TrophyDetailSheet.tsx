@@ -1,4 +1,4 @@
-import { Check, Lock, Share2, Video, X } from "lucide-react-native";
+import { Check, Lock, Pin, Share2, Video, X } from "lucide-react-native";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,13 +22,17 @@ export function TrophyDetailSheet({
   ladder,
   visible,
   onClose,
-  onShare
+  onShare,
+  onFeature,
+  featured
 }: {
   card: TrophyCardModel | null;
   ladder: LadderRow[];
   visible: boolean;
   onClose: () => void;
   onShare?: () => void;
+  onFeature?: () => void;
+  featured?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   if (!card) return null;
@@ -117,24 +121,28 @@ export function TrophyDetailSheet({
           </ScrollView>
 
           {card.earned && onShare ? (
-            <Pressable
-              onPress={onShare}
-              accessibilityLabel="Share trophy"
-              style={{
-                marginTop: 12,
-                marginHorizontal: 20,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                paddingVertical: 13,
-                borderRadius: 14,
-                backgroundColor: colors.white
-              }}
-            >
-              <Share2 size={16} color={colors.black} strokeWidth={2.4} />
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.black }}>Share</Text>
-            </Pressable>
+            <View style={{ marginTop: 12, marginHorizontal: 20, gap: 8 }}>
+              <Pressable
+                onPress={onShare}
+                accessibilityLabel="Share trophy"
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: 14, backgroundColor: colors.white }}
+              >
+                <Share2 size={16} color={colors.black} strokeWidth={2.4} />
+                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.black }}>Share</Text>
+              </Pressable>
+              {onFeature ? (
+                <Pressable
+                  onPress={onFeature}
+                  accessibilityLabel={featured ? "Unpin from profile" : "Pin to profile"}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: featured ? colors.gold : colors.iron }}
+                >
+                  <Pin size={15} color={featured ? colors.gold : colors.mist} strokeWidth={2.2} />
+                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: featured ? colors.gold : colors.mist }}>
+                    {featured ? "Featured on profile" : "Feature on profile"}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
       </View>

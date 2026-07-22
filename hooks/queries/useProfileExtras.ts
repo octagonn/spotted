@@ -28,6 +28,23 @@ export function useHasActiveStory(userId?: string | null) {
 export type Visibility = "public" | "friends" | "private";
 
 /** Update the signed-in user's visibility (schedule_visibility). */
+/** Pin up to 3 featured trophies to the profile header (spec C). */
+export function useSetFeaturedTrophies() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (featured: { id: string; icon: string; name: string; familyName: string | null }[]) => {
+      if (!userId) return;
+      const { error } = await supabase
+        .from("profiles")
+        .update({ featured_trophies: featured.slice(0, 3) })
+        .eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
+  });
+}
+
 /** Weekly split privacy (profile spec #14). */
 export function useSetSplitPublic() {
   const queryClient = useQueryClient();

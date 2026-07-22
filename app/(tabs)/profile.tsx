@@ -114,6 +114,11 @@ export default function ProfileScreen() {
   const trophies = useTrophyProgress();
   const hasActiveStory = hasStory.data ?? false;
   const socials = useMemo(() => socialEntries(parseSocialLinks(profile?.social_links)), [profile?.social_links]);
+  // Featured trophies pinned to the header (spec C).
+  const featuredTrophies = useMemo(() => {
+    const raw = profile?.featured_trophies;
+    return Array.isArray(raw) ? (raw as { icon: string; name: string; familyName: string | null }[]) : [];
+  }, [profile?.featured_trophies]);
 
   // One continuous grid of everything the user has posted.
   const gridPosts = useMemo(() => (posts.data ?? []).filter((p) => p.media_url), [posts.data]);
@@ -300,6 +305,37 @@ export default function ProfileScreen() {
             <Text style={{ marginTop: 12, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.gold, textAlign: "center" }}>
               {currentStreak} {currentStreak === 1 ? "day" : "days"} — keep it alive. Post today.
             </Text>
+          ) : null}
+
+          {/* Featured trophies (spec C) — up to 3 pinned; tap opens the case. */}
+          {featuredTrophies.length > 0 ? (
+            <Pressable
+              onPress={() => router.push("/profile-section/trophies" as Href)}
+              accessibilityLabel="Featured trophies"
+              style={{ marginTop: 14, flexDirection: "row", justifyContent: "center", gap: 10 }}
+            >
+              {featuredTrophies.slice(0, 3).map((t, i) => (
+                <View
+                  key={`${t.name}-${i}`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingVertical: 6,
+                    paddingHorizontal: 11,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: "rgba(232,180,76,0.4)",
+                    backgroundColor: tokens.accent.goldSubtle
+                  }}
+                >
+                  <Text style={{ fontSize: 12 }}>🏆</Text>
+                  <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 11.5, color: colors.gold, maxWidth: 90 }}>
+                    {t.name}
+                  </Text>
+                </View>
+              ))}
+            </Pressable>
           ) : null}
         </View>
 

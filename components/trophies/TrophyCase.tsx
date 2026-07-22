@@ -12,6 +12,8 @@ import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import { usePersonalRecords } from "@/hooks/usePersonalRecords";
 import { useTrophies } from "@/hooks/useTrophies";
 import { useMyProfile } from "@/hooks/queries/useProfile";
+import { useSetFeaturedTrophies } from "@/hooks/queries/useProfileExtras";
+import { showToast } from "@/stores/ui";
 import { type TrophyCardModel } from "@/lib/trophySelectors";
 import { colors } from "@/theme/colors";
 
@@ -25,7 +27,24 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
   const { width } = useWindowDimensions();
   const { sections, earned, ladderFor, newlyEarned, dismissNewlyEarned } = useTrophies(userId);
   // Workout-session PRs (any exercise) — they belong in the case too.
-  const myId = useMyProfile().data?.id ?? null;
+  const profile = useMyProfile().data;
+  const myId = profile?.id ?? null;
+  const isOwn = !userId || userId === myId;
+  const setFeatured = useSetFeaturedTrophies();
+  const featured = useMemo(() => {
+    const raw = profile?.featured_trophies;
+    return Array.isArray(raw) ? (raw as { id?: string; icon: string; name: string; familyName: string | null }[]) : [];
+  }, [profile?.featured_trophies]);
+  const featuredIds = useMemo(() => {
+    // Match by stored id when present (new writes), else by display name (legacy).
+    const names = new Set(featured.map((f) => f.name));
+    const storedIds = new Set(featured.map((f) => f.id).filter(Boolean) as string[]);
+    const ids = new Set<string>();
+    for (const section of sections) for (const card of section.cards) {
+      if (storedIds.has(card.def.id) || names.has(card.displayTier?.name ?? card.def.name)) ids.add(card.def.id);
+    }
+    return ids;
+  }, [featured, sections]);
   const personalRecords = usePersonalRecords(userId ?? myId);
   const [tab, setTab] = useState<TrophyTab>("Categories");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -89,6 +108,26 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
                 const data = shareFromCard(openCard);
                 setOpenId(null);
                 setCelebrate(data);
+              }
+            : undefined
+        }
+        // Feature/unfeature only on your OWN case (spec C — 3 pins max).
+        featured={openCard ? featuredIds.has(openCard.def.id) : false}
+        onFeature={
+          openCard && isOwn
+            ? () => {
+                const id = openCard.def.id;
+                const already = featuredIds.has(id);
+                if (!already && featured.length >= 3) {
+                  showToast("You can feature up to 3 trophies");
+                  return;
+                }
+                const next = already
+                  ? featured.filter((f) => f.id !== id)
+                  : [...featured, { id, icon: openCard.def.icon, name: openCard.displayTier?.name ?? openCard.def.name, familyName: openCard.def.type === "stacked" ? openCard.def.name : null }];
+                setFeatured.mutate(
+                  next.map((f) => ({ id: f.id ?? "", icon: f.icon, name: f.name, familyName: f.familyName }))
+                );
               }
             : undefined
         }

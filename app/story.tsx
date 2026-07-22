@@ -111,21 +111,14 @@ export default function StoryViewer() {
   const replyInputRef = useRef<TextInput>(null);
   pausedRef.current = held || typing;
 
-  // Distinct slide transition when moving between DIFFERENT people (4b): the new
-  // person's media slides in from the swipe direction while the header + progress
-  // re-render fresh. Within one person, segments just cut (no slide).
+  // Finger-tracked horizontal paging between PEOPLE (Instagram-style): the whole
+  // card follows the finger while the neighbor's story peeks in, then snaps to
+  // the target and commits. `canPrev`/`canNext` gate the rubber-band at the ends.
   const { width: screenW } = useWindowDimensions();
-  const slideX = useSharedValue(0);
-  const prevGi = useRef(gi);
-  useEffect(() => {
-    if (prevGi.current !== gi) {
-      const dir = gi > prevGi.current ? 1 : -1;
-      slideX.value = dir * screenW;
-      slideX.value = withTiming(0, { duration: 260 });
-      prevGi.current = gi;
-    }
-  }, [gi, screenW, slideX]);
-  const slideStyle = useAnimatedStyle(() => ({ transform: [{ translateX: slideX.value }] }));
+  const panX = useSharedValue(0);
+  const canPrev = useSharedValue(0);
+  const canNext = useSharedValue(0);
+  const paging = useSharedValue(0); // 1 while a horizontal pan is active (pauses timer)
 
   // Pick the starting group + first UNVIEWED story once, when stories load.
   useEffect(() => {
@@ -151,6 +144,23 @@ export default function StoryViewer() {
   // person-to-person swiping janky and could crash.
   const navRef = useRef({ queue, gi, group });
   navRef.current = { queue, gi, group };
+
+  // Neighbor media for the peek during a horizontal drag. Next = the next
+  // person's first UNSEEN story (matches goNextPerson); prev = the previous
+  // person's first story (matches goPrevPerson).
+  const nextGroup = queue?.[gi + 1];
+  const nextPeekMedia = nextGroup
+    ? nextGroup.stories[Math.max(0, nextGroup.stories.findIndex((s) => !s.seen))]?.mediaUrl ??
+      nextGroup.stories[0]?.mediaUrl ??
+      null
+    : null;
+  const prevPeekMedia = queue?.[gi - 1]?.stories[0]?.mediaUrl ?? null;
+
+  // Keep the UI-thread bounds in sync so the pan can rubber-band at the ends.
+  useEffect(() => {
+    canPrev.value = gi > 0 ? 1 : 0;
+    canNext.value = queue && gi < queue.length - 1 ? 1 : 0;
+  }, [gi, queue, canPrev, canNext]);
   const viewers = useStoryViewers(story?.id, Boolean(group?.isMe) && viewersOpen);
   const likers = useStoryLikers(story?.id, Boolean(group?.isMe) && viewersOpen);
   const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
@@ -237,7 +247,7 @@ export default function StoryViewer() {
       markViewed.mutate(currentId);
     }
     const timer = setInterval(() => {
-      if (pausedRef.current) return;
+      if (pausedRef.current || paging.value > 0) return;
       elapsedRef.current += TICK_MS;
       barFill.value = Math.min(1, elapsedRef.current / STORY_MS);
       if (elapsedRef.current >= STORY_MS && !advanced) {
@@ -327,6 +337,18 @@ export default function StoryViewer() {
     }
   }, []);
 
+  // Commit a page change AFTER the snap animation has moved the card fully to
+  // the neighbor — then reset panX so the (identical) new center shows with no
+  // flash. Both happen in the same JS turn.
+  const commitNext = useCallback(() => {
+    goNextPerson();
+    panX.value = 0;
+  }, [goNextPerson, panX]);
+  const commitPrev = useCallback(() => {
+    goPrevPerson();
+    panX.value = 0;
+  }, [goPrevPerson, panX]);
+
   // Swipe up: on someone else's story → reply keyboard; on YOUR OWN → viewer
   // sheet (4e). Stable (reads group from the ref).
   const swipeUpAction = useCallback(() => {
@@ -342,12 +364,52 @@ export default function StoryViewer() {
 
   // Build the composed gesture exactly ONCE (all callbacks + shared values are
   // stable). GestureDetector then keeps the same handler across renders, so a
-  // re-render mid-swipe no longer interrupts the pan.
+  // re-render mid-swipe never interrupts the pan.
   const storyGesture = useMemo(() => {
+    const SNAP = { damping: 22, stiffness: 220 } as const;
+    // Horizontal paging — the card tracks the finger 1:1, rubber-banding when
+    // there's no neighbor in that direction, and snaps to the target on release.
+    const pageG = Gesture.Pan()
+      .activeOffsetX([-12, 12])
+      .failOffsetY([-16, 16])
+      .onStart(() => {
+        paging.value = 1;
+      })
+      .onUpdate((e) => {
+        "worklet";
+        let x = e.translationX;
+        // Rubber-band past the ends (no next/prev to reveal).
+        if (x < 0 && canNext.value === 0) x *= 0.25;
+        if (x > 0 && canPrev.value === 0) x *= 0.25;
+        panX.value = x;
+      })
+      .onEnd((e) => {
+        "worklet";
+        const goNextSwipe = (e.translationX < -80 || e.velocityX < -650) && canNext.value === 1;
+        const goPrevSwipe = (e.translationX > 80 || e.velocityX > 650) && canPrev.value === 1;
+        if (goNextSwipe) {
+          panX.value = withTiming(-screenW, { duration: 190 }, (done) => {
+            if (done) {
+              paging.value = 0;
+              runOnJS(commitNext)();
+            }
+          });
+        } else if (goPrevSwipe) {
+          panX.value = withTiming(screenW, { duration: 190 }, (done) => {
+            if (done) {
+              paging.value = 0;
+              runOnJS(commitPrev)();
+            }
+          });
+        } else {
+          panX.value = withSpring(0, SNAP);
+          paging.value = 0;
+        }
+      });
     const swipeDownG = Gesture.Pan()
-      .activeOffsetY(14)
-      .failOffsetY(-14)
-      .failOffsetX([-24, 24])
+      .activeOffsetY(16)
+      .failOffsetY(-16)
+      .failOffsetX([-20, 20])
       .onUpdate((e) => {
         dragY.value = Math.max(0, e.translationY);
       })
@@ -360,21 +422,17 @@ export default function StoryViewer() {
         }
       });
     const swipeUpG = Gesture.Pan()
-      .activeOffsetY(-16)
-      .failOffsetY(16)
-      .failOffsetX([-24, 24])
+      .activeOffsetY(-18)
+      .failOffsetY(18)
+      .failOffsetX([-20, 20])
       .onEnd((e) => {
         if (e.translationY < -60 || e.velocityY < -700) runOnJS(swipeUpAction)();
       });
-    const swipeHG = Gesture.Pan()
-      .activeOffsetX([-24, 24])
-      .failOffsetY([-20, 20])
-      .onEnd((e) => {
-        if (e.translationX < -60 || e.velocityX < -700) runOnJS(goNextPerson)();
-        else if (e.translationX > 60 || e.velocityX > 700) runOnJS(goPrevPerson)();
-      });
-    return Gesture.Exclusive(swipeDownG, swipeUpG, swipeHG);
-  }, [close, goNextPerson, goPrevPerson, swipeUpAction, dragY]);
+    // Race: whichever direction activates first wins the touch.
+    return Gesture.Race(pageG, swipeDownG, swipeUpG);
+  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW]);
+
+  const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: panX.value }] }));
 
   const dragStyle = useAnimatedStyle(() => {
     const p = Math.min(1, dragY.value / 420);
@@ -404,6 +462,26 @@ export default function StoryViewer() {
   return (
     <GestureDetector gesture={storyGesture}>
       <Animated.View style={[{ flex: 1, backgroundColor: colors.black, overflow: "hidden" }, dragStyle]}>
+      {/* Paging layer — the current card + its two neighbor peeks translate
+          together with the finger; the neighbor images sit exactly one screen
+          width to each side so a drag reveals them seamlessly. */}
+      <Animated.View style={[{ flex: 1 }, pageStyle]}>
+        {prevPeekMedia ? (
+          <Image
+            source={{ uri: prevPeekMedia }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            style={{ position: "absolute", top: 0, bottom: 0, left: -screenW, width: screenW, backgroundColor: colors.black }}
+          />
+        ) : null}
+        {nextPeekMedia ? (
+          <Image
+            source={{ uri: nextPeekMedia }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            style={{ position: "absolute", top: 0, bottom: 0, left: screenW, width: screenW, backgroundColor: colors.black }}
+          />
+        ) : null}
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: colors.black }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -415,21 +493,19 @@ export default function StoryViewer() {
           </View>
         ) : null}
         {story.mediaUrl ? (
-          <Animated.View style={[{ position: "absolute", inset: 0 }, slideStyle]}>
-            <Image
-              source={{ uri: story.mediaUrl }}
-              contentFit="contain"
-              transition={150}
-              cachePolicy="memory-disk"
-              priority="high"
-              onLoad={() => setMediaLoaded(true)}
-              // Reuse one decoded surface across stories (no reload flash) and let
-              // expo-image downscale big photos to the view — the main viewer cost.
-              recyclingKey={story.id}
-              allowDownscaling
-              style={{ position: "absolute", inset: 0 }}
-            />
-          </Animated.View>
+          <Image
+            source={{ uri: story.mediaUrl }}
+            contentFit="contain"
+            transition={150}
+            cachePolicy="memory-disk"
+            priority="high"
+            onLoad={() => setMediaLoaded(true)}
+            // Reuse one decoded surface across stories (no reload flash) and let
+            // expo-image downscale big photos to the view — the main viewer cost.
+            recyclingKey={story.id}
+            allowDownscaling
+            style={{ position: "absolute", inset: 0 }}
+          />
         ) : null}
 
         {/* Tap zones: left third = prev, right two-thirds = next; hold = pause. */}
@@ -799,6 +875,7 @@ export default function StoryViewer() {
           </Pressable>
         ) : null}
       </KeyboardAvoidingView>
+      </Animated.View>
       </Animated.View>
     </GestureDetector>
   );

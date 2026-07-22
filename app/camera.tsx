@@ -710,19 +710,34 @@ export default function CameraScreen() {
   const [recordLocked, setRecordLocked] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [flashOn, setFlashOn] = useState(false);
-  // Ultra-wide (0.5×): pinching out past 1× switches to the ultra-wide lens
+  // Ultra-wide (0.5×): pinching out past 1× hands off to the ultra-wide lens
   // when the device has one. Virtual zoom < 0 = ultra-wide territory.
   const [availableLenses, setAvailableLenses] = useState<string[]>([]);
   const ultraLens = facing === "back" ? availableLenses.find((l) => /ultra.?wide/i.test(l)) ?? null : null;
   const [virtualZoom, setVirtualZoom] = useState(0);
-  const ultraActive = Boolean(ultraLens) && (recording ? recordUltraRef.current : virtualZoom < -0.02);
-  const cameraZoom = ultraActive ? 0 : Math.max(0, Math.min(1, virtualZoom));
+  const ultraActive = Boolean(ultraLens) && (recording ? recordUltraRef.current : virtualZoom < 0);
+  /** Full ultra-wide travel: virtualZoom −0.35 = full 0.5×. */
+  const ULTRA_RANGE = 0.35;
+  /** Ultra-wide zoom value that roughly matches the main lens at 1× (the
+   *  ultra-wide digitally zoomed ~2× ≈ the wide's native FOV). Continuity
+   *  anchor for the smooth iPhone-style handoff — tune on device if the
+   *  crossover shows a visible jump. */
+  const ULTRA_ENTRY_ZOOM = 0.12;
+  // Smooth zoom-out (not a hard switch): crossing 1× keeps the SAME field of
+  // view (ultra-wide zoomed in to match 1×), then widens continuously toward
+  // 0.5× as the pinch continues.
+  const ultraProgress = ultraActive ? Math.min(1, -virtualZoom / ULTRA_RANGE) : 0;
+  const cameraZoom = ultraActive
+    ? ULTRA_ENTRY_ZOOM * (1 - ultraProgress)
+    : Math.max(0, Math.min(1, virtualZoom));
+  /** The user-facing zoom multiplier (1× ↔ 0.5× across the ultra travel). */
+  const zoomLabel = ultraActive ? 1 - 0.5 * ultraProgress : 1 + cameraZoom * 4;
   /** Keep virtual zoom in range; while recording, never cross the lens boundary. */
   const clampVirtual = (next: number): number => {
     if (recording) {
-      return recordUltraRef.current ? Math.max(-0.35, Math.min(-0.02, next)) : Math.max(0, Math.min(1, next));
+      return recordUltraRef.current ? Math.max(-ULTRA_RANGE, Math.min(-0.01, next)) : Math.max(0, Math.min(1, next));
     }
-    return Math.max(ultraLens ? -0.35 : 0, Math.min(1, next));
+    return Math.max(ultraLens ? -ULTRA_RANGE : 0, Math.min(1, next));
   };
   // Camera session config, DERIVED from the flow (never switched on hold — that
   // remount + wait was the recording lag). Daily is photo-only → "picture" for
@@ -1180,7 +1195,7 @@ export default function CameraScreen() {
     setRecordSeconds(0);
     setRecordLocked(false);
     // Pin the current lens for the whole take.
-    recordUltraRef.current = Boolean(ultraLens) && virtualZoom < -0.02;
+    recordUltraRef.current = Boolean(ultraLens) && virtualZoom < 0;
     setRecording(true);
     // Camera is ALREADY in video mode (camMode derived from the flow) — no mode
     // switch, no remount, no long wait. Recording starts immediately (#1); a
@@ -1479,7 +1494,7 @@ export default function CameraScreen() {
         {ultraActive || cameraZoom > 0.01 ? (
           <View pointerEvents="none" style={{ position: "absolute", top: insets.top + 60, alignSelf: "center", paddingVertical: 4, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.55)" }}>
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.white }}>
-              {ultraActive ? "0.5×" : `${(1 + cameraZoom * 4).toFixed(1)}x`}
+              {`${zoomLabel.toFixed(1)}x`}
             </Text>
           </View>
         ) : null}

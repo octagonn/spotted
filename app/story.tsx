@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Eye, Flag, Heart, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -144,6 +144,13 @@ export default function StoryViewer() {
 
   const group: StoryGroup | undefined = queue?.[gi];
   const story = group?.stories[si];
+
+  // Latest nav state in a ref so the swipe gestures can be created ONCE and
+  // read current values — recreating gestures every render (the old approach)
+  // tore down + rebuilt the handlers mid-swipe, which is what made
+  // person-to-person swiping janky and could crash.
+  const navRef = useRef({ queue, gi, group });
+  navRef.current = { queue, gi, group };
   const viewers = useStoryViewers(story?.id, Boolean(group?.isMe) && viewersOpen);
   const likers = useStoryLikers(story?.id, Boolean(group?.isMe) && viewersOpen);
   const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
@@ -174,7 +181,12 @@ export default function StoryViewer() {
     setHeld(false);
   };
 
+  // Guard against rapid double-fire (swiping past the end fired router.back()
+  // several times → popped past the story screen → crash).
+  const closingRef = useRef(false);
   const close = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
     if (router.canGoBack()) router.back();
     else router.replace("/(tabs)/feed");
   }, [router]);
@@ -288,73 +300,81 @@ export default function StoryViewer() {
   }, [queue, gi, si]);
 
   // Interactive swipe-down dismiss (Snapchat-style): the card follows the
-  // finger with a slight shrink, then flies off or springs back.
+  // finger with a slight shrink, then flies off or springs back. The gesture
+  // itself is composed in the useMemo below.
   const dragY = useSharedValue(0);
-  const swipeDown = Gesture.Pan()
-    .activeOffsetY(14)
-    .failOffsetY(-14)
-    .failOffsetX([-24, 24])
-    .onUpdate((e) => {
-      dragY.value = Math.max(0, e.translationY);
-    })
-    .onEnd((e) => {
-      if (dragY.value > 130 || e.velocityY > 900) {
-        dragY.value = withTiming(700, { duration: 170 });
-        runOnJS(close)();
-      } else {
-        dragY.value = withSpring(0, { damping: 18, stiffness: 240 });
-      }
-    });
-  // Swipe = jump to the next/previous PERSON's ring (4d), independent of how many
-  // of the current person's segments are viewed (explicit navigation).
+  // Swipe = jump to the next/previous PERSON's ring (4d). Stable identity (reads
+  // nav state from the ref) so the gestures below never need to be rebuilt.
   const goNextPerson = useCallback(() => {
-    if (!queue) return;
-    if (gi < queue.length - 1) {
-      const next = queue[gi + 1];
+    const { queue: q, gi: g } = navRef.current;
+    if (!q) return;
+    if (g < q.length - 1) {
+      const next = q[g + 1];
       const fu = next.stories.findIndex((s) => !s.seen);
-      setGi(gi + 1);
+      setGi(g + 1);
       setSi(fu >= 0 ? fu : 0);
     } else {
       close();
     }
-  }, [queue, gi, close]);
+  }, [close]);
   const goPrevPerson = useCallback(() => {
-    if (gi > 0) {
-      setGi(gi - 1);
+    const { gi: g } = navRef.current;
+    if (g > 0) {
+      setGi(g - 1);
       setSi(0);
     } else {
       setSi(0);
     }
-  }, [gi]);
+  }, []);
 
   // Swipe up: on someone else's story → reply keyboard; on YOUR OWN → viewer
-  // sheet (4e). The timer pauses via `held` while either is open.
-  const swipeUpAction = () => {
-    if (!group) return;
-    if (group.isMe) {
+  // sheet (4e). Stable (reads group from the ref).
+  const swipeUpAction = useCallback(() => {
+    const { group: gr } = navRef.current;
+    if (!gr) return;
+    if (gr.isMe) {
       setHeld(true);
       setViewersOpen(true);
     } else {
       replyInputRef.current?.focus();
     }
-  };
-  const swipeUp = Gesture.Pan()
-    .activeOffsetY(-16)
-    .failOffsetY(16)
-    .failOffsetX([-24, 24])
-    .onEnd((e) => {
-      if (e.translationY < -60 || e.velocityY < -700) {
-        runOnJS(swipeUpAction)();
-      }
-    });
-  const swipeH = Gesture.Pan()
-    .activeOffsetX([-24, 24])
-    .failOffsetY([-20, 20])
-    .onEnd((e) => {
-      if (e.translationX < -60 || e.velocityX < -700) runOnJS(goNextPerson)();
-      else if (e.translationX > 60 || e.velocityX > 700) runOnJS(goPrevPerson)();
-    });
-  const storyGesture = Gesture.Exclusive(swipeDown, swipeUp, swipeH);
+  }, []);
+
+  // Build the composed gesture exactly ONCE (all callbacks + shared values are
+  // stable). GestureDetector then keeps the same handler across renders, so a
+  // re-render mid-swipe no longer interrupts the pan.
+  const storyGesture = useMemo(() => {
+    const swipeDownG = Gesture.Pan()
+      .activeOffsetY(14)
+      .failOffsetY(-14)
+      .failOffsetX([-24, 24])
+      .onUpdate((e) => {
+        dragY.value = Math.max(0, e.translationY);
+      })
+      .onEnd((e) => {
+        if (dragY.value > 130 || e.velocityY > 900) {
+          dragY.value = withTiming(700, { duration: 170 });
+          runOnJS(close)();
+        } else {
+          dragY.value = withSpring(0, { damping: 18, stiffness: 240 });
+        }
+      });
+    const swipeUpG = Gesture.Pan()
+      .activeOffsetY(-16)
+      .failOffsetY(16)
+      .failOffsetX([-24, 24])
+      .onEnd((e) => {
+        if (e.translationY < -60 || e.velocityY < -700) runOnJS(swipeUpAction)();
+      });
+    const swipeHG = Gesture.Pan()
+      .activeOffsetX([-24, 24])
+      .failOffsetY([-20, 20])
+      .onEnd((e) => {
+        if (e.translationX < -60 || e.velocityX < -700) runOnJS(goNextPerson)();
+        else if (e.translationX > 60 || e.velocityX > 700) runOnJS(goPrevPerson)();
+      });
+    return Gesture.Exclusive(swipeDownG, swipeUpG, swipeHG);
+  }, [close, goNextPerson, goPrevPerson, swipeUpAction, dragY]);
 
   const dragStyle = useAnimatedStyle(() => {
     const p = Math.min(1, dragY.value / 420);

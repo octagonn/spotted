@@ -42,7 +42,7 @@ export default function ProfilePostsScreen() {
 
   // Same set the grid showed: all posts, or permanent-only on the progress tab.
   const list = useMemo(() => {
-    const withMedia = (posts.data ?? []).filter((p) => p.media_url);
+    const withMedia = (posts.data ?? []).filter((p) => p.hasMedia);
     return tab === "progress" ? withMedia.filter((p) => p.permanent) : withMedia;
   }, [posts.data, tab]);
 

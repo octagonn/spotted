@@ -15,5 +15,7 @@ check them off with the commit that fixed them.
 - [x] Communities tab clutter: create-card and invite-code button folded into section headers (`771f7a8`)
 - [x] Community detail repeated the community name twice (`771f7a8`)
 
+- [x] Colin saw HIS photo on someone else's daily post + the post missing from their profile: recycled expo-image kept the previous card's photo when a signed URL failed to load, and failed signing dropped posts from profile grids. Fixed: recyclingKey on post media, batched createSignedUrls with retry, no raw-path fallbacks, unsigned posts keep a placeholder tile.
+
 ## Open
 - [ ] (add new beta feedback here)

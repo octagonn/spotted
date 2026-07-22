@@ -96,8 +96,8 @@ export default function UserProfileScreen() {
   const longestStreak = Math.max(userStreak.data?.longest_streak ?? 0, currentStreak);
   const friendTrophies = useTrophies(profile?.id);
   const trophyCount = friendTrophies.earnedCount;
-  const postCount = counts.data?.posts ?? (posts.data ?? []).filter((p) => p.media_url).length;
-  const gridPosts = (posts.data ?? []).filter((p) => p.media_url);
+  const postCount = counts.data?.posts ?? (posts.data ?? []).filter((p) => p.hasMedia).length;
+  const gridPosts = (posts.data ?? []).filter((p) => p.hasMedia);
 
   const advance = () => {
     const from = state;

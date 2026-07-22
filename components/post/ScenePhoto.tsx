@@ -40,6 +40,12 @@ export function ScenePhoto({ uri, scene = "s1", blurRadius, legibility = true, s
       {uri ? (
         <Image
           source={{ uri }}
+          // Recycling hardening: list virtualization reuses this Image across
+          // different posts; without a recyclingKey expo-image keeps showing
+          // the PREVIOUS post's photo until (unless!) the new source loads —
+          // i.e. someone else's picture on your post. Keying by uri clears the
+          // surface the moment the source changes.
+          recyclingKey={uri}
           blurRadius={blurRadius}
           contentFit="cover"
           transition={150}

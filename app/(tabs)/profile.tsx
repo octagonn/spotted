@@ -101,7 +101,7 @@ export default function ProfileScreen() {
   const visibility = (profile?.schedule_visibility ?? "friends") as Visibility;
   const counts = useUserCounts(profile?.id);
   const friendCount = counts.data?.friends ?? friends.data?.length ?? 0;
-  const postCount = (posts.data ?? []).filter((p) => p.media_url).length;
+  const postCount = (posts.data ?? []).filter((p) => p.hasMedia).length;
   // Streak computed from the gym-day posts with a grace window for today, so it
   // never reads 0 the morning after a post.
   const gymStreak = useMemo(
@@ -122,7 +122,7 @@ export default function ProfileScreen() {
   }, [profile?.featured_trophies]);
 
   // One continuous grid of everything the user has posted.
-  const gridPosts = useMemo(() => (posts.data ?? []).filter((p) => p.media_url), [posts.data]);
+  const gridPosts = useMemo(() => (posts.data ?? []).filter((p) => p.hasMedia), [posts.data]);
 
   const openAvatarStory = () => {
     if (hasActiveStory && profile) router.push(`/story?user=${profile.id}`);

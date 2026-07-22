@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { mockFeed } from "@/lib/mockData";
-import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, signedPostUrls, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import type { FeedPost, Gym, Post, Profile } from "@/types/domain";
 
@@ -17,7 +17,17 @@ type FeedRow = Post & {
   attached_workouts?: { id: string; name: string; duration_seconds: number; started_at: string; data: unknown }[] | null;
 };
 
-async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
+/** Resolve a stored media path against the page's batch-signed map. NEVER
+ *  falls back to the raw storage path — an unloadable URI leaves a recycled
+ *  list image showing the PREVIOUS post's photo (the "wrong picture on
+ *  someone else's post" bug). Missing → null → placeholder. */
+function resolveSigned(path: string | null, signed: Map<string, string>): string | null {
+  if (!path) return null;
+  if (path.startsWith("http")) return path;
+  return signed.get(path) ?? null;
+}
+
+function rowToFeedPost(row: FeedRow, signed: Map<string, string>): FeedPost {
   const profile = row.profiles ?? {
     id: row.user_id,
     username: "unknown",
@@ -25,32 +35,15 @@ async function rowToFeedPost(row: FeedRow): Promise<FeedPost> {
     avatar_url: null,
     avatar_blurred_url: null
   };
-  let mediaUrl = row.media_url;
-  if (mediaUrl && !mediaUrl.startsWith("http")) {
-    try {
-      mediaUrl = await signedPostUrl(mediaUrl);
-    } catch {
-      mediaUrl = row.media_url;
-    }
-  }
-  // Sign every carousel photo path.
-  let mediaUrls = row.media_urls;
-  if (mediaUrls?.length) {
-    mediaUrls = await Promise.all(
-      mediaUrls.map(async (path) => {
-        if (path.startsWith("http")) return path;
-        try {
-          return await signedPostUrl(path);
-        } catch {
-          return path;
-        }
-      })
-    );
-  }
+  const mediaUrl = resolveSigned(row.media_url, signed);
+  const mediaUrls = row.media_urls?.length
+    ? row.media_urls.map((path) => resolveSigned(path, signed)).filter((u): u is string => Boolean(u))
+    : row.media_urls;
   const { profiles: _profiles, gyms: _gyms, post_tags: _tags, photo_tags: _ptags, answered_taunts: _ans, attached_workouts: _wk, ...post } = row;
   return {
     ...post,
-    media_url: mediaUrl,
+    // Unsigned/missing → "" (falsy) so media components show the placeholder.
+    media_url: mediaUrl ?? "",
     media_urls: mediaUrls,
     profile,
     gym: row.gyms,
@@ -118,7 +111,9 @@ export function useFeed() {
       const { data, error } = await query;
       if (error) throw error;
       const rows = (data ?? []) as unknown as FeedRow[];
-      return Promise.all(rows.map(rowToFeedPost));
+      // One batched signing call for every photo on the page (retried inside).
+      const signed = await signedPostUrls(rows.flatMap((r) => [r.media_url, ...(r.media_urls ?? [])]));
+      return rows.map((row) => rowToFeedPost(row, signed));
     },
     getNextPageParam: (lastPage) =>
       lastPage.length < FEED_PAGE ? undefined : lastPage[lastPage.length - 1]?.created_at ?? undefined

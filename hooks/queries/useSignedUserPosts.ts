@@ -2,11 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { FeedWorkout } from "@/components/post/WorkoutSlideCard";
 import { useUserPosts } from "@/hooks/queries/useProfile";
-import { signedPostUrl } from "@/lib/supabase";
+import { signedPostUrls } from "@/lib/supabase";
 
 export type SignedPost = {
   id: string;
   media_url: string | null;
+  /** The post HAS media even if signing failed this fetch — grids should show
+   *  a placeholder tile, not silently drop the post. */
+  hasMedia: boolean;
   /** Every photo posted that day (signed) — first = cover. */
   media_urls: string[] | null;
   caption: string | null;
@@ -16,15 +19,6 @@ export type SignedPost = {
   /** Attached workout slides, oldest first (2nd+ of the day badged). */
   workouts: FeedWorkout[];
 };
-
-async function sign(path: string): Promise<string | null> {
-  if (path.startsWith("http")) return path;
-  try {
-    return await signedPostUrl(path);
-  } catch {
-    return null;
-  }
-}
 
 /** Attached-workout rows → feed slide shape (same mapping as useFeed). */
 function toFeedWorkouts(
@@ -52,6 +46,10 @@ function toFeedWorkouts(
  * User posts with their private storage paths resolved to signed URLs, plus
  * carousel photos and attached workout slides — so opening an archive post
  * shows EVERYTHING from that day, not just the cover photo.
+ *
+ * Signing is BATCHED (one storage call, retried inside signedPostUrls) and a
+ * failed sign resolves to null — never a raw storage path, which can't load
+ * and leaves recycled list images showing the wrong photo.
  */
 export function useSignedUserPosts(userId?: string | null) {
   const posts = useUserPosts(userId);
@@ -61,26 +59,26 @@ export function useSignedUserPosts(userId?: string | null) {
     queryKey: ["signed-user-posts", userId, (raw ?? []).map((post) => post.id).join(",")],
     enabled: Boolean(userId) && Boolean(raw),
     queryFn: async (): Promise<SignedPost[]> => {
-      return Promise.all(
-        (raw ?? []).map(async (post) => {
-          const media = post.media_url ? await sign(post.media_url) : null;
-          let mediaUrls: string[] | null = null;
-          if (post.media_urls?.length) {
-            const signed = await Promise.all(post.media_urls.map(sign));
-            mediaUrls = signed.filter((u): u is string => Boolean(u));
-          }
-          return {
-            id: post.id,
-            media_url: media,
-            media_urls: mediaUrls,
-            caption: post.caption,
-            created_at: post.created_at,
-            permanent: post.permanent,
-            isDailyDrop: post.is_daily_drop,
-            workouts: toFeedWorkouts(post.attached_workouts)
-          };
-        })
-      );
+      const rows = raw ?? [];
+      const signed = await signedPostUrls(rows.flatMap((post) => [post.media_url, ...(post.media_urls ?? [])]));
+      const resolve = (path: string | null | undefined): string | null => {
+        if (!path) return null;
+        if (path.startsWith("http")) return path;
+        return signed.get(path) ?? null;
+      };
+      return rows.map((post) => ({
+        id: post.id,
+        media_url: resolve(post.media_url),
+        hasMedia: Boolean(post.media_url),
+        media_urls: post.media_urls?.length
+          ? post.media_urls.map(resolve).filter((u): u is string => Boolean(u))
+          : null,
+        caption: post.caption,
+        created_at: post.created_at,
+        permanent: post.permanent,
+        isDailyDrop: post.is_daily_drop,
+        workouts: toFeedWorkouts(post.attached_workouts)
+      }));
     }
   });
 }

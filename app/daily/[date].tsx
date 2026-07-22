@@ -48,7 +48,7 @@ export default function DayScreen() {
   const dayPosts = useMemo(
     () =>
       (posts.data ?? [])
-        .filter((p) => p.media_url && localDateKey(new Date(p.created_at)) === date)
+        .filter((p) => p.hasMedia && localDateKey(new Date(p.created_at)) === date)
         .sort((a, b) => a.created_at.localeCompare(b.created_at)),
     [posts.data, date]
   );

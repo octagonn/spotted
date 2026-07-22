@@ -88,6 +88,33 @@ export async function signedPostUrl(path: string) {
   return data.signedUrl;
 }
 
+/**
+ * Batch-sign post media paths — ONE storage API call per page instead of one
+ * per photo (a feed page was issuing dozens, and transient failures made
+ * other people's posts render wrong/missing). Retries once; paths that still
+ * fail are simply absent from the map, so callers fall back to a placeholder
+ * instead of a broken raw path.
+ */
+export async function signedPostUrls(paths: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const unique = [...new Set(paths.filter((p): p is string => Boolean(p) && !(p as string).startsWith("http")))];
+  if (!unique.length) return map;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const missing = unique.filter((p) => !map.has(p));
+    if (!missing.length) break;
+    try {
+      const { data, error } = await supabase.storage.from("posts").createSignedUrls(missing, 60 * 60);
+      if (error) throw error;
+      for (const row of data ?? []) {
+        if (row.path && row.signedUrl && !row.error) map.set(row.path, row.signedUrl);
+      }
+    } catch {
+      // swallow and retry once; leftovers stay unsigned
+    }
+  }
+  return map;
+}
+
 /** Signed URL for chat media (private messages bucket). */
 export async function signedMessageUrl(path: string) {
   const { data, error } = await supabase.storage.from("messages").createSignedUrl(path, 60 * 60);

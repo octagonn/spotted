@@ -1,13 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { useRouter, type Href } from "expo-router";
-import { Camera, ChevronDown, ChevronRight, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Play, Plus, Tag, Trophy, Users } from "lucide-react-native";
+import { CalendarDays, Camera, ChevronDown, ChevronRight, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Play, Plus, Tag, Trophy, Users } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
+import { LayoutAnimation, Linking, RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CalendarTapHint } from "@/components/profile/CalendarTapHint";
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
+import { WeeklySplit } from "@/components/profile/WeeklySplit";
 import { StreakPopup } from "@/components/profile/StreakPopup";
 import { VisibilityPicker, type Visibility } from "@/components/profile/VisibilityPicker";
 import { Avatar } from "@/components/ui/Avatar";
@@ -16,8 +17,10 @@ import { Pressable } from "@/components/ui/Pressable";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useUserCounts } from "@/hooks/queries/useUserCounts";
 import { useMyProfile } from "@/hooks/queries/useProfile";
-import { useHasActiveStory, useSetVisibility } from "@/hooks/queries/useProfileExtras";
+import { useHasActiveStory, useSetSplitPublic, useSetVisibility } from "@/hooks/queries/useProfileExtras";
+import { useWorkouts } from "@/hooks/queries/useWorkouts";
 import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRecordStreakHighWater, useStreak } from "@/hooks/queries/useStreak";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
 import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
@@ -51,19 +54,42 @@ export default function ProfileScreen() {
   const setVisibility = useSetVisibility();
   const [streakOpen, setStreakOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [grid, setGrid] = useState<"posts" | "tagged">("posts");
-  // Collapsible calendar — the collapsed choice sticks across sessions.
-  const [calendarOpen, setCalendarOpen] = useState(true);
+  const [grid, setGrid] = useState<"posts" | "split" | "tagged">("posts");
+  // Collapsible calendar (spec #3) — hidden by default; the expanded choice
+  // sticks across sessions. Expand/collapse animates (LayoutAnimation).
+  const [calendarOpen, setCalendarOpen] = useState(false);
   useEffect(() => {
     void AsyncStorage.getItem(CALENDAR_OPEN_KEY).then((v) => {
-      if (v === "0") setCalendarOpen(false);
+      if (v === "1") setCalendarOpen(true);
     });
   }, []);
   const toggleCalendar = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(260, "easeInEaseOut", "opacity"));
     setCalendarOpen((open) => {
       void AsyncStorage.setItem(CALENDAR_OPEN_KEY, open ? "0" : "1").catch(() => undefined);
       return !open;
     });
+  };
+
+  // Weekly split data — straight from My Workouts (spec #6).
+  const workouts = useWorkouts(profile?.id);
+  const setSplitPublic = useSetSplitPublic();
+
+  // Pull-to-refresh (spec #20): force-update stats, streaks, posts, split.
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["profile"] }),
+      queryClient.invalidateQueries({ queryKey: ["user-posts"] }),
+      queryClient.invalidateQueries({ queryKey: ["streak"] }),
+      queryClient.invalidateQueries({ queryKey: ["streak-days"] }),
+      queryClient.invalidateQueries({ queryKey: ["tagged-posts"] }),
+      queryClient.invalidateQueries({ queryKey: ["workouts"] }),
+      queryClient.invalidateQueries({ queryKey: ["user-lifts"] })
+    ]);
+    setRefreshing(false);
   };
   const tagged = useTaggedPosts(profile?.id, grid === "tagged");
 
@@ -103,7 +129,10 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: NAV_H + insets.bottom + 12 }}>
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.white} />}
+        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: NAV_H + insets.bottom + 12 }}
+      >
         {/* Top bar: username + lock, add-story, menu */}
         <View
           style={{
@@ -263,6 +292,7 @@ export default function ProfileScreen() {
             <InlineStat
               value={trophies.earnedCount}
               label="Trophies"
+              icon={<Text style={{ fontSize: 13 }}>🏆</Text>}
               onPress={() => router.push("/profile-section/trophies" as Href)}
             />
           </View>
@@ -273,6 +303,63 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
+        {/* Posts / Split / Tagged tab bar — above the calendar (spec #1). */}
+        <View style={{ marginTop: SECTION, borderTopWidth: 1, borderTopColor: colors.graphite, flexDirection: "row" }}>
+          <ProfileTab active={grid === "posts"} icon={Grid3x3} label="POSTS" onPress={() => setGrid("posts")} />
+          <ProfileTab active={grid === "split"} icon={CalendarDays} label="SPLIT" onPress={() => setGrid("split")} />
+          <ProfileTab active={grid === "tagged"} icon={Tag} label="TAGGED" onPress={() => setGrid("tagged")} />
+        </View>
+        {grid === "split" ? (
+          <View style={{ paddingTop: 14 }}>
+            <WeeklySplit
+              workouts={workouts.data ?? []}
+              isLoading={workouts.isLoading}
+              ownProfile
+              splitPublic={profile?.split_public ?? true}
+              onTogglePublic={(next) => setSplitPublic.mutate(next)}
+            />
+          </View>
+        ) : grid === "posts" ? (
+          gridPosts.length ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+              {gridPosts.map((post) => (
+                <Pressable
+                  key={post.id}
+                  style={{ width: "33%", aspectRatio: 4 / 5 }}
+                  onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
+                >
+                  <GridCell post={post} />
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
+              {posts.isLoading ? null : <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+              <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
+                {posts.isLoading ? "Loading your posts…" : "No posts yet"}
+              </Text>
+            </View>
+          )
+        ) : tagged.data?.length ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+            {tagged.data.map((post) => (
+              <Pressable
+                key={post.id}
+                style={{ width: "33%", aspectRatio: 4 / 5 }}
+                onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
+              >
+                <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
+            {tagged.isLoading ? null : <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+            <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
+              {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet"}
+            </Text>
+          </View>
+        )}
         {/* Streak calendar — the hero, the one contained surface. Collapsible;
             the header row always shows so it can be reopened. */}
         <View style={{ paddingTop: SECTION }}>
@@ -331,52 +418,6 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* Posts / Tagged tab bar */}
-        <View style={{ marginTop: SECTION, borderTopWidth: 1, borderTopColor: colors.graphite, flexDirection: "row" }}>
-          <ProfileTab active={grid === "posts"} icon={Grid3x3} label="POSTS" onPress={() => setGrid("posts")} />
-          <ProfileTab active={grid === "tagged"} icon={Tag} label="TAGGED" onPress={() => setGrid("tagged")} />
-        </View>
-        {grid === "posts" ? (
-          gridPosts.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
-              {gridPosts.map((post) => (
-                <Pressable
-                  key={post.id}
-                  style={{ width: "33%", aspectRatio: 4 / 5 }}
-                  onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
-                >
-                  <GridCell post={post} />
-                </Pressable>
-              ))}
-            </View>
-          ) : (
-            <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-              {posts.isLoading ? null : <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
-              <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-                {posts.isLoading ? "Loading your posts…" : "No posts yet"}
-              </Text>
-            </View>
-          )
-        ) : tagged.data?.length ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
-            {tagged.data.map((post) => (
-              <Pressable
-                key={post.id}
-                style={{ width: "33%", aspectRatio: 4 / 5 }}
-                onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
-              >
-                <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />
-              </Pressable>
-            ))}
-          </View>
-        ) : (
-          <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-            {tagged.isLoading ? null : <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
-            <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-              {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet"}
-            </Text>
-          </View>
-        )}
       </ScrollView>
       <StreakPopup
         visible={streakOpen}
@@ -473,8 +514,10 @@ function GridCell({ post }: { post: { media_url: string | null; media_type?: str
   const isVideo = post.media_type === "video";
   const src = isVideo ? post.thumbnail_url ?? null : post.media_url;
   return (
+    // Placeholder frame while the image streams in (spec #18) — expo-image
+    // decodes async + caches to disk, so cells fade in instead of popping.
     <View style={{ flex: 1, backgroundColor: isVideo && !src ? tokens.bg.subtle : colors.graphite }}>
-      {src ? <Image source={{ uri: src }} contentFit="cover" style={{ flex: 1 }} /> : null}
+      {src ? <Image source={{ uri: src }} contentFit="cover" transition={140} cachePolicy="memory-disk" style={{ flex: 1 }} /> : null}
       {isVideo ? (
         <View style={{ position: "absolute", right: 6, bottom: 6 }}>
           <Play size={16} color="rgba(255,255,255,0.9)" fill="rgba(255,255,255,0.9)" strokeWidth={1} />

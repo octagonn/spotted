@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { AppState, View } from "react-native";
 
 import { DismissKeyboard } from "@/components/ui/DismissKeyboard";
+import { useProfileCache } from "@/hooks/useProfileCache";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
@@ -93,6 +94,8 @@ function AppServices() {
   useInAppBanners(activeUserId);
   usePushTokenSync(activeUserId);
   usePresenceSync();
+  // Instant own-profile loads: snapshot profile queries to disk, seed at start.
+  useProfileCache();
   return null;
 }
 

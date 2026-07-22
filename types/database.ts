@@ -1188,6 +1188,7 @@ export type Database = {
           last_seen_at: string | null
           show_activity: boolean
           dm_preview_enabled: boolean
+          split_public: boolean
           avatar_blurred_url: string | null
           avatar_url: string | null
           bio: string | null
@@ -1214,6 +1215,7 @@ export type Database = {
           last_seen_at?: string | null
           show_activity?: boolean
           dm_preview_enabled?: boolean
+          split_public?: boolean
           avatar_blurred_url?: string | null
           avatar_url?: string | null
           bio?: string | null
@@ -1240,6 +1242,7 @@ export type Database = {
           last_seen_at?: string | null
           show_activity?: boolean
           dm_preview_enabled?: boolean
+          split_public?: boolean
           avatar_blurred_url?: string | null
           avatar_url?: string | null
           bio?: string | null

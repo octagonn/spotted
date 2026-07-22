@@ -28,6 +28,20 @@ export function useHasActiveStory(userId?: string | null) {
 export type Visibility = "public" | "friends" | "private";
 
 /** Update the signed-in user's visibility (schedule_visibility). */
+/** Weekly split privacy (profile spec #14). */
+export function useSetSplitPublic() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!userId) return;
+      const { error } = await supabase.from("profiles").update({ split_public: value }).eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
+  });
+}
+
 export function useSetVisibility() {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);

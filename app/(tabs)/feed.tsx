@@ -122,15 +122,26 @@ export default function HomeScreen() {
     return shuffleSeed > 0 ? seededShuffle(mapped, shuffleSeed) : mapped;
   }, [feed.data, tab, userId, friendIds, shuffleSeed]);
 
-  // "X friends already went today" for the lock CTA (spec A).
-  const friendsPostedToday = useMemo(() => {
+  // Lock-screen social proof (spec A): the distinct friends who posted today
+  // (with avatars for the stack) + how many posts wait behind the glass.
+  const lockStats = useMemo(() => {
     const today = new Date().toDateString();
-    const seen = new Set<string>();
-    for (const p of feed.data?.pages.flat() ?? []) {
-      if (friendIds.has(p.user_id) && new Date(p.created_at).toDateString() === today) seen.add(p.user_id);
+    const rows = feed.data?.pages.flat() ?? [];
+    const byPoster = new Map<string, { id: string; name: string; avatarUrl: string | null }>();
+    let lockedCount = 0;
+    for (const p of rows) {
+      if (p.user_id === userId) continue;
+      lockedCount += 1;
+      if (friendIds.has(p.user_id) && new Date(p.created_at).toDateString() === today && !byPoster.has(p.user_id)) {
+        byPoster.set(p.user_id, {
+          id: p.user_id,
+          name: p.profile?.display_name ?? p.profile?.username ?? "Friend",
+          avatarUrl: p.profile?.avatar_url ?? null
+        });
+      }
     }
-    return seen.size;
-  }, [feed.data, friendIds]);
+    return { posters: [...byPoster.values()], count: byPoster.size, lockedCount };
+  }, [feed.data, friendIds, userId]);
 
   const listRef = useRef<React.ComponentRef<typeof FlashList<FeedMockPost>>>(null);
   // Tapping the Home tab while on the feed scrolls back to the top.
@@ -257,7 +268,13 @@ export default function HomeScreen() {
           )
         }
       />
-      {locked ? <LockOverlay friendsPostedToday={friendsPostedToday} /> : null}
+      {locked ? (
+        <LockOverlay
+          friendsPostedToday={lockStats.count}
+          posters={lockStats.posters}
+          lockedCount={lockStats.lockedCount}
+        />
+      ) : null}
     </View>
   );
 }

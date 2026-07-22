@@ -100,12 +100,17 @@ export function useFeed() {
       if (!isSupabaseConfigured) {
         return pageParam ? [] : mockFeed;
       }
+      // The main feed shows only TODAY's posts — anything from a previous day
+      // disappears at LOCAL midnight (BeReal-style daily reset), matching the
+      // feed lock. Profile archives keep full history (separate query).
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
       let query = supabase
         .from("posts")
         .select(
           "*, profiles:user_id(id, username, display_name, avatar_url, avatar_blurred_url), gyms:gym_id(id, name, latitude, longitude), post_tags(profile:user_id(username)), photo_tags(x, y, profile:user_id(username)), answered_taunts:taunts!taunts_answered_post_id_fkey(sender:sender_id(username)), attached_workouts:workouts!workouts_post_id_fkey(id, name, duration_seconds, started_at, data)"
         )
-        .gt("expires_at", new Date().toISOString())
+        .gte("created_at", startOfDay.toISOString())
         .order("created_at", { ascending: false })
         .limit(FEED_PAGE);
       // Keyset cursor: everything strictly older than the last row we have.

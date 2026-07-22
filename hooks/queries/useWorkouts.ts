@@ -175,6 +175,25 @@ export function deriveExerciseBests(
   return bests;
 }
 
+/** Rename a workout (own only — RLS enforces). */
+export function useRenameWorkout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workoutId, name }: { workoutId: string; name: string }) => {
+      const trimmed = name.trim().slice(0, 60);
+      if (!trimmed) throw new Error("empty_name");
+      const { error } = await supabase.from("workouts").update({ name: trimmed }).eq("id", workoutId);
+      if (error) throw error;
+      return trimmed;
+    },
+    onSuccess: (_name, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ["workout", vars.workoutId] });
+      void queryClient.invalidateQueries({ queryKey: ["workouts"] });
+      void queryClient.invalidateQueries({ queryKey: ["feed"] });
+    }
+  });
+}
+
 /** Today's daily post id for a user, or null (drives the "add to daily" CTA). */
 export function useTodayDailyPost(userId?: string | null) {
   return useQuery({

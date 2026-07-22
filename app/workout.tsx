@@ -7,13 +7,14 @@ import {
   Dumbbell,
   Flame,
   Minus,
+  Pencil,
   Plus,
   Search,
   Trophy,
   X
 } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -35,6 +36,7 @@ import {
   deriveExerciseBests,
   isRepsGraded,
   useAttachWorkoutToDaily,
+  useRenameWorkout,
   useSaveWorkout,
   useTodayDailyPost,
   useWorkouts,
@@ -60,6 +62,23 @@ const CARDIO_TINT = "rgba(255,138,76,0.14)";
 
 let _id = Date.now() % 10_000_000;
 const uid = () => ++_id;
+
+/** Drag-down-to-dismiss grip for the picker/logger modal sheets. */
+function SheetGrip({ onDismiss }: { onDismiss: () => void }) {
+  const responder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 60 || g.vy > 0.5) onDismiss();
+      }
+    })
+  ).current;
+  return (
+    <View {...responder.panHandlers} style={{ alignSelf: "stretch", alignItems: "center", paddingTop: 14, paddingBottom: 10 }}>
+      <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.border.strong }} />
+    </View>
+  );
+}
 
 /** The blinking LIVE dot (prototype `blink`). */
 function BlinkDot({ size = 9 }: { size?: number }) {
@@ -129,6 +148,23 @@ export default function WorkoutScreen() {
   const attachToDaily = useAttachWorkoutToDaily();
   const [savedWorkoutId, setSavedWorkoutId] = useState<string | null>(null);
   const [attached, setAttached] = useState(false);
+  // Rename on the finish screen (pencil next to the workout name).
+  const renameWorkout = useRenameWorkout();
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const startRename = () => {
+    setNameDraft(summary?.title ?? "");
+    setEditingName(true);
+  };
+  const commitRename = () => {
+    setEditingName(false);
+    const next = nameDraft.trim();
+    if (!next || !summary || next === summary.title) return;
+    setSummary((prev) => (prev ? { ...prev, title: next } : prev));
+    if (savedWorkoutId) {
+      renameWorkout.mutate({ workoutId: savedWorkoutId, name: next }, { onError: () => showToast("Couldn't rename — try again") });
+    }
+  };
 
   // Start (or resume) the session on mount. Also prune empty entries left
   // behind if the app closed mid-logger. The timer does NOT auto-start —
@@ -551,6 +587,29 @@ export default function WorkoutScreen() {
                 ? `${summary.prs.length} personal ${summary.prs.length === 1 ? "record" : "records"} smashed.`
                 : "Solid session logged."}
             </Text>
+            {/* Workout name — defaults to the session type, pencil to rename. */}
+            {editingName ? (
+              <TextInput
+                autoFocus
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                onSubmitEditing={commitRename}
+                onBlur={commitRename}
+                maxLength={60}
+                style={{ marginTop: 10, minWidth: 180, textAlign: "center", fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.text.primary, borderBottomWidth: 1, borderBottomColor: tokens.accent.gold, paddingVertical: 4 }}
+              />
+            ) : (
+              <Pressable
+                onPress={startRename}
+                accessibilityLabel="Rename workout"
+                style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 7 }}
+              >
+                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.text.secondary }}>
+                  {summary.title}
+                </Text>
+                <Pencil size={14} color={tokens.text.tertiary} strokeWidth={2} />
+              </Pressable>
+            )}
           </View>
 
           {summary.prs.length > 0 ? (
@@ -855,7 +914,7 @@ export default function WorkoutScreen() {
               overflow: "hidden"
             }}
           >
-            <View style={{ alignSelf: "center", marginTop: 14, marginBottom: 6, width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.border.strong }} />
+            <SheetGrip onDismiss={() => setPicker(null)} />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 12 }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
                 {picker === "cardio" ? <Flame size={18} color={tokens.accent.gold} strokeWidth={1.7} /> : <Dumbbell size={19} color={tokens.accent.gold} strokeWidth={1.8} />}
@@ -1016,7 +1075,7 @@ export default function WorkoutScreen() {
               overflow: "hidden"
             }}
           >
-            <View style={{ alignSelf: "center", marginTop: 14, marginBottom: 6, width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.border.strong }} />
+            <SheetGrip onDismiss={closeLogger} />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24, paddingTop: 6, paddingBottom: 16 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
                 <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>

@@ -5,7 +5,6 @@ import { Camera, Dumbbell, House, User, Users } from "lucide-react-native";
 import { Pressable as RNPressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { usePostedState } from "@/hooks/queries/usePostedState";
 import { selectionHaptic } from "@/lib/haptics";
 import { colors } from "@/theme/colors";
 import { radius, tokens } from "@/theme/tokens";
@@ -63,11 +62,10 @@ function TabSlot({
 
 /**
  * Center camera button: 76px circle raised above the row, 1.5px border.strong
- * ring, ink bg, white 28px camera icon. Posted state adds a gold dot (bg.base
- * ring) at top-right so the "you've dropped today" cue survives. Pushes /camera
- * instead of switching tabs.
+ * ring, ink bg, white 28px camera icon. Pushes /camera instead of switching
+ * tabs.
  */
-function CameraTabButton({ posted, onPress }: { posted: boolean; onPress: () => void }) {
+function CameraTabButton({ onPress }: { onPress: () => void }) {
   return (
     <RNPressable
       onPress={() => {
@@ -102,21 +100,6 @@ function CameraTabButton({ posted, onPress }: { posted: boolean; onPress: () => 
         }}
       >
         <Camera color={tokens.text.primary} size={28} strokeWidth={2} />
-        {posted ? (
-          <View
-            style={{
-              position: "absolute",
-              top: 4,
-              right: 4,
-              width: 14,
-              height: 14,
-              borderRadius: radius.pill,
-              backgroundColor: tokens.accent.gold,
-              borderWidth: 2,
-              borderColor: tokens.bg.base
-            }}
-          />
-        ) : null}
       </View>
     </RNPressable>
   );
@@ -125,7 +108,6 @@ function CameraTabButton({ posted, onPress }: { posted: boolean; onPress: () => 
 function RedesignTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { postedToday: posted } = usePostedState();
 
   const isFocused = (name: TabName) => state.routes[state.index]?.name === name;
   const goTo = (name: TabName) => navigation.navigate(name);
@@ -169,7 +151,7 @@ function RedesignTabBar({ state, navigation }: BottomTabBarProps) {
         {LEFT_TABS.map((name) => (
           <TabSlot key={name} name={name} focused={isFocused(name)} onPress={() => goTo(name)} />
         ))}
-        <CameraTabButton posted={posted} onPress={() => router.push("/camera")} />
+        <CameraTabButton onPress={() => router.push("/camera")} />
         {RIGHT_TABS.map((name) => (
           <TabSlot key={name} name={name} focused={isFocused(name)} onPress={() => goTo(name)} />
         ))}

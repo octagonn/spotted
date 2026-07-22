@@ -1,9 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Dumbbell, Flame, Trophy } from "lucide-react-native";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ChevronLeft, Dumbbell, Flame, Pencil, Trophy } from "lucide-react-native";
+import { useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useWorkout, type CardioSet, type LiftSet } from "@/hooks/queries/useWorkouts";
+import { useRenameWorkout, useWorkout, type CardioSet, type LiftSet } from "@/hooks/queries/useWorkouts";
+import { showToast } from "@/stores/ui";
+import { useAuthStore } from "@/stores/auth";
 import { fmtClock } from "@/lib/workoutLibrary";
 import { relDay } from "@/lib/relDay";
 import { colors } from "@/theme/colors";
@@ -36,6 +39,10 @@ export default function WorkoutDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const workout = useWorkout(id);
+  const myId = useAuthStore((state) => state.userId);
+  const rename = useRenameWorkout();
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
 
   if (workout.isLoading) {
     return (
@@ -75,9 +82,42 @@ export default function WorkoutDetailScreen() {
           <Pressable accessibilityLabel="Back" onPress={() => router.back()} hitSlop={10} style={{ marginLeft: -6, padding: 2 }}>
             <ChevronLeft size={28} color={tokens.text.secondary} />
           </Pressable>
-          <Text numberOfLines={1} style={{ flex: 1, fontFamily: DISP, fontSize: 26, letterSpacing: -0.6, color: tokens.text.primary }}>
-            {w.name}
-          </Text>
+          {editing ? (
+            <TextInput
+              autoFocus
+              value={nameDraft}
+              onChangeText={setNameDraft}
+              maxLength={60}
+              onSubmitEditing={() => {
+                setEditing(false);
+                const next = nameDraft.trim();
+                if (next && next !== w.name) {
+                  rename.mutate({ workoutId: w.id, name: next }, { onError: () => showToast("Couldn't rename — try again") });
+                }
+              }}
+              onBlur={() => setEditing(false)}
+              style={{ flex: 1, fontFamily: DISP, fontSize: 24, color: tokens.text.primary, borderBottomWidth: 1, borderBottomColor: tokens.accent.gold, paddingVertical: 2 }}
+            />
+          ) : (
+            <>
+              <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: DISP, fontSize: 26, letterSpacing: -0.6, color: tokens.text.primary }}>
+                {w.name}
+              </Text>
+              {w.userId === myId ? (
+                <Pressable
+                  accessibilityLabel="Rename workout"
+                  onPress={() => {
+                    setNameDraft(w.name);
+                    setEditing(true);
+                  }}
+                  hitSlop={10}
+                >
+                  <Pencil size={17} color={tokens.text.tertiary} strokeWidth={2} />
+                </Pressable>
+              ) : null}
+              <View style={{ flex: 1 }} />
+            </>
+          )}
         </View>
         <Text style={{ paddingLeft: 36, marginTop: 4, fontSize: 14, color: tokens.text.tertiary }}>{when}</Text>
       </View>

@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -119,6 +120,13 @@ export default function StoryViewer() {
   // the target and commits. `canPrev`/`canNext` gate the rubber-band at the ends.
   const { width: screenW } = useWindowDimensions();
   const panX = useSharedValue(0);
+  // UI-thread mirror of `gi`. The pager translates by (-giSV * width + panX),
+  // and a swipe commit updates giSV and panX IN ONE WORKLET so the on-screen
+  // frame is arithmetically unchanged — the flash-free handoff can't depend on
+  // React and Reanimated flushing in the same frame (they never reliably do).
+  const giSV = useSharedValue(0);
+  // 1 between the UI-thread commit and React catching up — pans are ignored.
+  const settling = useSharedValue(0);
   const canPrev = useSharedValue(0);
   const canNext = useSharedValue(0);
   const paging = useSharedValue(0); // 1 while a horizontal pan is active (pauses timer)
@@ -148,16 +156,30 @@ export default function StoryViewer() {
   const navRef = useRef({ queue, gi, group });
   navRef.current = { queue, gi, group };
 
-  // Neighbor media for the peek during a horizontal drag. Next = the next
-  // person's first UNSEEN story (matches goNextPerson); prev = the previous
-  // person's first story (matches goPrevPerson).
-  const nextGroup = queue?.[gi + 1];
-  const nextPeekMedia = nextGroup
-    ? nextGroup.stories[Math.max(0, nextGroup.stories.findIndex((s) => !s.seen))]?.mediaUrl ??
-      nextGroup.stories[0]?.mediaUrl ??
-      null
-    : null;
-  const prevPeekMedia = queue?.[gi - 1]?.stories[0]?.mediaUrl ?? null;
+  // Underlay pages for the pager, positioned at ABSOLUTE index * width and
+  // keyed by absolute index. The page the finger reveals keeps its React
+  // identity when it becomes the center after a commit, so the visible photo
+  // is never remounted or moved — the core of the flash-free handoff.
+  // Prev shows the previous person's FIRST story (matches goPrevPerson); next
+  // shows the next person's first UNSEEN story (matches goNextPerson); the
+  // center underlay mirrors the story on screen (sits behind the full UI).
+  const pagerPages = useMemo(() => {
+    if (!queue) return [] as { idx: number; uri: string }[];
+    const out: { idx: number; uri: string }[] = [];
+    for (const idx of [gi - 1, gi, gi + 1]) {
+      const g = queue[idx];
+      if (!g) continue;
+      let uri: string | null | undefined;
+      if (idx === gi) uri = g.stories[si]?.mediaUrl;
+      else if (idx < gi) uri = g.stories[0]?.mediaUrl;
+      else {
+        const fu = g.stories.findIndex((st) => !st.seen);
+        uri = g.stories[fu >= 0 ? fu : 0]?.mediaUrl;
+      }
+      if (uri) out.push({ idx, uri });
+    }
+    return out;
+  }, [queue, gi, si]);
 
   // Keep the UI-thread bounds in sync so the pan can rubber-band at the ends.
   useEffect(() => {
@@ -354,12 +376,13 @@ export default function StoryViewer() {
   const commitPrev = useCallback(() => {
     goPrevPerson();
   }, [goPrevPerson]);
-  // Recenter AFTER the new person's card has rendered — the peek image the
-  // finger revealed is identical to the incoming center, so snapping panX back
-  // in the same commit is invisible. Resetting inside commitNext (pre-render)
-  // flashed the OLD story back at center for a frame.
+  // React caught up with a commit (or gi changed via tap): sync the UI-thread
+  // mirror and release the settle guard. After a swipe commit the worklet has
+  // already set giSV/panX, so these assignments are no-ops there; for tap
+  // navigation they move the pager instantly (panX is already 0).
   useLayoutEffect(() => {
-    panX.value = 0;
+    giSV.value = gi;
+    settling.value = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gi]);
 
@@ -383,14 +406,20 @@ export default function StoryViewer() {
     const SNAP = { damping: 22, stiffness: 220 } as const;
     // Horizontal paging — the card tracks the finger 1:1, rubber-banding when
     // there's no neighbor in that direction, and snaps to the target on release.
+    const SNAP_TIMING = { duration: 230, easing: Easing.out(Easing.cubic) } as const;
     const pageG = Gesture.Pan()
-      .activeOffsetX([-12, 12])
-      .failOffsetY([-16, 16])
+      .activeOffsetX([-10, 10])
+      // Looser vertical tolerance: slightly diagonal swipes should still page
+      // instead of dying (a big part of the "sticky" feel).
+      .failOffsetY([-24, 24])
       .onStart(() => {
+        "worklet";
+        if (settling.value === 1) return;
         paging.value = 1;
       })
       .onUpdate((e) => {
         "worklet";
+        if (settling.value === 1) return;
         let x = e.translationX;
         // Rubber-band past the ends (no next/prev to reveal).
         if (x < 0 && canNext.value === 0) x *= 0.25;
@@ -399,20 +428,41 @@ export default function StoryViewer() {
       })
       .onEnd((e) => {
         "worklet";
+        if (settling.value === 1) return;
         const goNextSwipe = (e.translationX < -80 || e.velocityX < -650) && canNext.value === 1;
         const goPrevSwipe = (e.translationX > 80 || e.velocityX > 650) && canPrev.value === 1;
         if (goNextSwipe) {
-          panX.value = withTiming(-screenW, { duration: 190 }, (done) => {
-            if (done) {
+          settling.value = 1;
+          panX.value = withTiming(-screenW, SNAP_TIMING, (done) => {
+            "worklet";
+            // A tap-advance mid-settle clears `settling` (via the sync
+            // effect) — bail instead of double-advancing.
+            if (done && settling.value === 1) {
+              // ATOMIC handoff: giSV+1 and panX->0 change translation by
+              // (-W + W) = 0 in one UI-thread batch — the frame is pixel-
+              // identical. React then re-renders around the already-visible
+              // page (same key, same position) at its own pace.
+              giSV.value = giSV.value + 1;
+              panX.value = 0;
               paging.value = 0;
               runOnJS(commitNext)();
+            } else {
+              settling.value = 0;
+              paging.value = 0;
             }
           });
         } else if (goPrevSwipe) {
-          panX.value = withTiming(screenW, { duration: 190 }, (done) => {
-            if (done) {
+          settling.value = 1;
+          panX.value = withTiming(screenW, SNAP_TIMING, (done) => {
+            "worklet";
+            if (done && settling.value === 1) {
+              giSV.value = giSV.value - 1;
+              panX.value = 0;
               paging.value = 0;
               runOnJS(commitPrev)();
+            } else {
+              settling.value = 0;
+              paging.value = 0;
             }
           });
         } else {
@@ -461,9 +511,11 @@ export default function StoryViewer() {
       });
     // Race the one-finger directions; pinch runs alongside (two fingers).
     return Gesture.Simultaneous(Gesture.Race(pageG, swipeDownG, swipeUpG), pinchG);
-  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW, pinchScale, pinchFocalX, pinchFocalY]);
+  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW, pinchScale, pinchFocalX, pinchFocalY, giSV, settling]);
 
-  const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: panX.value }] }));
+  const pageStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -giSV.value * screenW + panX.value }]
+  }));
 
   // Scale about the pinch focal point: translate focal→origin, scale, undo.
   const zoomStyle = useAnimatedStyle(() => {
@@ -511,26 +563,24 @@ export default function StoryViewer() {
           together with the finger; the neighbor images sit exactly one screen
           width to each side so a drag reveals them seamlessly. */}
       <Animated.View style={[{ flex: 1 }, pageStyle]}>
-        {prevPeekMedia ? (
+        {/* Underlay pages at ABSOLUTE index positions, keyed by index — the
+            revealed page keeps its node across a commit, so the photo the
+            user is looking at never remounts. */}
+        {pagerPages.map((pg) => (
           <Image
-            source={{ uri: prevPeekMedia }}
+            key={"page-" + pg.idx}
+            source={{ uri: pg.uri }}
             contentFit="contain"
             cachePolicy="memory-disk"
-            style={{ position: "absolute", top: 0, bottom: 0, left: -screenW, width: screenW, backgroundColor: colors.black }}
+            style={{ position: "absolute", top: 0, bottom: 0, left: pg.idx * screenW, width: screenW, backgroundColor: colors.black }}
           />
-        ) : null}
-        {nextPeekMedia ? (
-          <Image
-            source={{ uri: nextPeekMedia }}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            style={{ position: "absolute", top: 0, bottom: 0, left: screenW, width: screenW, backgroundColor: colors.black }}
-          />
-        ) : null}
+        ))}
+      {/* Full story UI rides at the center page's absolute slot. */}
+      <View style={{ position: "absolute", top: 0, bottom: 0, left: gi * screenW, width: screenW }}>
       {/* iOS: the reply bar is absolutely positioned, which KAV padding cannot
           move — the explicit bottom offset below handles it instead. */}
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: colors.black }}
+        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? undefined : "height"}
       >
         {/* Spinner behind the media so opening a story never flashes blank. */}
@@ -940,6 +990,7 @@ export default function StoryViewer() {
           </Pressable>
         ) : null}
       </KeyboardAvoidingView>
+      </View>
       </Animated.View>
       </Animated.View>
     </GestureDetector>

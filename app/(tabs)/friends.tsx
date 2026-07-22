@@ -42,8 +42,7 @@ export default function FriendsScreen() {
   const [tab, setTab] = useState("Messages");
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
-  // Inbox filter (#1) + folder (#2) selection.
-  const [msgFilter, setMsgFilter] = useState<"all" | "unread" | "unanswered" | "story" | "verified">("all");
+  // Folder (#2) selection — the filter-chip row was removed per feedback.
   const [folderId, setFolderId] = useState<string | null>(null);
   const messageRequests = useMessageRequests();
   const folders = useMessageFolders();
@@ -149,22 +148,8 @@ export default function FriendsScreen() {
   const dmThreads = useMemo(() => {
     let list = (inbox.data ?? []).filter((t) => !t.empty);
     if (folderId) list = list.filter((t) => t.folderId === folderId);
-    switch (msgFilter) {
-      case "unread":
-        list = list.filter((t) => t.unread);
-        break;
-      case "unanswered":
-        list = list.filter((t) => !t.answered);
-        break;
-      case "story":
-        list = list.filter((t) => t.storyReply);
-        break;
-      case "verified":
-        list = list.filter((t) => t.verified);
-        break;
-    }
     return list;
-  }, [inbox.data, msgFilter, folderId]);
+  }, [inbox.data, folderId]);
   const dmPlaceholders = useMemo(() => {
     const threaded = new Set(dmThreads.map((t) => t.profileId));
     const list: { profileId: string; name: string; avatarUrl: string | null }[] = [];
@@ -286,26 +271,6 @@ export default function FriendsScreen() {
                     </View>
                   </Pressable>
                 ) : null}
-
-                {/* Filter chips (#1) */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 18, paddingBottom: 8 }}>
-                  {([
-                    ["all", "All"],
-                    ["unread", "Unread"],
-                    ["unanswered", "Unanswered"],
-                    ["story", "Story replies"],
-                    ["verified", "Verified"]
-                  ] as const).map(([key, label]) => {
-                    const on = msgFilter === key;
-                    return (
-                      <Pressable key={key} onPress={() => setMsgFilter(key)}>
-                        <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: on ? colors.white : colors.graphite, borderWidth: 1, borderColor: on ? colors.white : colors.iron }}>
-                          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: on ? colors.black : colors.silver }}>{label}</Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
 
                 {/* Folder chips (#2) */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 18, paddingBottom: 10, alignItems: "center" }}>

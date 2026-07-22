@@ -224,7 +224,7 @@ export default function WorkoutScreen() {
 
   // Trophy cascade + summary volume count-up.
   const [celebrateIdx, setCelebrateIdx] = useState(0);
-  const [animVolume, setAnimVolume] = useState(0);
+  const [animSets, setAnimSets] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const exercises = session.exercises;
@@ -454,19 +454,20 @@ export default function WorkoutScreen() {
     }
   };
 
-  // Summary volume count-up (prototype `volTween`, cubic ease-out over 900ms).
+  // Summary sets count-up (cubic ease-out over 900ms) — volume is no longer
+  // surfaced anywhere; sets are the headline stat.
   useEffect(() => {
     if (!summary) return;
-    const target = summary.volume;
+    const target = summary.sets;
     if (target <= 0) {
-      setAnimVolume(0);
+      setAnimSets(0);
       return;
     }
     const start = Date.now();
     const t = setInterval(() => {
       const p = Math.min(1, (Date.now() - start) / 900);
       const eased = 1 - Math.pow(1 - p, 3);
-      setAnimVolume(Math.round(target * eased));
+      setAnimSets(Math.round(target * eased));
       if (p >= 1) clearInterval(t);
     }, 24);
     return () => clearInterval(t);
@@ -645,8 +646,8 @@ export default function WorkoutScreen() {
 
           <View style={{ paddingHorizontal: 26, paddingTop: 26, flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             {[
-              { v: animVolume.toLocaleString(), l: "Volume · lb" },
-              { v: `${summary.sets}`, l: `Sets · reps ${summary.reps}` },
+              { v: `${animSets}`, l: "Sets" },
+              { v: `${summary.reps}`, l: "Reps" },
               { v: fmtClock(summary.duration), l: "Duration" },
               { v: `${summary.exCount}`, l: "Exercises" }
             ].map((st) => (
@@ -847,8 +848,8 @@ export default function WorkoutScreen() {
         }}
       >
         <View>
-          <Text style={{ fontFamily: NUM, fontSize: 26, lineHeight: 27, color: tokens.text.primary }}>{totals.vol.toLocaleString()}</Text>
-          <Micro style={{ marginTop: 4, letterSpacing: 1.5 }}>Volume · lb</Micro>
+          <Text style={{ fontFamily: NUM, fontSize: 26, lineHeight: 27, color: tokens.text.primary }}>{totals.reps}</Text>
+          <Micro style={{ marginTop: 4, letterSpacing: 1.5 }}>Reps</Micro>
         </View>
         <View>
           <Text style={{ fontFamily: NUM, fontSize: 26, lineHeight: 27, color: tokens.text.primary }}>

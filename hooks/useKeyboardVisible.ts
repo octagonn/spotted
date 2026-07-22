@@ -21,3 +21,23 @@ export function useKeyboardVisible(): boolean {
   }, []);
   return visible;
 }
+
+/**
+ * Current soft-keyboard height in px (0 when hidden). For absolutely-
+ * positioned bottom bars, which KeyboardAvoidingView's padding cannot move —
+ * absolute children pin to the container edge and ignore padding.
+ */
+export function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, (e) => setHeight(e.endCoordinates?.height ?? 0));
+    const hide = Keyboard.addListener(hideEvent, () => setHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return height;
+}

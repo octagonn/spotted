@@ -440,7 +440,7 @@ export default function ProfileScreen() {
               <Pressable
                 key={post.id}
                 style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
-                onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
+                onPress={() => router.push(`/profile-posts/${post.id}?user=${post.user_id}` as Href)}
               >
                 <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />
               </Pressable>

@@ -10,7 +10,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, CornerUpLeft, ImagePlus, Mic, MoreVertical, Pause, Play, Send, Share2, Square, X } from "lucide-react-native";
+import { Camera, ChevronLeft, CornerUpLeft, Eye, Flame, ImagePlus, Mic, MoreVertical, Pause, Play, Send, Share2, Square, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -38,6 +38,7 @@ import { Pressable } from "@/components/ui/Pressable";
 import {
   useConversation,
   useMarkConversationRead,
+  useMarkMessageViewed,
   useMessages,
   useMessagesRealtime,
   useSendMediaMessage,
@@ -231,6 +232,90 @@ function ChatMediaBubble({ path, mine }: { path: string; mine: boolean }) {
 }
 
 /**
+ * Snapchat-style view-once photo bubble. Sender sees a static "Photo" chip
+ * (with an "Opened" state once the recipient burns it). The recipient gets a
+ * tappable chip that opens the photo full-screen exactly once — closing it
+ * marks the message viewed and collapses the chip to "Opened".
+ */
+function ViewOnceBubble({
+  message,
+  mine,
+  onOpen
+}: {
+  message: ChatMessage;
+  mine: boolean;
+  onOpen: (message: ChatMessage) => void;
+}) {
+  const opened = Boolean(message.viewed_at);
+  const canOpen = !mine && !opened;
+  return (
+    <RNPressable
+      onPress={canOpen ? () => onOpen(message) : undefined}
+      accessibilityLabel={canOpen ? "View photo (view once)" : opened ? "Photo opened" : "Photo sent"}
+      style={{
+        alignSelf: mine ? "flex-end" : "flex-start",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 9,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: canOpen ? tokens.accent.gold : colors.iron,
+        backgroundColor: canOpen ? "rgba(232,180,76,0.10)" : colors.graphite,
+        paddingVertical: 11,
+        paddingHorizontal: 15,
+        marginVertical: 2
+      }}
+    >
+      {opened ? (
+        <Eye size={16} color={colors.fog} strokeWidth={2} />
+      ) : (
+        <Flame size={16} color={canOpen ? tokens.accent.gold : colors.silver} strokeWidth={2} />
+      )}
+      <Text
+        style={{
+          fontFamily: "Geist_600SemiBold",
+          fontSize: 13.5,
+          color: opened ? colors.fog : canOpen ? tokens.accent.gold : colors.silver
+        }}
+      >
+        {opened ? "Opened" : mine ? "Photo — view once" : "Tap to view photo"}
+      </Text>
+    </RNPressable>
+  );
+}
+
+/** Full-screen one-shot photo viewer; closing burns the view. */
+function ViewOnceViewer({ path, onClose }: { path: string; onClose: () => void }) {
+  const media = useQuery({
+    queryKey: ["msg-media", path],
+    staleTime: 50 * 60_000,
+    queryFn: () => signedMessageUrl(path)
+  });
+  return (
+    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
+      {media.data ? (
+        <Image source={{ uri: media.data }} style={{ flex: 1 }} contentFit="contain" />
+      ) : (
+        <View style={{ flex: 1 }} />
+      )}
+      <Pressable
+        onPress={onClose}
+        accessibilityLabel="Close photo"
+        hitSlop={10}
+        style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}
+      >
+        <X size={20} color={colors.white} strokeWidth={2.2} />
+      </Pressable>
+      <View pointerEvents="none" style={{ position: "absolute", bottom: 46, left: 0, right: 0, alignItems: "center" }}>
+        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.silver }}>
+          View once — it disappears when you close it
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
  * Stable fallback for the sent-messages selector. Returning a fresh `[]` from
  * a zustand selector makes every store snapshot look "changed", which sends
  * useSyncExternalStore into an infinite re-render loop and crashes the screen.
@@ -264,6 +349,11 @@ export default function ChatScreen() {
 
   // DM epic wiring.
   const [replyTo, setReplyTo] = useState<{ id: string; text: string; mine: boolean } | null>(null);
+  // Media staged in the composer (gallery pick or camera shot) — sent on Send,
+  // never auto-sent. Camera shots go out as view-once.
+  const [pendingMedia, setPendingMedia] = useState<{ uri: string; kind: "image" | "video"; viewOnce: boolean } | null>(null);
+  const [viewOnceOpen, setViewOnceOpen] = useState<ChatMessage | null>(null);
+  const markViewed = useMarkMessageViewed(conversationId);
   const reactions = useMessageReactions(conversationId, (messages.data ?? []).map((m) => m.id));
   const react = useReactToMessage(conversationId);
   const unsend = useUnsendMessage(conversationId);
@@ -329,13 +419,26 @@ export default function ChatScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 0.8, videoMaxDuration: 60 });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
-      const isVideo = asset.type === "video";
-      sendMedia.mutate(
-        { localUri: asset.uri, kind: isVideo ? "video" : "image" },
-        { onSuccess: inboxActions.invalidate, onError: () => showToast(isVideo ? "Couldn't send the video" : "Couldn't send the photo") }
-      );
+      // Stage in the composer — the user confirms with Send.
+      setPendingMedia({ uri: asset.uri, kind: asset.type === "video" ? "video" : "image", viewOnce: false });
     } catch {
       showToast("Couldn't open your photo library");
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showToast("Enable camera access in Settings to send photos");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
+      if (result.canceled || !result.assets[0]) return;
+      // Camera shots are view-once, Snapchat-style.
+      setPendingMedia({ uri: result.assets[0].uri, kind: "image", viewOnce: true });
+    } catch {
+      showToast("Couldn't open the camera");
     }
   };
   useMessagesRealtime(conversationId);
@@ -377,7 +480,22 @@ export default function ChatScreen() {
 
   const send = () => {
     const text = draft.trim();
-    if (!text || !sendReady) return;
+    if (!sendReady || (!text && !pendingMedia)) return;
+    if (pendingMedia) {
+      const staged = pendingMedia;
+      setPendingMedia(null);
+      sendMedia.mutate(
+        { localUri: staged.uri, kind: staged.kind, viewOnce: staged.viewOnce },
+        {
+          onSuccess: inboxActions.invalidate,
+          onError: () => showToast(staged.kind === "video" ? "Couldn't send the video" : "Couldn't send the photo")
+        }
+      );
+    }
+    if (!text) {
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+      return;
+    }
     setDraft("");
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
@@ -570,6 +688,8 @@ export default function ChatScreen() {
                               else if ((message.shared_kind === "checkin" || message.shared_kind === "stream") && message.shared_id) router.push(`/gym/${message.shared_id}`);
                             }}
                           />
+                        ) : message.media_url && message.view_once ? (
+                          <ViewOnceBubble message={message} mine={mine} onOpen={setViewOnceOpen} />
                         ) : message.media_url ? (
                           <ChatMediaBubble path={message.media_url} mine={mine} />
                         ) : (
@@ -648,6 +768,24 @@ export default function ChatScreen() {
               backgroundColor: "rgba(0,0,0,0.92)"
             }}
           />
+          {/* Staged media preview — confirm with Send, X to discard. */}
+          {pendingMedia ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <View style={{ borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: pendingMedia.viewOnce ? tokens.accent.gold : colors.iron }}>
+                <Image source={{ uri: pendingMedia.uri }} style={{ width: 52, height: 66 }} contentFit="cover" />
+              </View>
+              <Text style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
+                {pendingMedia.viewOnce
+                  ? "View-once photo — they can open it one time"
+                  : pendingMedia.kind === "video"
+                    ? "Video ready to send"
+                    : "Photo ready to send"}
+              </Text>
+              <Pressable onPress={() => setPendingMedia(null)} accessibilityLabel="Remove attachment" hitSlop={8}>
+                <X size={16} color={colors.fog} strokeWidth={2} />
+              </Pressable>
+            </View>
+          ) : null}
           {/* Quote-reply preview (#10) */}
           {replyTo ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: tokens.accent.gold }}>
@@ -676,7 +814,12 @@ export default function ChatScreen() {
             }}
           >
             {!mock && sendReady ? (
-              <Pressable onPress={() => void pickImage()} accessibilityLabel="Send a photo" hitSlop={6} disabled={sendMedia.isPending}>
+              <Pressable onPress={() => void takePhoto()} accessibilityLabel="Take a view-once photo" hitSlop={6} disabled={sendMedia.isPending}>
+                <Camera size={20} color={sendMedia.isPending ? colors.iron : colors.silver} strokeWidth={2} />
+              </Pressable>
+            ) : null}
+            {!mock && sendReady ? (
+              <Pressable onPress={() => void pickImage()} accessibilityLabel="Attach a photo" hitSlop={6} disabled={sendMedia.isPending}>
                 <ImagePlus size={20} color={sendMedia.isPending ? colors.iron : colors.silver} strokeWidth={2} />
               </Pressable>
             ) : null}
@@ -714,7 +857,7 @@ export default function ChatScreen() {
             )}
             <Pressable
               onPress={send}
-              disabled={!draft.trim() || !sendReady || sendReal.isPending || recording}
+              disabled={(!draft.trim() && !pendingMedia) || !sendReady || sendReal.isPending || recording}
               accessibilityRole="button"
               accessibilityLabel="Send message"
             >
@@ -725,15 +868,26 @@ export default function ChatScreen() {
                   borderRadius: 18,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: draft.trim() && !recording ? colors.white : colors.iron
+                  backgroundColor: (draft.trim() || pendingMedia) && !recording ? colors.white : colors.iron
                 }}
               >
-                <Send color={draft.trim() && !recording ? colors.black : colors.fog} size={16} strokeWidth={2.2} />
+                <Send color={(draft.trim() || pendingMedia) && !recording ? colors.black : colors.fog} size={16} strokeWidth={2.2} />
               </View>
             </Pressable>
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* One-shot view-once photo overlay — closing marks it viewed. */}
+      {viewOnceOpen?.media_url ? (
+        <ViewOnceViewer
+          path={viewOnceOpen.media_url}
+          onClose={() => {
+            markViewed.mutate(viewOnceOpen.id);
+            setViewOnceOpen(null);
+          }}
+        />
+      ) : null}
 
       {/* iMessage-style reaction + action menu (long-press on a message). */}
       <MessageActionMenu

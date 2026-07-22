@@ -23,15 +23,13 @@ export type FeedWorkout = {
  * when a big session doesn't fit, so no truncation.
  */
 export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
-  let vol = 0;
   let sets = 0;
   let cardioMin = 0;
   for (const ex of workout.exercises) {
     for (const s of ex.sets) {
       if (!s.done) continue;
       sets += 1;
-      if (ex.kind === "lift") vol += (s as LiftSet).w * (s as LiftSet).r;
-      else cardioMin += (s as CardioSet).min;
+      if (ex.kind === "cardio") cardioMin += (s as CardioSet).min;
     }
   }
 
@@ -48,7 +46,6 @@ export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
           </Text>
           <Text style={{ marginTop: 2, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>
             {[
-              vol > 0 ? `${vol.toLocaleString()} lb` : null,
               `${sets} ${sets === 1 ? "set" : "sets"}`,
               cardioMin > 0 ? `${cardioMin} min cardio` : null,
               fmtClock(workout.durationSeconds)

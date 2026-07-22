@@ -377,7 +377,9 @@ export const mockMessages = [
     deleted_at: null,
     kind: "text",
     shared_kind: null,
-    shared_id: null
+    shared_id: null,
+    view_once: false,
+    viewed_at: null
   },
   {
     id: "msg-2",
@@ -392,7 +394,9 @@ export const mockMessages = [
     deleted_at: null,
     kind: "text",
     shared_kind: null,
-    shared_id: null
+    shared_id: null,
+    view_once: false,
+    viewed_at: null
   }
 ];
 

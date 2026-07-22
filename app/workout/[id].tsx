@@ -68,10 +68,10 @@ export default function WorkoutDetailScreen() {
   const timeLabel = new Date(w.startedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const when = `${relDay(w.startedAt)} · ${timeLabel}`;
   const stats = [
-    { v: w.totalVolume.toLocaleString(), l: "Volume · lb" },
     { v: `${w.totalSets}`, l: "Sets" },
+    { v: `${w.exerciseCount}`, l: "Exercises" },
     { v: fmtClock(w.durationSeconds), l: "Duration" },
-    { v: `${w.exerciseCount}`, l: "Exercises" }
+    { v: `${w.prs.length}`, l: w.prs.length === 1 ? "PR" : "PRs" }
   ];
 
   return (

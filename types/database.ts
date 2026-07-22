@@ -657,6 +657,8 @@ export type Database = {
           kind: string
           shared_kind: string | null
           shared_id: string | null
+          view_once: boolean
+          viewed_at: string | null
         }
         Insert: {
           content?: string | null
@@ -672,6 +674,8 @@ export type Database = {
           kind?: string
           shared_kind?: string | null
           shared_id?: string | null
+          view_once?: boolean
+          viewed_at?: string | null
         }
         Update: {
           content?: string | null
@@ -687,6 +691,8 @@ export type Database = {
           kind?: string
           shared_kind?: string | null
           shared_id?: string | null
+          view_once?: boolean
+          viewed_at?: string | null
         }
         Relationships: [
           {
@@ -1527,6 +1533,7 @@ export type Database = {
       join_community_by_code: { Args: { code: string }; Returns: string | null }
       nudge_community: { Args: { cid: string }; Returns: number }
       notify_second_workout: { Args: { p_post: string; p_name: string }; Returns: number }
+      mark_message_viewed: { Args: { p_message: string }; Returns: undefined }
       evaluate_trophies: {
         Args: { p_user: string }
         Returns: { out_unlock_id: string; out_family_id: string; out_tier: number; out_name: string; out_metric: number }[]

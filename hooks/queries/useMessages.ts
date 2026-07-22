@@ -123,7 +123,9 @@ export function useSendMessage(conversationId?: string | null) {
           deleted_at: null,
           kind: "text",
           shared_kind: null,
-          shared_id: null
+          shared_id: null,
+          view_once: false,
+          viewed_at: null
         };
         queryClient.setQueryData<ChatMessage[]>(["messages", conversationId], (prev) => [
           ...(prev ?? []),
@@ -156,6 +158,8 @@ export type MediaMessageInput = {
   /** Local file URI (photo, video, or a recorded .m4a). */
   localUri: string;
   kind: "image" | "audio" | "video";
+  /** Snapchat-style: the recipient can open this photo exactly once. */
+  viewOnce?: boolean;
 };
 
 const MEDIA_CFG: Record<MediaMessageInput["kind"], { ext: string; type: string; label: string }> = {
@@ -169,7 +173,7 @@ export function useSendMediaMessage(conversationId?: string | null) {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
   return useMutation({
-    mutationFn: async ({ localUri, kind }: MediaMessageInput): Promise<void> => {
+    mutationFn: async ({ localUri, kind, viewOnce }: MediaMessageInput): Promise<void> => {
       if (!isSupabaseConfigured || !conversationId || !userId) {
         throw new Error("Not ready to send");
       }
@@ -192,8 +196,9 @@ export function useSendMediaMessage(conversationId?: string | null) {
         conversation_id: conversationId,
         sender_id: userId,
         // Placeholder text keeps inbox previews readable.
-        content: cfg.label,
-        media_url: path
+        content: viewOnce ? "Photo" : cfg.label,
+        media_url: path,
+        view_once: Boolean(viewOnce)
       });
       if (error) {
         await supabase.storage.from("messages").remove([path]).catch(() => {});
@@ -253,4 +258,19 @@ export function useMarkConversationRead(conversationId?: string | null, messageC
         }
       });
   }, [conversationId, userId, messageCount]);
+}
+
+/** Recipient opens a view-once photo — burn it (RPC guards participant/sender). */
+export function useMarkMessageViewed(conversationId?: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: string): Promise<void> => {
+      if (!isSupabaseConfigured) return;
+      const { error } = await supabase.rpc("mark_message_viewed", { p_message: messageId });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+    }
+  });
 }

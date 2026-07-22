@@ -302,7 +302,7 @@ export default function UserProfileScreen() {
                   <Pressable
                     key={post.id}
                     style={{ width: "33%", aspectRatio: 4 / 5 }}
-                    onPress={() => profile && router.push(`/profile-posts/${post.id}?user=${profile.id}` as Href)}
+                    onPress={() => router.push(`/profile-posts/${post.id}?user=${post.user_id}` as Href)}
                   >
                     <View style={{ flex: 1, backgroundColor: colors.graphite }}>
                       {post.media_url ? (

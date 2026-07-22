@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Eye, Flag, Heart, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -26,6 +26,8 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { useMarkStoryViewed, useStories, type StoryGroup } from "@/hooks/queries/useStories";
@@ -84,6 +86,7 @@ export default function StoryViewer() {
   const { user } = useLocalSearchParams<{ user?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
   const stories = useStories();
   const groups = stories.data;
   const markViewed = useMarkStoryViewed();
@@ -161,7 +164,7 @@ export default function StoryViewer() {
     canPrev.value = gi > 0 ? 1 : 0;
     canNext.value = queue && gi < queue.length - 1 ? 1 : 0;
   }, [gi, queue, canPrev, canNext]);
-  const viewers = useStoryViewers(story?.id, Boolean(group?.isMe) && viewersOpen);
+  const viewers = useStoryViewers(story?.id, Boolean(group?.isMe));
   const likers = useStoryLikers(story?.id, Boolean(group?.isMe) && viewersOpen);
   const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
   const toggleLike = useToggleStoryLike();
@@ -313,6 +316,11 @@ export default function StoryViewer() {
   // finger with a slight shrink, then flies off or springs back. The gesture
   // itself is composed in the useMemo below.
   const dragY = useSharedValue(0);
+  // Pinch-to-zoom (Instagram-style transient zoom): scale about the pinch
+  // focal point while the fingers are down, spring back to 1 on release.
+  const pinchScale = useSharedValue(1);
+  const pinchFocalX = useSharedValue(0);
+  const pinchFocalY = useSharedValue(0);
   // Swipe = jump to the next/previous PERSON's ring (4d). Stable identity (reads
   // nav state from the ref) so the gestures below never need to be rebuilt.
   const goNextPerson = useCallback(() => {
@@ -342,12 +350,18 @@ export default function StoryViewer() {
   // flash. Both happen in the same JS turn.
   const commitNext = useCallback(() => {
     goNextPerson();
-    panX.value = 0;
-  }, [goNextPerson, panX]);
+  }, [goNextPerson]);
   const commitPrev = useCallback(() => {
     goPrevPerson();
+  }, [goPrevPerson]);
+  // Recenter AFTER the new person's card has rendered — the peek image the
+  // finger revealed is identical to the incoming center, so snapping panX back
+  // in the same commit is invisible. Resetting inside commitNext (pre-render)
+  // flashed the OLD story back at center for a frame.
+  useLayoutEffect(() => {
     panX.value = 0;
-  }, [goPrevPerson, panX]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gi]);
 
   // Swipe up: on someone else's story → reply keyboard; on YOUR OWN → viewer
   // sheet (4e). Stable (reads group from the ref).
@@ -428,11 +442,42 @@ export default function StoryViewer() {
       .onEnd((e) => {
         if (e.translationY < -60 || e.velocityY < -700) runOnJS(swipeUpAction)();
       });
-    // Race: whichever direction activates first wins the touch.
-    return Gesture.Race(pageG, swipeDownG, swipeUpG);
-  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW]);
+    // Pinch-to-zoom — two fingers, so it never fights the single-finger pans.
+    const pinchG = Gesture.Pinch()
+      .onStart((e) => {
+        "worklet";
+        paging.value = 1; // pause the story timer while zooming
+        pinchFocalX.value = e.focalX;
+        pinchFocalY.value = e.focalY;
+      })
+      .onUpdate((e) => {
+        "worklet";
+        pinchScale.value = Math.max(1, Math.min(4, e.scale));
+      })
+      .onEnd(() => {
+        "worklet";
+        pinchScale.value = withSpring(1, { damping: 20, stiffness: 220 });
+        paging.value = 0;
+      });
+    // Race the one-finger directions; pinch runs alongside (two fingers).
+    return Gesture.Simultaneous(Gesture.Race(pageG, swipeDownG, swipeUpG), pinchG);
+  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW, pinchScale, pinchFocalX, pinchFocalY]);
 
   const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: panX.value }] }));
+
+  // Scale about the pinch focal point: translate focal→origin, scale, undo.
+  const zoomStyle = useAnimatedStyle(() => {
+    const sc = pinchScale.value;
+    return {
+      transform: [
+        { translateX: pinchFocalX.value },
+        { translateY: pinchFocalY.value },
+        { scale: sc },
+        { translateX: -pinchFocalX.value },
+        { translateY: -pinchFocalY.value }
+      ]
+    };
+  });
 
   const dragStyle = useAnimatedStyle(() => {
     const p = Math.min(1, dragY.value / 420);
@@ -482,9 +527,11 @@ export default function StoryViewer() {
             style={{ position: "absolute", top: 0, bottom: 0, left: screenW, width: screenW, backgroundColor: colors.black }}
           />
         ) : null}
+      {/* iOS: the reply bar is absolutely positioned, which KAV padding cannot
+          move — the explicit bottom offset below handles it instead. */}
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: colors.black }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? undefined : "height"}
       >
         {/* Spinner behind the media so opening a story never flashes blank. */}
         {story.mediaUrl && !mediaLoaded ? (
@@ -493,19 +540,21 @@ export default function StoryViewer() {
           </View>
         ) : null}
         {story.mediaUrl ? (
-          <Image
-            source={{ uri: story.mediaUrl }}
-            contentFit="contain"
-            transition={150}
-            cachePolicy="memory-disk"
-            priority="high"
-            onLoad={() => setMediaLoaded(true)}
-            // Reuse one decoded surface across stories (no reload flash) and let
-            // expo-image downscale big photos to the view — the main viewer cost.
-            recyclingKey={story.id}
-            allowDownscaling
-            style={{ position: "absolute", inset: 0 }}
-          />
+          <Animated.View pointerEvents="none" style={[{ position: "absolute", inset: 0 }, zoomStyle]}>
+            <Image
+              source={{ uri: story.mediaUrl }}
+              contentFit="contain"
+              transition={150}
+              cachePolicy="memory-disk"
+              priority="high"
+              onLoad={() => setMediaLoaded(true)}
+              // Reuse one decoded surface across stories (no reload flash) and let
+              // expo-image downscale big photos to the view — the main viewer cost.
+              recyclingKey={story.id}
+              allowDownscaling
+              style={{ flex: 1 }}
+            />
+          </Animated.View>
         ) : null}
 
         {/* Tap zones: left third = prev, right two-thirds = next; hold = pause. */}
@@ -662,18 +711,32 @@ export default function StoryViewer() {
         ) : null}
 
         {group.isMe ? (
-          <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 0, right: 0, alignItems: "center", gap: 12 }}>
+          // Slim own-story bar: viewer count left, compact Add right — the
+          // old centered stack sat on top of the photo and hid the count
+          // until the sheet was opened.
+          <View
+            style={{
+              position: "absolute",
+              bottom: insets.bottom + 16,
+              left: 14,
+              right: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between"
+            }}
+          >
             <Pressable
               onPress={() => {
                 setHeld(true);
                 setViewersOpen(true);
               }}
               accessibilityLabel="See who viewed your story"
+              hitSlop={8}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                <Eye size={16} color={colors.white} strokeWidth={2} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.55)" }}>
+                <Eye size={15} color={colors.white} strokeWidth={2} />
                 <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>
-                  Seen by
+                  {viewers.data?.length ? `Seen by ${viewers.data.length}` : "Seen by"}
                 </Text>
               </View>
             </Pressable>
@@ -684,9 +747,9 @@ export default function StoryViewer() {
               }}
               accessibilityLabel="Add another story"
             >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 44, paddingHorizontal: 22, borderRadius: 22, backgroundColor: colors.white }}>
-                <Plus size={17} color={colors.black} strokeWidth={2.6} />
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Add to story</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: 16, borderRadius: 19, backgroundColor: colors.white }}>
+                <Plus size={15} color={colors.black} strokeWidth={2.6} />
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: colors.black }}>Add</Text>
               </View>
             </Pressable>
           </View>
@@ -695,7 +758,9 @@ export default function StoryViewer() {
           <View
             style={{
               position: "absolute",
-              bottom: 0,
+              // KAV padding can't move an absolutely-positioned bar — pin it
+              // to the top of the keyboard ourselves.
+              bottom: Platform.OS === "ios" ? keyboardHeight : 0,
               left: 0,
               right: 0,
               paddingHorizontal: 14,

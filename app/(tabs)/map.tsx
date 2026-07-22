@@ -964,16 +964,16 @@ export default function MapTabScreen() {
               ) : null}
             </View>
             <Text style={{ marginTop: 2, fontFamily: NUM, fontSize: 12, color: colors.fog }}>
-              {`${relDay(workout.startedAt)} · ${timeLabel} · ${workout.totalSets} ${workout.totalSets === 1 ? "set" : "sets"}`}
+              {`${relDay(workout.startedAt)} · ${timeLabel} · ${workout.exerciseCount} ${workout.exerciseCount === 1 ? "exercise" : "exercises"}`}
             </Text>
           </View>
           <View style={{ alignItems: "flex-end", flexDirection: "row", gap: 8 }}>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={{ fontFamily: NUM, fontSize: 17, color: colors.white }}>
-                {workout.totalVolume > 0 ? workout.totalVolume.toLocaleString() : `${workout.exerciseCount}`}
+                {workout.totalSets > 0 ? `${workout.totalSets}` : `${workout.exerciseCount}`}
               </Text>
               <Micro style={{ marginTop: 1, letterSpacing: 0.5 }}>
-                {workout.totalVolume > 0 ? "lb vol" : "activities"}
+                {workout.totalSets > 0 ? (workout.totalSets === 1 ? "set" : "sets") : "activities"}
               </Micro>
             </View>
             <ChevronRight size={17} color={colors.slate} />

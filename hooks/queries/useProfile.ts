@@ -176,7 +176,13 @@ export function useUserStreak(userId?: string | null) {
 export type UserPost = Pick<
   Post,
   "id" | "media_url" | "caption" | "created_at" | "saved" | "permanent" | "is_daily_drop" | "media_type"
-> & { thumbnail_url: string | null };
+> & {
+  thumbnail_url: string | null;
+  /** Carousel photo paths (unsigned) — everything posted that day. */
+  media_urls?: string[] | null;
+  /** Workouts attached to the daily post — shown as extra archive slides. */
+  attached_workouts?: { id: string; name: string; duration_seconds: number; started_at: string; data: unknown }[] | null;
+};
 
 export function useUserPosts(userId?: string | null) {
   return useQuery({
@@ -198,21 +204,26 @@ export function useUserPosts(userId?: string | null) {
             permanent: post.permanent,
             is_daily_drop: post.is_daily_drop,
             media_type: post.media_type,
-            thumbnail_url: null
+            thumbnail_url: null,
+            media_urls: post.media_urls ?? null,
+            attached_workouts: null
           }));
       }
       // No expiry filter: your own archive keeps history (RLS already hides
       // other users' expired posts).
       const { data, error } = await supabase
         .from("posts")
-        .select("id, media_url, caption, created_at, saved, permanent, is_daily_drop, media_type, thumbnail_url")
+        .select(
+          "id, media_url, caption, created_at, saved, permanent, is_daily_drop, media_type, thumbnail_url, media_urls, attached_workouts:workouts!workouts_post_id_fkey(id, name, duration_seconds, started_at, data)"
+        )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(120);
       if (error) {
         throw error;
       }
-      const rows = data ?? [];
+      // Cast: generated types don't know the workouts.post_id FK (same as useFeed).
+      const rows = (data ?? []) as unknown as UserPost[];
       return Promise.all(
         rows.map(async (row) => {
           let mediaUrl = row.media_url;

@@ -87,14 +87,15 @@ function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState("Friends");
-  // Feed stays unlocked for a week after the last daily post (server-derived).
-  const { postedThisWeek } = usePostedState();
+  // Feed lock resets at LOCAL midnight (spec A): locked until today's post.
+  // Server truth (UTC timestamps compared in device tz) + optimistic local flag.
+  const { postedToday } = usePostedState();
   const sheet = useSheet();
   const feed = useFeed();
   const router = useRouter();
   const unreadCount = useActivityUnreadCount();
 
-  const locked = !postedThisWeek;
+  const locked = !postedToday;
   const userId = useAuthStore((state) => state.userId);
   const friends = useFriends();
   const friendIds = useMemo(() => new Set((friends.data ?? []).map((f) => f.id)), [friends.data]);
@@ -119,6 +120,16 @@ export default function HomeScreen() {
     const mapped = scoped.map(toMockShape);
     return shuffleSeed > 0 ? seededShuffle(mapped, shuffleSeed) : mapped;
   }, [feed.data, tab, userId, friendIds, shuffleSeed]);
+
+  // "X friends already went today" for the lock CTA (spec A).
+  const friendsPostedToday = useMemo(() => {
+    const today = new Date().toDateString();
+    const seen = new Set<string>();
+    for (const p of feed.data?.pages.flat() ?? []) {
+      if (friendIds.has(p.user_id) && new Date(p.created_at).toDateString() === today) seen.add(p.user_id);
+    }
+    return seen.size;
+  }, [feed.data, friendIds]);
 
   const listRef = useRef<React.ComponentRef<typeof FlashList<FeedMockPost>>>(null);
   // Tapping the Home tab while on the feed scrolls back to the top.
@@ -245,7 +256,7 @@ export default function HomeScreen() {
           )
         }
       />
-      {locked ? <LockOverlay /> : null}
+      {locked ? <LockOverlay friendsPostedToday={friendsPostedToday} /> : null}
     </View>
   );
 }

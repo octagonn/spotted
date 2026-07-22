@@ -321,11 +321,11 @@ export default function ProfileScreen() {
           </View>
         ) : grid === "posts" ? (
           gridPosts.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
               {gridPosts.map((post) => (
                 <Pressable
                   key={post.id}
-                  style={{ width: "33%", aspectRatio: 4 / 5 }}
+                  style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
                   onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
                 >
                   <GridCell post={post} />
@@ -341,11 +341,11 @@ export default function ProfileScreen() {
             </View>
           )
         ) : tagged.data?.length ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
             {tagged.data.map((post) => (
               <Pressable
                 key={post.id}
-                style={{ width: "33%", aspectRatio: 4 / 5 }}
+                style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
                 onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
               >
                 <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />

@@ -165,6 +165,7 @@ export default function WorkoutScreen() {
   const [customItems, setCustomItems] = useState<LibraryItem[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [a, setA] = useState("0");
+  const [logError, setLogError] = useState<string | null>(null);
   const [b, setB] = useState("0");
 
   // PR celebration overlay.
@@ -300,8 +301,6 @@ export default function WorkoutScreen() {
   const logSet = () => {
     const entry = active;
     if (!entry) return;
-    // Logging before pressing Start starts the clock implicitly.
-    startSession();
     let isPR = false;
     let prInfo: SessionPR | null = null;
     let newBest = 0;
@@ -309,7 +308,19 @@ export default function WorkoutScreen() {
     if (entry.kind === "lift") {
       const w = parseFloat(a) || 0;
       const r = parseInt(b, 10) || 0;
-      if (r <= 0) return;
+      // Hard caps (Trophy v2 spec A) — reject out of range, never clamp
+      // (clamping creates phantom PRs). Reps 1–200, weight 0–999 (0 = bodyweight).
+      if (r < 1 || r > 200) {
+        setLogError("Reps must be 1–200");
+        return;
+      }
+      if (w < 0 || w > 999) {
+        setLogError("Weight must be 0–999 lb");
+        return;
+      }
+      setLogError(null);
+      // Logging starts the clock implicitly (past validation now).
+      startSession();
       const repsGraded = isRepsGraded(entry.name);
       const metric = repsGraded ? r : w;
       const cur = useWorkoutSession.getState().bests[entry.name] ?? 0;
@@ -329,7 +340,12 @@ export default function WorkoutScreen() {
     } else {
       const mi = parseFloat(a) || 0;
       const min = parseInt(b, 10) || 0;
-      if (min <= 0) return;
+      if (min < 1 || min > 600) {
+        setLogError("Minutes must be 1–600");
+        return;
+      }
+      setLogError(null);
+      startSession();
       const cur = useWorkoutSession.getState().bests[entry.name] ?? 0;
       if (mi > cur && mi > 0) {
         isPR = true;
@@ -1026,6 +1042,11 @@ export default function WorkoutScreen() {
               </View>
 
               <View style={{ paddingHorizontal: 22, paddingTop: 14 }}>
+                {logError ? (
+                  <Text style={{ marginBottom: 8, textAlign: "center", fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: "#FF5C5C" }}>
+                    {logError}
+                  </Text>
+                ) : null}
                 <Pressable
                   onPress={logSet}
                   style={{ paddingVertical: 17, borderRadius: radius.md, backgroundColor: tokens.accent.gold, alignItems: "center" }}

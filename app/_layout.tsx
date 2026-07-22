@@ -221,7 +221,6 @@ export default function RootLayout() {
                 <Stack.Screen name="edit-profile" />
                 <Stack.Screen name="people/[type]" />
                 <Stack.Screen name="profile-posts/[postId]" />
-                <Stack.Screen name="admin/claims" />
                 <Stack.Screen name="community/[id]/members" />
                 {/* Regular card, not a native modal: native modals render above the
                     root-level toast host, so create errors/successes were invisible,

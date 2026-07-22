@@ -311,45 +311,6 @@ export type Database = {
         }
         Relationships: []
       }
-      trophy_claims: {
-        Row: {
-          id: string
-          user_id: string
-          post_id: string | null
-          trophy_id: string
-          claimed_value: number
-          status: string
-          reviewer_id: string | null
-          reason_id: string | null
-          reviewed_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          post_id?: string | null
-          trophy_id: string
-          claimed_value: number
-          status?: string
-          reviewer_id?: string | null
-          reason_id?: string | null
-          reviewed_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          post_id?: string | null
-          trophy_id?: string
-          claimed_value?: number
-          status?: string
-          reviewer_id?: string | null
-          reason_id?: string | null
-          reviewed_at?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
       admin_users: {
         Row: { user_id: string }
         Insert: { user_id: string }
@@ -1565,13 +1526,13 @@ export type Database = {
       regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
       join_community_by_code: { Args: { code: string }; Returns: string | null }
       nudge_community: { Args: { cid: string }; Returns: number }
+      evaluate_trophies: {
+        Args: { p_user: string }
+        Returns: { out_unlock_id: string; out_family_id: string; out_tier: number; out_name: string; out_metric: number }[]
+      }
       send_taunt_line: {
         Args: { p_target: string; p_line_id: string; p_line_text: string; p_since: string }
         Returns: string
-      }
-      review_trophy_claim: {
-        Args: { p_claim: string; p_approve: boolean; p_reason?: string | null }
-        Returns: undefined
       }
       wave_at_friend: { Args: { target: string; gym_name?: string | null }; Returns: undefined }
       search_profiles_fuzzy: {

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { CANONICAL_IS_REPS, CANONICAL_LIFT, type Muscle } from "@/lib/workoutLibrary";
-import { LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
+import { LIFT_OPTION_BY_ID, type LiftExercise } from "@/lib/liftCatalog";
 import type { TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import type { Json } from "@/types/database";
 
@@ -259,29 +259,38 @@ export function useSaveWorkout() {
         priorBest[row.exercise] = Math.max(priorBest[row.exercise] ?? 0, row.value);
       }
 
-      const celebrations: TrophyShareData[] = [];
+      // Log each genuine PR into user_lifts (the derived source of truth). The
+      // server cap guard rejects out-of-range values; skip those rather than
+      // failing the whole save.
       for (const [exercise, value] of Object.entries(sessionBest) as [LiftExercise, number][]) {
         const old = priorBest[exercise] ?? 0;
         if (value <= old) continue; // not a PR
         const option = LIFT_OPTION_BY_ID[exercise];
-        await supabase.from("user_lifts").insert({
-          user_id: input.userId,
-          exercise,
-          value,
-          unit: option?.unit ?? "lb",
-          post_id: null
+        await supabase
+          .from("user_lifts")
+          .insert({ user_id: input.userId, exercise, value, unit: option?.unit ?? "lb", post_id: null });
+      }
+
+      // Trophy unlocks come from the ONE engine (spec B) — idempotent, permanent,
+      // rule-driven. It returns only freshly-unlocked tiers for the animation
+      // queue. Highest tier per family first.
+      const celebrations: TrophyShareData[] = [];
+      const { data: unlocked } = await supabase.rpc("evaluate_trophies", { p_user: input.userId });
+      const rows = ((unlocked ?? []) as { out_family_id: string; out_name: string; out_tier: number }[]).sort(
+        (a, b) => b.out_tier - a.out_tier
+      );
+      const seenFamily = new Set<string>();
+      for (const row of rows) {
+        if (seenFamily.has(row.out_family_id)) continue; // one animation per family
+        seenFamily.add(row.out_family_id);
+        const option = LIFT_OPTION_BY_ID[row.out_family_id];
+        celebrations.push({
+          icon: option?.def.icon ?? "trophy",
+          name: row.out_name,
+          familyName: option?.name ?? row.out_family_id,
+          earnedAt: new Date().toISOString(),
+          rarityPct: 50
         });
-        const crossed = newlyUnlockedTiers(exercise, old, value);
-        if (crossed.length > 0 && option) {
-          const top = crossed[0];
-          celebrations.push({
-            icon: option.def.icon,
-            name: top.name,
-            familyName: option.name,
-            earnedAt: new Date().toISOString(),
-            rarityPct: top.rarityPct
-          });
-        }
       }
 
       return { workoutId: inserted.id, celebrations };

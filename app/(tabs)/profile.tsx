@@ -339,63 +339,6 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        {/* Posts / Split / Tagged tab bar — above the calendar (spec #1). */}
-        <View style={{ marginTop: SECTION, borderTopWidth: 1, borderTopColor: colors.graphite, flexDirection: "row" }}>
-          <ProfileTab active={grid === "posts"} icon={Grid3x3} label="POSTS" onPress={() => setGrid("posts")} />
-          <ProfileTab active={grid === "split"} icon={CalendarDays} label="SPLIT" onPress={() => setGrid("split")} />
-          <ProfileTab active={grid === "tagged"} icon={Tag} label="TAGGED" onPress={() => setGrid("tagged")} />
-        </View>
-        {grid === "split" ? (
-          <View style={{ paddingTop: 14 }}>
-            <WeeklySplit
-              workouts={workouts.data ?? []}
-              isLoading={workouts.isLoading}
-              ownProfile
-              splitPublic={profile?.split_public ?? true}
-              onTogglePublic={(next) => setSplitPublic.mutate(next)}
-            />
-          </View>
-        ) : grid === "posts" ? (
-          gridPosts.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
-              {gridPosts.map((post) => (
-                <Pressable
-                  key={post.id}
-                  style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
-                  onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
-                >
-                  <GridCell post={post} />
-                </Pressable>
-              ))}
-            </View>
-          ) : (
-            <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-              {posts.isLoading ? null : <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
-              <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-                {posts.isLoading ? "Loading your posts…" : "No posts yet"}
-              </Text>
-            </View>
-          )
-        ) : tagged.data?.length ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
-            {tagged.data.map((post) => (
-              <Pressable
-                key={post.id}
-                style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
-                onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
-              >
-                <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />
-              </Pressable>
-            ))}
-          </View>
-        ) : (
-          <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-            {tagged.isLoading ? null : <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
-            <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-              {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet"}
-            </Text>
-          </View>
-        )}
         {/* Streak calendar — the hero, the one contained surface. Collapsible;
             the header row always shows so it can be reopened. */}
         <View style={{ paddingTop: SECTION }}>
@@ -454,6 +397,63 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* Posts / Split / Tagged tab bar — below the calendar + trophies. */}
+        <View style={{ marginTop: SECTION, borderTopWidth: 1, borderTopColor: colors.graphite, flexDirection: "row" }}>
+          <ProfileTab active={grid === "posts"} icon={Grid3x3} label="POSTS" onPress={() => setGrid("posts")} />
+          <ProfileTab active={grid === "split"} icon={CalendarDays} label="SPLIT" onPress={() => setGrid("split")} />
+          <ProfileTab active={grid === "tagged"} icon={Tag} label="TAGGED" onPress={() => setGrid("tagged")} />
+        </View>
+        {grid === "split" ? (
+          <View style={{ paddingTop: 14 }}>
+            <WeeklySplit
+              workouts={workouts.data ?? []}
+              isLoading={workouts.isLoading}
+              ownProfile
+              splitPublic={profile?.split_public ?? true}
+              onTogglePublic={(next) => setSplitPublic.mutate(next)}
+            />
+          </View>
+        ) : grid === "posts" ? (
+          gridPosts.length ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
+              {gridPosts.map((post) => (
+                <Pressable
+                  key={post.id}
+                  style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
+                  onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
+                >
+                  <GridCell post={post} />
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
+              {posts.isLoading ? null : <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+              <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
+                {posts.isLoading ? "Loading your posts…" : "No posts yet"}
+              </Text>
+            </View>
+          )
+        ) : tagged.data?.length ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
+            {tagged.data.map((post) => (
+              <Pressable
+                key={post.id}
+                style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
+                onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
+              >
+                <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
+            {tagged.isLoading ? null : <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+            <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
+              {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet"}
+            </Text>
+          </View>
+        )}
       </ScrollView>
       <StreakPopup
         visible={streakOpen}

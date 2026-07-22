@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { ChevronRight, FolderPlus, Inbox, Mail, X } from "lucide-react-native";
+import { ChevronRight, FolderPlus, Mail, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Platform, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,7 +20,6 @@ import { SearchBar } from "@/components/ui/SearchBar";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { Segmented } from "@/components/ui/Segmented";
 import { useStartedThreads } from "@/hooks/useStartedThreads";
-import { useActivityUnreadCount } from "@/hooks/queries/useNotifications";
 import {
   useFriendSuggestions,
   useFriends,
@@ -255,7 +254,6 @@ export default function FriendsScreen() {
           >
             Friends
           </Text>
-          <InboxButton onPress={() => router.push("/inbox")} />
         </View>
         <Segmented options={["Messages", "Find Friends"]} value={tab} onChange={setTab} />
 
@@ -585,45 +583,3 @@ function FolderChip({ label, on, onPress }: { label: string; on: boolean; onPres
   );
 }
 
-function InboxButton({ onPress }: { onPress: () => void }) {
-  const unread = useActivityUnreadCount();
-  return (
-    <Pressable onPress={onPress} accessibilityLabel="Activity" hitSlop={8}>
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          borderWidth: 1,
-          borderColor: colors.iron,
-          alignItems: "center",
-          justifyContent: "center"
-        }}
-      >
-        <Inbox size={19} color={colors.white} strokeWidth={2} />
-        {unread > 0 ? (
-          <View
-            style={{
-              position: "absolute",
-              top: -3,
-              right: -3,
-              minWidth: 18,
-              height: 18,
-              borderRadius: 9,
-              paddingHorizontal: 4,
-              backgroundColor: colors.white,
-              borderWidth: 2,
-              borderColor: colors.black,
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 9.5, color: colors.black }}>
-              {unread > 9 ? "9+" : unread}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
-  );
-}

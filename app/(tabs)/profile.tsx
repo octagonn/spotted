@@ -27,6 +27,7 @@ import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
 import { useTrophyProgress } from "@/hooks/useTrophyProgress";
 import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
 import { computeGymStreak } from "@/lib/streak";
+import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import { radius as R, tokens } from "@/theme/tokens";
 
@@ -440,7 +441,11 @@ export default function ProfileScreen() {
               <Pressable
                 key={post.id}
                 style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
-                onPress={() => router.push(`/profile-posts/${post.id}?user=${post.user_id}` as Href)}
+                onPress={() =>
+                  router.push(
+                    `/daily/${localDateKey(new Date(post.created_at))}?user=${post.user_id}&post=${post.id}` as Href
+                  )
+                }
               >
                 <GridCell post={{ ...post, media_type: (post as { media_type?: string }).media_type ?? "image", thumbnail_url: (post as { thumbnail_url?: string | null }).thumbnail_url ?? null }} />
               </Pressable>

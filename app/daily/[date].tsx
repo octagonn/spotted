@@ -1,89 +1,109 @@
-import { Image } from "expo-image";
+import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMemo } from "react";
+import { Text, View } from "react-native";
 
+import { PostCard } from "@/components/post/PostCard";
+import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
 import { PanelHeader } from "@/components/ui/PanelHeader";
-import { useMyProfile, useUserPosts } from "@/hooks/queries/useProfile";
-import { signedPostUrl } from "@/lib/supabase";
+import { useSheet } from "@/components/ui/Sheet";
+import { useMyProfile, useProfileById } from "@/hooks/queries/useProfile";
+import { useSignedUserPosts, type SignedPost } from "@/hooks/queries/useSignedUserPosts";
+import { type FeedMockPost } from "@/lib/redesignData";
 import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export default function DailyPostScreen() {
-  const { date = "" } = useLocalSearchParams<{ date: string }>();
-  const insets = useSafeAreaInsets();
-  const profile = useMyProfile();
-  const posts = useUserPosts(profile.data?.id);
-  const [mediaUri, setMediaUri] = useState<string | null>(null);
+/** "9:41 AM" stamp for a same-day post. */
+function timeOf(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * Day viewer (rework 1a): a calendar day is the unit of history. Opening a day
+ * shows EVERY post from that local date — each as the full feed card with its
+ * photo carousel + attached workout slides — oldest first, so the day reads
+ * top to bottom. `?user=<id>` opens someone else's day (RLS gates visibility);
+ * `?post=<id>` lands on a specific post within the day.
+ */
+export default function DayScreen() {
+  const { date = "", user, post } = useLocalSearchParams<{ date: string; user?: string; post?: string }>();
+  const sheet = useSheet();
+  const myProfile = useMyProfile();
+  const otherProfile = useProfileById(user);
+  const ownerId = user ?? myProfile.data?.id;
+  const owner = user ? otherProfile.data : myProfile.data;
+  const posts = useSignedUserPosts(ownerId);
 
   const parts = date.split("-").map(Number);
   const day = Number.isFinite(parts[2]) ? parts[2] : 1;
   const month = MONTHS[(parts[1] || 1) - 1] ?? "";
 
-  const dayPost = (posts.data ?? []).find((post) => localDateKey(new Date(post.created_at)) === date);
+  const name = owner?.display_name ?? "You";
+  const handle = owner?.username ?? "you";
+  const avatarUrl = owner?.avatar_url ?? null;
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!dayPost?.media_url) {
-        setMediaUri(null);
-        return;
-      }
-      if (dayPost.media_url.startsWith("http")) {
-        setMediaUri(dayPost.media_url);
-        return;
-      }
-      try {
-        const url = await signedPostUrl(dayPost.media_url);
-        if (!cancelled) setMediaUri(url);
-      } catch {
-        if (!cancelled) setMediaUri(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [dayPost?.media_url]);
+  // Every post from this local day, oldest first.
+  const dayPosts = useMemo(
+    () =>
+      (posts.data ?? [])
+        .filter((p) => p.media_url && localDateKey(new Date(p.created_at)) === date)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    [posts.data, date]
+  );
+
+  const feedPosts: FeedMockPost[] = useMemo(
+    () =>
+      dayPosts.map((p: SignedPost) => ({
+        id: p.id,
+        kind: "fb",
+        user: { name, handle, avatarUrl },
+        time: timeOf(p.created_at),
+        mediaUri: p.media_url ?? undefined,
+        mediaUris: p.media_urls?.length ? p.media_urls : undefined,
+        workouts: p.workouts.length ? p.workouts : undefined,
+        caption: p.caption ?? undefined,
+        reactions: [],
+        comments: []
+      })),
+    [dayPosts, name, handle, avatarUrl]
+  );
+
+  const initialIndex = Math.max(
+    0,
+    feedPosts.findIndex((p) => p.id === post)
+  );
+
+  const openReactionCapture = (id: string) => {
+    sheet.open(<ReactionCaptureSheet postId={id} onClose={sheet.close} />);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
-        <PanelHeader title="Daily post" sub={`${day} ${month}`} />
-        {!dayPost ? (
-          <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
-            {posts.isLoading ? "Loading…" : "No post saved for this day."}
-          </Text>
-        ) : (
-          <>
-            <View
-              style={{
-                marginHorizontal: 18,
-                marginTop: 8,
-                aspectRatio: 3 / 3.6,
-                borderRadius: 16,
-                overflow: "hidden",
-                backgroundColor: colors.graphite
-              }}
-            >
-              {mediaUri ? (
-                <Image source={{ uri: mediaUri }} contentFit="cover" style={{ flex: 1 }} transition={150} />
-              ) : null}
-            </View>
-            {dayPost.caption ? (
-              <Text style={{ paddingHorizontal: 18, paddingTop: 12, fontSize: 13.5, lineHeight: 19, color: colors.mist }}>
-                <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>
-                  {profile.data?.username ?? ""}
-                </Text>
-                {"  "}
-                {dayPost.caption}
-              </Text>
-            ) : null}
-          </>
+      <PanelHeader
+        title={`${month} ${day}`}
+        sub={
+          feedPosts.length
+            ? `@${handle} · ${feedPosts.length} ${feedPosts.length === 1 ? "post" : "posts"}`
+            : `@${handle}`
+        }
+      />
+      <FlashList
+        data={feedPosts}
+        keyExtractor={(item: FeedMockPost) => item.id}
+        initialScrollIndex={initialIndex}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        renderItem={({ item }: { item: FeedMockPost }) => (
+          <PostCard post={item} locked={false} onReact={openReactionCapture} />
         )}
-      </ScrollView>
+        ListEmptyComponent={
+          <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
+            {posts.isLoading ? "Loading…" : "No posts saved for this day."}
+          </Text>
+        }
+      />
     </View>
   );
 }

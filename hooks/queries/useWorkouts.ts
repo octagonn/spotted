@@ -65,6 +65,88 @@ function parseWorkoutData(data: unknown): { exercises: WorkoutExercise[]; prs: S
   return { exercises: [], prs: [] };
 }
 
+/** Done-set totals for a workout's exercises (shared by save + edit). */
+export function computeWorkoutTotals(exercises: WorkoutExercise[]) {
+  let totalVolume = 0;
+  let totalSets = 0;
+  let cardioMinutes = 0;
+  let exerciseCount = 0;
+  for (const ex of exercises) {
+    if (ex.sets.some((set) => set.done)) exerciseCount += 1;
+    for (const set of ex.sets) {
+      if (!set.done) continue;
+      totalSets += 1;
+      if (ex.kind === "cardio") cardioMinutes += (set as CardioSet).min;
+      else totalVolume += (set as LiftSet).w * (set as LiftSet).r;
+    }
+  }
+  return { totalVolume, totalSets, cardioMinutes, exerciseCount };
+}
+
+/**
+ * Edit a logged workout (3a): overwrite name + exercises and recompute the
+ * stored aggregates. started_at/duration are preserved — an edit corrects the
+ * log, it doesn't re-time the session. Trophies/PRs already earned stay
+ * (permanent by spec), so no user_lifts writes happen here.
+ */
+export function useUpdateWorkout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      workoutId,
+      name,
+      exercises,
+      prs
+    }: {
+      workoutId: string;
+      name: string;
+      exercises: WorkoutExercise[];
+      /** Original session PRs — preserved through the edit. */
+      prs: SessionPR[];
+    }) => {
+      const totals = computeWorkoutTotals(exercises);
+      const { error } = await supabase
+        .from("workouts")
+        .update({
+          name: name.trim() || "Workout",
+          total_volume: totals.totalVolume,
+          total_sets: totals.totalSets,
+          cardio_minutes: totals.cardioMinutes,
+          exercise_count: totals.exerciseCount,
+          data: { exercises, prs } as unknown as Json
+        })
+        .eq("id", workoutId);
+      if (error) throw error;
+    },
+    onSuccess: (_r, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ["workout", vars.workoutId] });
+      void queryClient.invalidateQueries({ queryKey: ["workouts"] });
+      void queryClient.invalidateQueries({ queryKey: ["feed"] });
+    }
+  });
+}
+
+/**
+ * Delete a workout (3a): hard delete. If it was attached to a daily post the
+ * slide disappears with the row (the feed embeds workouts by post_id join).
+ * Trophies earned from it are permanent and stay.
+ */
+export function useDeleteWorkout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (workoutId: string) => {
+      const { error } = await supabase.from("workouts").delete().eq("id", workoutId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["workouts"] });
+      void queryClient.invalidateQueries({ queryKey: ["feed"] });
+      void queryClient.invalidateQueries({ queryKey: ["signed-user-posts"] });
+      void queryClient.invalidateQueries({ queryKey: ["user-posts"] });
+    }
+  });
+}
+
 /** Recent workouts for a user (self or a friend, per RLS). Newest first. */
 export function useWorkouts(userId?: string | null) {
   return useQuery({

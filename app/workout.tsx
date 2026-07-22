@@ -39,6 +39,8 @@ import {
   useRenameWorkout,
   useSaveWorkout,
   useTodayDailyPost,
+  useUpdateWorkout,
+  useWorkout,
   useWorkouts,
   type CardioSet,
   type LiftSet,
@@ -136,8 +138,13 @@ export default function WorkoutScreen() {
   const router = useRouter();
   // daily=1 → this workout is tied to today's daily post: finishing prompts
   // the daily photo, and publishing attaches this workout as a feed slide.
-  const params = useLocalSearchParams<{ daily?: string }>();
+  const params = useLocalSearchParams<{ daily?: string; edit?: string }>();
   const dailyTied = params.daily === "1";
+  // Edit mode (3a): /workout?edit=<id> opens this same logger pre-filled from
+  // the saved workout; finishing overwrites the row instead of inserting.
+  const editingId = typeof params.edit === "string" && params.edit ? params.edit : null;
+  const editTarget = useWorkout(editingId);
+  const updateWorkout = useUpdateWorkout();
   const userId = useAuthStore((s) => s.userId);
   const saveWorkout = useSaveWorkout();
 
@@ -230,6 +237,22 @@ export default function WorkoutScreen() {
   // header). Empty = default sessionTitle at save time.
   const [customName, setCustomName] = useState("");
   const [namingLive, setNamingLive] = useState(false);
+  // One-shot hydration of the session store from the workout being edited.
+  const hydratedEditRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editingId || !editTarget.data || hydratedEditRef.current === editingId) return;
+    const live = useWorkoutSession.getState();
+    if (live.active && live.exercises.some((ex) => ex.sets.length > 0)) {
+      showToast("Finish your current workout before editing an old one");
+      router.back();
+      return;
+    }
+    hydratedEditRef.current = editingId;
+    const saved = editTarget.data;
+    live.start();
+    live.setExercises(() => saved.exercises);
+    setCustomName(saved.name);
+  }, [editingId, editTarget.data, router]);
 
   const exercises = session.exercises;
   const active = exercises.find((e) => e.id === activeId) ?? null;
@@ -422,6 +445,27 @@ export default function WorkoutScreen() {
 
   const finish = async () => {
     if (totals.sets === 0 || !userId || saving) return;
+    if (editingId && editTarget.data) {
+      // Edit: overwrite the logged workout; aggregates recompute in the hook.
+      // Time/PRs are preserved; trophies already earned are permanent.
+      setSaving(true);
+      const logged = exercises.filter((e) => e.sets.length > 0);
+      updateWorkout.mutate(
+        { workoutId: editingId, name: customName.trim() || editTarget.data.name, exercises: logged, prs: editTarget.data.prs },
+        {
+          onSuccess: () => {
+            session.clear();
+            showToast("Workout updated");
+            router.back();
+          },
+          onError: () => {
+            setSaving(false);
+            showToast("Couldn't save changes — try again");
+          }
+        }
+      );
+      return;
+    }
     setSaving(true);
     const hasLift = exercises.some((e) => e.kind === "lift" && e.sets.length > 0);
     const hasCardio = exercises.some((e) => e.kind === "cardio" && e.sets.length > 0);
@@ -898,7 +942,7 @@ export default function WorkoutScreen() {
             }}
           >
             <Text style={{ fontFamily: DISP, fontSize: 16, color: totals.sets > 0 ? colors.black : tokens.text.tertiary }}>
-              {saving ? "Saving…" : "Finish workout"}
+              {saving ? "Saving…" : editingId ? "Save changes" : "Finish workout"}
             </Text>
           </Pressable>
         ) : (

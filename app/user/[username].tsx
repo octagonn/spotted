@@ -26,6 +26,7 @@ import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
 import { computeGymStreak } from "@/lib/streak";
 import { useAuthStore } from "@/stores/auth";
 import { relationshipButton, useRelationships } from "@/stores/relationships";
+import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import type { RelationshipState } from "@/types/redesign";
 
@@ -264,7 +265,7 @@ export default function UserProfileScreen() {
                 <StreakCalendar
                   days={streakDays.data ?? new Map()}
                   createdAt={profile?.created_at}
-                  onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
+                  onDayPress={(dateKey) => profile && router.push(`/daily/${dateKey}?user=${profile.id}` as Href)}
                 />
               </View>
             </View>
@@ -302,7 +303,11 @@ export default function UserProfileScreen() {
                   <Pressable
                     key={post.id}
                     style={{ width: "33%", aspectRatio: 4 / 5 }}
-                    onPress={() => router.push(`/profile-posts/${post.id}?user=${post.user_id}` as Href)}
+                    onPress={() =>
+                      router.push(
+                        `/daily/${localDateKey(new Date(post.created_at))}?user=${post.user_id}&post=${post.id}` as Href
+                      )
+                    }
                   >
                     <View style={{ flex: 1, backgroundColor: colors.graphite }}>
                       {post.media_url ? (

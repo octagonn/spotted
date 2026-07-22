@@ -1,10 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Dumbbell, Flame, Pencil, Trophy } from "lucide-react-native";
+import { ChevronLeft, Dumbbell, Flame, Pencil, SquarePen, Trash2, Trophy } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useRenameWorkout, useWorkout, type CardioSet, type LiftSet } from "@/hooks/queries/useWorkouts";
+import { useDeleteWorkout, useRenameWorkout, useWorkout, type CardioSet, type LiftSet } from "@/hooks/queries/useWorkouts";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
 import { fmtClock } from "@/lib/workoutLibrary";
@@ -41,8 +41,33 @@ export default function WorkoutDetailScreen() {
   const workout = useWorkout(id);
   const myId = useAuthStore((state) => state.userId);
   const rename = useRenameWorkout();
+  const deleteWorkout = useDeleteWorkout();
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+
+  const confirmDelete = (workoutId: string, attachedToPost: boolean) => {
+    Alert.alert(
+      "Delete workout?",
+      attachedToPost
+        ? "It comes off your daily post too. Trophies you earned from it stay."
+        : "It disappears from your history. Trophies you earned from it stay.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () =>
+            deleteWorkout.mutate(workoutId, {
+              onSuccess: () => {
+                showToast("Workout deleted");
+                router.back();
+              },
+              onError: () => showToast("Couldn't delete — try again")
+            })
+        }
+      ]
+    );
+  };
 
   if (workout.isLoading) {
     return (
@@ -116,6 +141,26 @@ export default function WorkoutDetailScreen() {
                 </Pressable>
               ) : null}
               <View style={{ flex: 1 }} />
+              {w.userId === myId ? (
+                <>
+                  <Pressable
+                    accessibilityLabel="Edit workout"
+                    onPress={() => router.push(`/workout?edit=${w.id}`)}
+                    hitSlop={10}
+                    style={{ padding: 4 }}
+                  >
+                    <SquarePen size={19} color={tokens.text.secondary} strokeWidth={2} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="Delete workout"
+                    onPress={() => confirmDelete(w.id, Boolean(w.postId))}
+                    hitSlop={10}
+                    style={{ padding: 4 }}
+                  >
+                    <Trash2 size={19} color="#E5484D" strokeWidth={2} />
+                  </Pressable>
+                </>
+              ) : null}
             </>
           )}
         </View>

@@ -1,5 +1,5 @@
 import { FlashList } from "@shopify/flash-list";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, type Href } from "expo-router";
 import { useMemo } from "react";
 import { Text, View } from "react-native";
 
@@ -10,6 +10,7 @@ import { useSheet } from "@/components/ui/Sheet";
 import { useMyProfile, useProfileById } from "@/hooks/queries/useProfile";
 import { useSignedUserPosts, type SignedPost } from "@/hooks/queries/useSignedUserPosts";
 import { type FeedMockPost } from "@/lib/redesignData";
+import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 
 /** Relative "3h"/"2d" stamp — matches the home feed's formatting. */
@@ -72,9 +73,28 @@ export default function ProfilePostsScreen() {
     sheet.open(<ReactionCaptureSheet postId={id} onClose={sheet.close} />);
   };
 
+  // Day-group context (1a): jump from this single-post scroll to the full day
+  // the tapped post belongs to.
+  const tapped = list.find((p) => p.id === postId);
+  const openFullDay = () => {
+    if (!tapped || !ownerId) return;
+    const key = localDateKey(new Date(tapped.created_at));
+    router.push(`/daily/${key}?user=${ownerId}&post=${tapped.id}` as Href);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      <PanelHeader title="Posts" sub={`@${handle}`} />
+      <PanelHeader
+        title="Posts"
+        sub={`@${handle}`}
+        right={
+          tapped ? (
+            <Text onPress={openFullDay} accessibilityRole="button" style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.silver }}>
+              See full day
+            </Text>
+          ) : undefined
+        }
+      />
       <FlashList
         data={feedPosts}
         keyExtractor={(item: FeedMockPost) => item.id}

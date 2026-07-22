@@ -14,8 +14,8 @@ export function useFriends() {
       if (!isSupabaseConfigured) {
         return mockProfiles.slice(1);
       }
-      const userResult = await supabase.auth.getUser();
-      const userId = userResult.data.user?.id;
+      // Local session state — auth.getUser() is a network round-trip per call.
+      const userId = useAuthStore.getState().userId;
       if (!userId) {
         return [];
       }
@@ -52,8 +52,8 @@ export function useSearchPeople(query: string) {
     enabled: isSupabaseConfigured && cleaned.length >= 2,
     staleTime: 30_000,
     queryFn: async (): Promise<Pick<Profile, "id" | "username" | "display_name" | "avatar_url">[]> => {
-      const userResult = await supabase.auth.getUser();
-      const userId = userResult.data.user?.id;
+      // Local session state — auth.getUser() is a network round-trip per call.
+      const userId = useAuthStore.getState().userId;
       // Typo-tolerant trigram search, similarity-ranked (pg_trgm RPC).
       const { data, error } = await supabase.rpc("search_profiles_fuzzy", { q: cleaned, max_rows: 20 });
       if (error) {
@@ -97,8 +97,8 @@ export function useIncomingRequests() {
       if (!isSupabaseConfigured) {
         return [];
       }
-      const userResult = await supabase.auth.getUser();
-      const userId = userResult.data.user?.id;
+      // Local session state — auth.getUser() is a network round-trip per call.
+      const userId = useAuthStore.getState().userId;
       if (!userId) {
         return [];
       }
@@ -122,13 +122,15 @@ export function useIncomingRequests() {
 
 export function useRespondToRequest() {
   const queryClient = useQueryClient();
+  const authUserId = useAuthStore((state) => state.userId);
   return useMutation({
     mutationFn: async ({ requesterId, accept }: { requesterId: string; accept: boolean }) => {
       if (!isSupabaseConfigured) {
         return;
       }
-      const user = await supabase.auth.getUser();
-      const userId = user.data.user?.id;
+      // Local auth state — supabase.auth.getUser() here was a full network
+      // round-trip to the auth server per tap (the "10s to accept" lag).
+      const userId = authUserId ?? useAuthStore.getState().userId;
       if (!userId) {
         return;
       }
@@ -149,9 +151,23 @@ export function useRespondToRequest() {
         throw error;
       }
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
-      await queryClient.invalidateQueries({ queryKey: ["friends"] });
+    // Optimistic: the request row disappears the instant the button is tapped.
+    onMutate: async ({ requesterId }) => {
+      await queryClient.cancelQueries({ queryKey: ["friend-requests"] });
+      const prev = queryClient.getQueriesData<IncomingRequest[]>({ queryKey: ["friend-requests"] });
+      queryClient.setQueriesData<IncomingRequest[]>({ queryKey: ["friend-requests"] }, (old) =>
+        (old ?? []).filter((request) => request.requesterId !== requesterId)
+      );
+      return { prev };
+    },
+    onError: (_error, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+    },
+    onSettled: () => {
+      // Fire-and-forget refresh — nothing blocks the UI on these refetches.
+      void queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["friends"] });
+      void queryClient.invalidateQueries({ queryKey: ["user-counts"] });
     }
   });
 }
@@ -163,8 +179,8 @@ export function useSendFriendRequest() {
       if (!isSupabaseConfigured) {
         return;
       }
-      const user = await supabase.auth.getUser();
-      const userId = user.data.user?.id;
+      // Local session state — auth.getUser() is a network round-trip per call.
+      const userId = useAuthStore.getState().userId;
       if (!userId) {
         return;
       }

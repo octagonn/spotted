@@ -105,8 +105,8 @@ export function useMarkPostViewed() {
       if (!isSupabaseConfigured) {
         return;
       }
-      const user = await supabase.auth.getUser();
-      const userId = user.data.user?.id;
+      // Local session state — auth.getUser() is a network round-trip per call.
+      const userId = useAuthStore.getState().userId;
       if (!userId) {
         return;
       }

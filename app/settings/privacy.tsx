@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { View } from "react-native";
+import { router, type Href } from "expo-router";
 
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/ui/BackButton";
@@ -12,7 +13,11 @@ import type { Database } from "@/types/database";
 
 type ScheduleVisibility = Database["public"]["Enums"]["schedule_visibility"];
 
+type LocationAudience = "friends" | "close_friends" | "nobody";
 type PrivacySettings = {
+  is_private: boolean;
+  location_audience: LocationAudience;
+  quiet_checkin_default: boolean;
   ghost_mode: boolean;
   discoverable: boolean;
   schedule_visibility: ScheduleVisibility;
@@ -22,6 +27,9 @@ type PrivacySettings = {
 };
 
 const defaultSettings: PrivacySettings = {
+  is_private: true,
+  location_audience: "friends",
+  quiet_checkin_default: false,
   ghost_mode: false,
   discoverable: true,
   schedule_visibility: "friends",
@@ -63,13 +71,13 @@ export default function PrivacySettingsScreen() {
       }
       const { data, error } = await supabase
         .from("profiles")
-        .select("ghost_mode, discoverable, schedule_visibility, arrival_notifs_enabled, show_activity, dm_preview_enabled")
+        .select("is_private, location_audience, quiet_checkin_default, ghost_mode, discoverable, schedule_visibility, arrival_notifs_enabled, show_activity, dm_preview_enabled")
         .eq("id", userId as string)
         .maybeSingle();
       if (error) {
         throw error;
       }
-      return data ?? defaultSettings;
+      return (data as PrivacySettings | null) ?? defaultSettings;
     }
   });
 
@@ -106,7 +114,7 @@ export default function PrivacySettingsScreen() {
 
   const settings = settingsQuery.data ?? defaultSettings;
 
-  function toggle(key: "ghost_mode" | "discoverable" | "arrival_notifs_enabled" | "show_activity" | "dm_preview_enabled") {
+  function toggle(key: "is_private" | "quiet_checkin_default" | "ghost_mode" | "discoverable" | "arrival_notifs_enabled" | "show_activity" | "dm_preview_enabled") {
     updateSettings.mutate({ [key]: !settings[key] });
   }
 
@@ -115,6 +123,53 @@ export default function PrivacySettingsScreen() {
       <BackButton fallback="/settings" style={{ marginBottom: 18 }} />
       <Text variant="display-sm">PRIVACY</Text>
       <View className="mt-8 gap-3">
+        <View className="flex-row items-center border border-hairline-strong bg-ink p-4">
+          <View className="flex-1 pr-4">
+            <Text variant="body-strong">Private account</Text>
+            <Text variant="caption" className="mt-2">
+              People can find you by username, but must be approved to see your posts, gyms, streak, and friends.
+            </Text>
+          </View>
+          <Toggle value={settings.is_private} onToggle={() => updateSettings.mutate({ is_private: !settings.is_private, discoverable: settings.is_private })} />
+        </View>
+
+        <View className="border border-hairline-strong bg-ink p-4">
+          <Text variant="body-strong">Who can see my check-ins</Text>
+          <Text variant="caption" className="mt-2">
+            Your gym location is never public — only these people see it.
+          </Text>
+          <View className="mt-4 flex-row gap-2">
+            {(["friends","close_friends","nobody"] as const).map((option) => (
+              <Chip
+                key={option}
+                selected={settings.location_audience === option}
+                onPress={() => updateSettings.mutate({ location_audience: option })}
+              >
+                {option === "close_friends" ? "CLOSE FRIENDS" : option.toUpperCase()}
+              </Chip>
+            ))}
+          </View>
+        </View>
+
+        <View className="flex-row items-center border border-hairline-strong bg-ink p-4">
+          <View className="flex-1 pr-4">
+            <Text variant="body-strong">Quiet check-in by default</Text>
+            <Text variant="caption" className="mt-2">
+              Log your streak and unlock the feed without posting or notifying anyone.
+            </Text>
+          </View>
+          <Toggle value={settings.quiet_checkin_default} onToggle={() => toggle("quiet_checkin_default")} />
+        </View>
+
+        <Pressable onPress={() => router.push("/settings/blocked" as Href)} className="flex-row items-center border border-hairline-strong bg-ink p-4">
+          <Text variant="body-strong" className="flex-1">Blocked accounts</Text>
+          <Text variant="caption">Manage</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push("/settings/restricted" as Href)} className="flex-row items-center border border-hairline-strong bg-ink p-4">
+          <Text variant="body-strong" className="flex-1">Restricted accounts</Text>
+          <Text variant="caption">Manage</Text>
+        </Pressable>
+
         <View className="flex-row items-center border border-hairline-strong bg-ink p-4">
           <View className="flex-1 pr-4">
             <Text variant="body-strong">Ghost mode</Text>

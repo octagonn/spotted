@@ -1,7 +1,7 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { LinearGradient } from "expo-linear-gradient";
 import { Tabs, useRouter } from "expo-router";
-import { Camera, Dumbbell, House, User, Users } from "lucide-react-native";
+import { Camera, Dumbbell, House, Send, User } from "lucide-react-native";
 import { Pressable as RNPressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -21,7 +21,7 @@ function TabIcon({ name, focused }: { name: TabName; focused: boolean }) {
   const color = focused ? tokens.text.primary : tokens.text.tertiary;
   const size = 28;
   if (name === "feed") return <House color={color} size={size} strokeWidth={2} />;
-  if (name === "friends") return <Users color={color} size={size} strokeWidth={2} />;
+  if (name === "friends") return <Send color={color} size={size} strokeWidth={2} />;
   if (name === "map") return <Dumbbell color={color} size={size} strokeWidth={2} />;
   return <User color={color} size={size} strokeWidth={2} />;
 }

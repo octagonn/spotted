@@ -34,6 +34,7 @@ import { useInAppBanners } from "@/hooks/useInAppBanners";
 import { usePresenceSync } from "@/hooks/useGeofence";
 import { useRealtime } from "@/hooks/useRealtime";
 import { usePushTokenSync } from "@/lib/notifications";
+import { useRestoreOnLogin } from "@/hooks/useRestoreOnLogin";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { useRelationshipsStore } from "@/stores/relationships";
@@ -94,6 +95,7 @@ function AppServices() {
   useRealtime(activeUserId);
   useInAppBanners(activeUserId);
   usePushTokenSync(activeUserId);
+  useRestoreOnLogin(activeUserId);
   usePresenceSync();
   // Instant own-profile loads: snapshot profile queries to disk, seed at start.
   useProfileCache();

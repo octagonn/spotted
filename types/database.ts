@@ -1640,6 +1640,10 @@ export type Database = {
       unblock_user: { Args: { p_target: string }; Returns: undefined }
       restrict_user: { Args: { p_target: string }; Returns: undefined }
       unrestrict_user: { Args: { p_target: string }; Returns: undefined }
+      deactivate_account: { Args: Record<string, never>; Returns: undefined }
+      reactivate_account: { Args: Record<string, never>; Returns: undefined }
+      request_account_deletion: { Args: Record<string, never>; Returns: string }
+      restore_account: { Args: Record<string, never>; Returns: undefined }
       mark_message_viewed: { Args: { p_message: string }; Returns: undefined }
       delete_community: { Args: { p_community: string }; Returns: undefined }
       evaluate_trophies: {

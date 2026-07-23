@@ -33,8 +33,10 @@ export default function DeleteAccountScreen() {
     setError(null);
     try {
       if (isSupabaseConfigured) {
-        const { error: fnError } = await supabase.functions.invoke("delete-account");
-        if (fnError) throw fnError;
+        // 30-day archive (§7): account hides immediately, restorable by logging
+        // back in until the purge date. Not an instant hard delete.
+        const { error: rpcError } = await supabase.rpc("request_account_deletion");
+        if (rpcError) throw rpcError;
       }
       await signOut();
       router.replace("/(auth)/welcome");
@@ -55,12 +57,13 @@ export default function DeleteAccountScreen() {
           <TriangleAlert size={24} color={RED} strokeWidth={2} />
         </View>
         <Text style={{ marginTop: 18, fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white, textAlign: "center" }}>
-          This is permanent.
+          Delete in 30 days.
         </Text>
         <Text style={{ marginTop: 12, fontSize: 13.5, lineHeight: 20, color: colors.mist, textAlign: "center" }}>
-          Deleting your account removes your profile, every post and photo, your workouts and
-          trophies, your streaks, your messages, and the communities you created. Friends lose
-          your conversations. None of it can be recovered, and your username is released.
+          Your account is hidden immediately and permanently deleted after 30 days. Log back in
+          any time before then to restore everything. After 30 days your profile, posts, photos,
+          workouts, trophies, streaks, and friend graph are erased. Messages you sent stay in your
+          friends&apos; threads (they&apos;re their record too) but are no longer linked to you.
         </Text>
 
         <View style={{ flex: 1 }} />

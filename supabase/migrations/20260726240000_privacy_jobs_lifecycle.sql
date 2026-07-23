@@ -1,0 +1,8 @@
+-- §11 scheduled jobs + §7 account lifecycle (deactivate/delete/purge) +
+-- messages-survive-purge retention. Applied via MCP; mirrors deployed state.
+-- Jobs: presence-expiry (5m), geofence-purge / signup-block-expiry /
+-- export-link-expiry / account-purge (daily). Lifecycle RPCs:
+-- deactivate_account, reactivate_account, request_account_deletion,
+-- restore_account, account_purge_sweep. messages.sender_id -> ON DELETE SET
+-- NULL with sender_name_snapshot so sent messages survive in recipients'
+-- threads, non-linkable.

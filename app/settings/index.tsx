@@ -1,5 +1,5 @@
 import { router, type Href } from "expo-router";
-import { Ban, Bell, ChevronRight, FileText, Lock, LogOut, ShieldCheck, Trash2, UserMinus, UserRound } from "lucide-react-native";
+import { Ban, Bell, ChevronRight, Download, FileText, Lock, LogOut, MoonStar, ShieldCheck, Trash2, UserMinus, UserRound } from "lucide-react-native";
 import { type ReactNode, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
 
@@ -7,6 +7,8 @@ import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/ui/BackButton";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
+import { useDeactivateAccount, useLatestExportRequest, useRequestDataExport } from "@/hooks/queries/useAccountLifecycle";
+import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
 
 const RED = "#E5484D";
@@ -62,6 +64,50 @@ function SectionLabel({ children }: { children: ReactNode }) {
 export default function SettingsScreen() {
   const signOut = useAuthStore((state) => state.signOut);
   const [signingOut, setSigningOut] = useState(false);
+  const deactivate = useDeactivateAccount();
+  const requestExport = useRequestDataExport();
+  const latestExport = useLatestExportRequest();
+
+  const onExport = () => {
+    Alert.alert(
+      "Download my data",
+      "We'll email a download link within 30 days: your profile, check-in history, posts, messages sent, friends, streak, and settings.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Request",
+          onPress: () =>
+            requestExport.mutate(undefined, {
+              onSuccess: () => showToast("Request filed — check your email within 30 days"),
+              onError: (e) =>
+                showToast(e instanceof Error && e.message === "rate_limited" ? "You can request once every 30 days" : "Couldn't file the request")
+            })
+        }
+      ]
+    );
+  };
+
+  const onDeactivate = () => {
+    Alert.alert(
+      "Deactivate account?",
+      "Your profile, posts, and presence are hidden until you log back in. Your streak freezes — it resumes where it left off.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Deactivate",
+          style: "destructive",
+          onPress: () =>
+            deactivate.mutate(undefined, {
+              onSuccess: () => {
+                void signOut();
+                router.replace("/(auth)/welcome");
+              },
+              onError: () => showToast("Couldn't deactivate — try again")
+            })
+        }
+      ]
+    );
+  };
 
   const confirmSignOut = () => {
     Alert.alert("Log out?", "You'll need to sign back in to post.", [
@@ -132,6 +178,20 @@ export default function SettingsScreen() {
           icon={<ShieldCheck size={19} color={ICON} strokeWidth={2} />}
           label="Privacy Policy"
           onPress={() => router.push("/settings/legal/privacy" as Href)}
+        />
+
+        <SectionLabel>Data</SectionLabel>
+        <SettingsRow
+          icon={<Download size={19} color={ICON} strokeWidth={2} />}
+          label="Download my data"
+          sub={latestExport.data ? `Last requested ${new Date(latestExport.data.requestedAt).toLocaleDateString()}` : "Profile, posts, messages, check-ins, more"}
+          onPress={onExport}
+        />
+        <SettingsRow
+          icon={<MoonStar size={19} color={ICON} strokeWidth={2} />}
+          label="Deactivate account"
+          sub="Hide everything; your streak freezes. Reversible on login."
+          onPress={onDeactivate}
         />
 
         <SectionLabel>Danger Zone</SectionLabel>

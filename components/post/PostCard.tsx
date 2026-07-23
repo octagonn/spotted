@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, Check, Flame, Heart, Home, MapPin, MessageCircle, MoreHorizontal, Users, Volume2, VolumeX } from "lucide-react-native";
+import { Camera, Check, Flame, Heart, Home, MapPin, Medal, MessageCircle, MoreHorizontal, Users, Volume2, VolumeX } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -276,7 +276,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         <View style={[{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 10 }, textBlur]}>
           <Pressable onPress={() => !locked && router.push(`/user/${post.answeredCall}`)}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(232,180,76,0.45)", backgroundColor: "rgba(232,180,76,0.12)", paddingVertical: 5, paddingHorizontal: 12 }}>
-              <Text style={{ fontSize: 11 }}>🫡</Text>
+              <Medal size={12} color={colors.gold} strokeWidth={2.2} />
               <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 11.5, color: colors.gold }}>
                 Answered the Call · @{post.answeredCall}
               </Text>

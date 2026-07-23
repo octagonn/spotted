@@ -48,17 +48,17 @@ function notificationText(n: AppNotification): string {
     case "community_invite":
       return `invited you to ${String(n.payload?.community_name ?? "a community")}`;
     case "wave":
-      return n.payload?.gymName ? `waved at you 👋 — they're at ${String(n.payload.gymName)}` : "waved at you 👋";
+      return n.payload?.gymName ? `waved at you — they're at ${String(n.payload.gymName)}` : "waved at you";
     case "community_nudge":
       return `nudged ${String(n.payload?.communityName ?? "your crew")} — it's been quiet`;
     case "tagged":
       return `tagged you in their ${n.payload?.kind === "story" ? "story" : "post"}`;
     case "second_workout":
-      return `put in a second workout today 💪 — ${String(n.payload?.workout_name ?? "another session")}`;
+      return `put in a second workout today — ${String(n.payload?.workout_name ?? "another session")}`;
     case "taunt_answered":
-      return "answered your taunt 🫡 — they posted";
+      return "answered your taunt — they posted";
     case "claim_approved":
-      return `approved your ${String(n.payload?.trophy_id ?? "lift")} claim ✅ — trophy unlocked`;
+      return `approved your ${String(n.payload?.trophy_id ?? "lift")} claim — trophy unlocked`;
     case "claim_rejected":
       return `rejected your ${String(n.payload?.trophy_id ?? "lift")} claim: ${String(n.payload?.reason ?? "not verifiable")}`;
     default:
@@ -108,7 +108,7 @@ function TauntSheet({ targetId, name }: { targetId: string; name: string }) {
     if (error) {
       showToast(error.message.includes("cooldown") ? "Easy — you already taunted them today" : "Couldn't send the taunt");
     } else {
-      showToast("Taunt sent 😈");
+      showToast("Taunt sent");
     }
   };
   return (
@@ -346,7 +346,7 @@ export default function InboxScreen() {
                     ) : null}
                     {n.type === "streak_break_friend" && n.actorId ? (
                       <RelButton
-                        label="Taunt 😈"
+                        label="Taunt"
                         kind="primary"
                         onPress={() => sheet.open(<TauntSheet targetId={n.actorId as string} name={n.actorName} />)}
                       />

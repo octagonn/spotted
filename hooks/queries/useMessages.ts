@@ -163,9 +163,9 @@ export type MediaMessageInput = {
 };
 
 const MEDIA_CFG: Record<MediaMessageInput["kind"], { ext: string; type: string; label: string }> = {
-  image: { ext: "jpg", type: "image/jpeg", label: "📷 Photo" },
-  audio: { ext: "m4a", type: "audio/m4a", label: "🎤 Voice message" },
-  video: { ext: "mp4", type: "video/mp4", label: "🎥 Video" }
+  image: { ext: "jpg", type: "image/jpeg", label: "Photo" },
+  audio: { ext: "m4a", type: "audio/m4a", label: "Voice message" },
+  video: { ext: "mp4", type: "video/mp4", label: "Video" }
 };
 
 /** Upload chat media (photo / video / voice note) and insert the message row. */

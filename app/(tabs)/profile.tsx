@@ -130,7 +130,7 @@ export default function ProfileScreen() {
   };
 
   const shareProfile = () => {
-    void Share.share({ message: `Check out @${handle} on Spotted 💪` });
+    void Share.share({ message: `Check out @${handle} on Spotted` });
   };
 
   return (
@@ -298,7 +298,7 @@ export default function ProfileScreen() {
             <InlineStat
               value={trophies.earnedCount}
               label="Trophies"
-              icon={<Text style={{ fontSize: 13 }}>🏆</Text>}
+              icon={<Trophy size={13} color={tokens.accent.gold} strokeWidth={2} />}
               onPress={() => router.push("/profile-section/trophies" as Href)}
             />
           </View>
@@ -330,7 +330,7 @@ export default function ProfileScreen() {
                     backgroundColor: tokens.accent.goldSubtle
                   }}
                 >
-                  <Text style={{ fontSize: 12 }}>🏆</Text>
+                  <Trophy size={12} color={tokens.accent.gold} strokeWidth={2} />
                   <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 11.5, color: colors.gold, maxWidth: 90 }}>
                     {t.name}
                   </Text>

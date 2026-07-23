@@ -460,7 +460,7 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
                 <ChoiceRow
                   key={track.id}
                   title={track.title}
-                  sub={`${track.explicit ? "🅴 " : ""}${track.artist}`}
+                  sub={`${track.explicit ? "E · " : ""}${track.artist}`}
                   selected={chosen?.id === track.id}
                   left={<TrackArt uri={track.artworkUrl} />}
                   onPress={() => auditTrack(track)}
@@ -486,7 +486,7 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
               <ChoiceRow
                 key={track.id}
                 title={track.title}
-                sub={`${track.explicit ? "🅴 " : ""}${track.artist}`}
+                sub={`${track.explicit ? "E · " : ""}${track.artist}`}
                 selected={chosen?.id === track.id}
                 left={<TrackArt uri={track.artworkUrl} />}
                 onPress={() => auditTrack(track)}
@@ -506,7 +506,7 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
                 {chosen.title}
               </Text>
               <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12.5, color: colors.silver }}>
-                {chosen.explicit ? "🅴 " : ""}{chosen.artist}
+                {chosen.explicit ? "E · " : ""}{chosen.artist}
               </Text>
             </View>
             <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 12, color: colors.silver }}>

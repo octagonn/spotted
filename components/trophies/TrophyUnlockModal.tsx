@@ -57,9 +57,9 @@ export function TrophyUnlockModal({
     }
     try {
       if (imageUri && Platform.OS !== "web") {
-        await Share.share({ url: imageUri, message: `I earned "${data.name}" on Spotted 🏆 — ${formatRarity(data.rarityPct)} have it.` });
+        await Share.share({ url: imageUri, message: `I earned "${data.name}" on Spotted — ${formatRarity(data.rarityPct)} have it.` });
       } else {
-        await Share.share({ message: `I earned "${data.name}" on Spotted 🏆 — ${formatRarity(data.rarityPct)} have it.` });
+        await Share.share({ message: `I earned "${data.name}" on Spotted — ${formatRarity(data.rarityPct)} have it.` });
       }
     } catch (error) {
       logger.warn("trophy_share_failed", { message: error instanceof Error ? error.message : String(error) });

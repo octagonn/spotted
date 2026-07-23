@@ -41,7 +41,7 @@ export function useInAppBanners(userId?: string | null) {
             showBanner({
               id: `taunt-${Date.now()}`,
               title: actor.display_name,
-              body: `roasted you: "${String(row.payload?.text ?? "…")}" 😈`,
+              body: `roasted you: "${String(row.payload?.text ?? "…")}"`,
               avatarName: actor.display_name,
               avatarUrl: actor.avatar_url,
               route: "/inbox"

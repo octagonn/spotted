@@ -48,12 +48,12 @@ function SpotSheet({ friend, onClose }: { friend: LiveFriend; onClose: () => voi
             onPress={() => {
               if (!spotted) {
                 markSpotted(friend.id);
-                showToast(`You spotted ${firstName} 👊`);
+                showToast(`You spotted ${firstName}`);
               }
               onClose();
             }}
           >
-            {spotted ? "◎ Spotted" : "Send a spot 👊"}
+            {spotted ? "◎ Spotted" : "Send a spot"}
           </Button>
         </View>
       </View>

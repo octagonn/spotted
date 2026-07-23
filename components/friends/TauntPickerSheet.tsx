@@ -31,7 +31,7 @@ export function TauntPickerSheet({ targetId, name }: { targetId: string; name: s
       {
         onSuccess: () => {
           sheet.close();
-          showToast("Taunt sent 😈");
+          showToast("Taunt sent");
         },
         onError: (error) => {
           setPending(false);

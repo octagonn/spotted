@@ -110,7 +110,7 @@ export default function UserProfileScreen() {
   };
 
   const shareProfile = () => {
-    void Share.share({ message: `Check out @${handle} on Spotted 💪` });
+    void Share.share({ message: `Check out @${handle} on Spotted` });
   };
 
   if (profile && ownUserId && profile.id === ownUserId) {
@@ -196,7 +196,7 @@ export default function UserProfileScreen() {
               the canned-line picker with trophy-gated extras. */}
           {isFriend && profile ? (
             <RelButton
-              label="Taunt 😈"
+              label="Taunt"
               kind="quiet"
               onPress={() => sheet.open(<TauntPickerSheet targetId={profile.id} name={profile.display_name} />)}
             />

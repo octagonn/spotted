@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
-import { localDateKey, usePostedToday, usePostedWithinDays } from "@/stores/ui";
+import { localDateKey, usePostedToday, usePostedWithinDays, useUiStore } from "@/stores/ui";
 
 const WEEK_MS = 7 * 86_400_000;
 
@@ -13,7 +13,7 @@ const WEEK_MS = 7 * 86_400_000;
  * without it, a user who posted on their phone sees a locked feed everywhere
  * else.
  */
-export function usePostedState(): { postedToday: boolean; postedThisWeek: boolean } {
+export function usePostedState(): { postedToday: boolean; postedThisWeek: boolean; resolved: boolean } {
   const userId = useAuthStore((state) => state.userId);
   const localToday = usePostedToday();
   const localWeek = usePostedWithinDays(7);
@@ -46,8 +46,17 @@ export function usePostedState(): { postedToday: boolean; postedThisWeek: boolea
     serverThisWeek = Date.now() - created.getTime() < WEEK_MS;
   }
 
+  // Known-state flag: until the persisted flag has hydrated AND (when online)
+  // the server check has settled, callers should render NOTHING lock-related —
+  // otherwise the unlock overlay flashes on every cold open for posters.
+  const hydrated = useUiStore((state) => state.postedHydrated);
+  const resolved =
+    (hydrated && (localToday || serverToday)) ||
+    (hydrated && (!isSupabaseConfigured || latest.isFetched));
+
   return {
     postedToday: localToday || serverToday,
-    postedThisWeek: localWeek || serverThisWeek
+    postedThisWeek: localWeek || serverThisWeek,
+    resolved
   };
 }

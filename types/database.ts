@@ -992,6 +992,7 @@ export type Database = {
       }
       workouts: {
         Row: {
+          hidden_at: string | null
           id: string
           user_id: string
           name: string
@@ -1007,6 +1008,7 @@ export type Database = {
           created_at: string
         }
         Insert: {
+          hidden_at?: string | null
           id?: string
           user_id: string
           name?: string
@@ -1022,6 +1024,7 @@ export type Database = {
           created_at?: string
         }
         Update: {
+          hidden_at?: string | null
           id?: string
           user_id?: string
           name?: string

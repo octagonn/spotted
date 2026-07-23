@@ -99,7 +99,7 @@ export default function HomeScreen() {
   const [tab, setTab] = useState("Friends");
   // Feed lock resets at LOCAL midnight (spec A): locked until today's post.
   // Server truth (UTC timestamps compared in device tz) + optimistic local flag.
-  const { postedToday } = usePostedState();
+  const { postedToday, resolved: postedResolved } = usePostedState();
   const sheet = useSheet();
   const feed = useFeed();
   const router = useRouter();
@@ -277,7 +277,9 @@ export default function HomeScreen() {
           )
         }
       />
-      {locked ? (
+      {/* Only gate once posted-state is KNOWN — rendering the overlay while
+          hydration/server-check are pending flashed it at every cold open. */}
+      {locked && postedResolved ? (
         <LockOverlay
           friendsPostedToday={lockStats.count}
           posters={lockStats.posters}

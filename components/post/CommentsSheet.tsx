@@ -69,11 +69,11 @@ export function CommentsSheet({
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close comments" />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          {/* Fixed tall sheet (85% of screen) so it always fills like Instagram —
-              no content-sized gap, and the comment list flexes to fill. */}
+          {/* Popup-sized sheet (~60% of screen) — the post stays visible
+              behind it, so it reads as a menu, not a new screen. */}
           <View
             style={{
-              height: height * 0.85,
+              height: height * 0.6,
               backgroundColor: colors.ink,
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,

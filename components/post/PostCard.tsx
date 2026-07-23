@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, Check, Flame, Heart, Home, MapPin, Medal, MessageCircle, MoreHorizontal, Users, Volume2, VolumeX } from "lucide-react-native";
+import { Camera, Check, Flame, Heart, Home, MapPin, Medal, MessageCircle, MoreHorizontal, Send, Users, Volume2, VolumeX } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -9,6 +9,7 @@ import { CommentsSheet, type CommentRow } from "@/components/post/CommentsSheet"
 import { MediaFrame } from "@/components/post/MediaFrame";
 import { ReactionsSheet } from "@/components/post/ReactionsSheet";
 import { ContentMenu } from "@/components/ContentMenu";
+import { ShareToFriendSheet } from "@/components/friends/ShareToFriendSheet";
 import { useSheet } from "@/components/ui/Sheet";
 import { useDeletePost } from "@/hooks/queries/useContentModeration";
 import { MusicChip } from "@/components/post/MusicChip";
@@ -164,7 +165,6 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         contentId={post.id}
         reportLabel="post"
         reportedUserId={undefined}
-        share={{ kind: "post", id: post.id, label: `${post.user.handle}'s post` }}
         onDelete={
           isOwnPost
             ? () =>
@@ -336,11 +336,34 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             hitSlop={6}
           >
             <Heart
-              size={24}
+              size={29}
               color={liked ? "#FF2D55" : colors.silver}
               fill={liked ? "#FF2D55" : "transparent"}
               strokeWidth={2}
             />
+          </Pressable>
+        ) : null}
+        {/* Comments — right after like, IG order. */}
+        <Pressable
+          onPress={() => !locked && setCommentsOpen((open) => !open)}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+          accessibilityLabel="Toggle comments"
+          hitSlop={6}
+        >
+          <MessageCircle size={26} color={colors.silver} strokeWidth={2} />
+          <Text style={{ fontSize: 14, fontFamily: "Geist_600SemiBold", color: colors.silver }}>{commentCount}</Text>
+        </Pressable>
+        {/* Share — after comments, out of the 3-dots menu. */}
+        {isRealPost ? (
+          <Pressable
+            onPress={() =>
+              !locked &&
+              sheet.open(<ShareToFriendSheet sharedKind="post" sharedId={post.id} label={`${post.user.handle}'s post`} />)
+            }
+            accessibilityLabel="Share post"
+            hitSlop={6}
+          >
+            <Send size={25} color={colors.silver} strokeWidth={2} />
           </Pressable>
         ) : null}
         <Pressable
@@ -439,14 +462,6 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         <Text style={mono(11, colors.fog)}>
           {`${reactorCount} live reaction${reactorCount === 1 ? "" : "s"}`}
         </Text>
-        <Pressable
-          onPress={() => !locked && setCommentsOpen((open) => !open)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 5, marginLeft: "auto" }}
-          accessibilityLabel="Toggle comments"
-        >
-          <MessageCircle size={15} color={colors.fog} strokeWidth={2} />
-          <Text style={{ fontSize: 12, fontFamily: "Geist_600SemiBold", color: colors.fog }}>{commentCount}</Text>
-        </Pressable>
       </View>
 
       {/* Comments open in a keyboard-avoiding bottom sheet so the input stays visible. */}

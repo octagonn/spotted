@@ -11,7 +11,7 @@ import {
   Users
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Platform, ScrollView, Share, Text, View } from "react-native";
+import { Alert, ActivityIndicator, Platform, ScrollView, Share, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -53,7 +53,7 @@ import {
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useMapGyms, type MapGym } from "@/hooks/queries/useMapGyms";
 import { useMyProfile } from "@/hooks/queries/useProfile";
-import { useWorkouts, type WorkoutRow } from "@/hooks/queries/useWorkouts";
+import { useDeleteWorkout, useWorkouts, type WorkoutRow } from "@/hooks/queries/useWorkouts";
 import { COMMUNITY_ICONS } from "@/lib/communityTypes";
 import { relDay } from "@/lib/relDay";
 import { fmtClock } from "@/lib/workoutLibrary";
@@ -305,6 +305,7 @@ export default function MapTabScreen() {
   const recentNudges = useMyRecentNudges();
   const pendingRequests = useMyPendingJoinRequests();
   const nudge = useNudgeCommunity();
+  const deleteWorkout = useDeleteWorkout();
   const wave = useWave();
   const markRead = useMarkCommunityRead();
   const friendGymIds = useMemo(() => (friends.data ?? []).map((f) => f.home_gym_id), [friends.data]);
@@ -909,8 +910,43 @@ export default function MapTabScreen() {
     const cardioOnly = workout.totalVolume === 0 && workout.cardioMinutes > 0;
     const timeLabel = new Date(workout.startedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     const prCount = workout.prs.length;
+    // Long-press: edit or delete straight from the tab. Neither touches the
+    // daily post — attached workouts are forked/hidden, never removed from it.
+    const openActions = () => {
+      Alert.alert(workout.name, undefined, [
+        { text: "Edit workout", onPress: () => router.push(`/workout?edit=${workout.id}` as Href) },
+        {
+          text: "Delete from history",
+          style: "destructive",
+          onPress: () =>
+            Alert.alert(
+              "Delete workout?",
+              workout.postId
+                ? "It leaves your workout history — your daily post keeps it. Trophies stay."
+                : "It disappears from your history. Trophies stay.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: () =>
+                    deleteWorkout.mutate(workout.id, {
+                      onSuccess: () => showToast("Workout deleted"),
+                      onError: () => showToast("Couldn't delete — try again")
+                    })
+                }
+              ]
+            )
+        },
+        { text: "Cancel", style: "cancel" }
+      ]);
+    };
     return (
-      <Pressable onPress={() => router.push(`/workout/${workout.id}` as Href)} style={{ marginHorizontal: 18, marginBottom: 12 }}>
+      <Pressable
+        onPress={() => router.push(`/workout/${workout.id}` as Href)}
+        onLongPress={openActions}
+        style={{ marginHorizontal: 18, marginBottom: 12 }}
+      >
         <View
           style={{
             flexDirection: "row",

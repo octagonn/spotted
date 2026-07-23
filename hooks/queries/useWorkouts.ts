@@ -84,10 +84,14 @@ export function computeWorkoutTotals(exercises: WorkoutExercise[]) {
 }
 
 /**
- * Edit a logged workout (3a): overwrite name + exercises and recompute the
- * stored aggregates. started_at/duration are preserved — an edit corrects the
- * log, it doesn't re-time the session. Trophies/PRs already earned stay
+ * Edit a logged workout. started_at/duration are preserved — an edit corrects
+ * the log, it doesn't re-time the session. Trophies/PRs already earned stay
  * (permanent by spec), so no user_lifts writes happen here.
+ *
+ * Post decoupling: when the workout is ATTACHED to a daily post, the posted
+ * version must not change. The edit becomes a NEW detached row carrying the
+ * changes (your history), while the original is hidden from history and keeps
+ * feeding the post slide exactly as it was.
  */
 export function useUpdateWorkout() {
   const queryClient = useQueryClient();
@@ -103,20 +107,46 @@ export function useUpdateWorkout() {
       exercises: WorkoutExercise[];
       /** Original session PRs — preserved through the edit. */
       prs: SessionPR[];
-    }) => {
+    }): Promise<{ historyId: string }> => {
       const totals = computeWorkoutTotals(exercises);
-      const { error } = await supabase
+      const fields = {
+        name: name.trim() || "Workout",
+        total_volume: totals.totalVolume,
+        total_sets: totals.totalSets,
+        cardio_minutes: totals.cardioMinutes,
+        exercise_count: totals.exerciseCount,
+        data: { exercises, prs } as unknown as Json
+      };
+      const { data: original, error: readError } = await supabase
         .from("workouts")
-        .update({
-          name: name.trim() || "Workout",
-          total_volume: totals.totalVolume,
-          total_sets: totals.totalSets,
-          cardio_minutes: totals.cardioMinutes,
-          exercise_count: totals.exerciseCount,
-          data: { exercises, prs } as unknown as Json
-        })
-        .eq("id", workoutId);
+        .select("user_id, started_at, ended_at, duration_seconds, post_id")
+        .eq("id", workoutId)
+        .single();
+      if (readError) throw readError;
+      if (original.post_id) {
+        // Attached: freeze the posted version, fork the edit into history.
+        const { data: clone, error: cloneError } = await supabase
+          .from("workouts")
+          .insert({
+            user_id: original.user_id,
+            started_at: original.started_at,
+            ended_at: original.ended_at,
+            duration_seconds: original.duration_seconds,
+            ...fields
+          })
+          .select("id")
+          .single();
+        if (cloneError) throw cloneError;
+        const { error: hideError } = await supabase
+          .from("workouts")
+          .update({ hidden_at: new Date().toISOString() })
+          .eq("id", workoutId);
+        if (hideError) throw hideError;
+        return { historyId: clone.id };
+      }
+      const { error } = await supabase.from("workouts").update(fields).eq("id", workoutId);
       if (error) throw error;
+      return { historyId: workoutId };
     },
     onSuccess: (_r, vars) => {
       void queryClient.invalidateQueries({ queryKey: ["workout", vars.workoutId] });
@@ -127,14 +157,29 @@ export function useUpdateWorkout() {
 }
 
 /**
- * Delete a workout (3a): hard delete. If it was attached to a daily post the
- * slide disappears with the row (the feed embeds workouts by post_id join).
- * Trophies earned from it are permanent and stay.
+ * Delete a workout from HISTORY. If it's attached to a daily post, the row is
+ * only hidden — the post keeps its slide untouched (spec: deleting from the
+ * workout tab never takes it off the daily). Detached rows hard-delete.
+ * Trophies earned from it are permanent and stay either way.
  */
 export function useDeleteWorkout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (workoutId: string) => {
+      const { data: row, error: readError } = await supabase
+        .from("workouts")
+        .select("post_id")
+        .eq("id", workoutId)
+        .single();
+      if (readError) throw readError;
+      if (row.post_id) {
+        const { error } = await supabase
+          .from("workouts")
+          .update({ hidden_at: new Date().toISOString() })
+          .eq("id", workoutId);
+        if (error) throw error;
+        return;
+      }
       const { error } = await supabase.from("workouts").delete().eq("id", workoutId);
       if (error) throw error;
     },
@@ -161,6 +206,9 @@ export function useWorkouts(userId?: string | null) {
         )
         .eq("user_id", userId as string)
         .not("ended_at", "is", null)
+        // Hidden = "deleted"/superseded from history; the row lives on so an
+        // attached daily-post slide is untouched.
+        .is("hidden_at", null)
         .order("started_at", { ascending: false })
         .limit(50);
       if (error) throw error;

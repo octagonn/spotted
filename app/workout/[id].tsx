@@ -49,7 +49,7 @@ export default function WorkoutDetailScreen() {
     Alert.alert(
       "Delete workout?",
       attachedToPost
-        ? "It comes off your daily post too. Trophies you earned from it stay."
+        ? "It leaves your workout history — your daily post keeps it. Trophies you earned from it stay."
         : "It disappears from your history. Trophies you earned from it stay.",
       [
         { text: "Cancel", style: "cancel" },

@@ -54,6 +54,7 @@ export default function ProfilePostsScreen() {
         user: { name, handle, avatarUrl },
         time: relTime(post.created_at),
         mediaUri: post.media_url ?? undefined,
+        insetUri: post.inset_url ?? undefined,
         // Everything from that day: extra photos + attached workout slides.
         mediaUris: post.media_urls?.length ? post.media_urls : undefined,
         workouts: post.workouts.length ? post.workouts : undefined,

@@ -15,6 +15,7 @@ function post(overrides: Partial<FeedPost> & { id: string }): FeedPost {
     is_verified_at_gym: false,
     media_type: "photo",
     media_url: "posts/x.jpg",
+    inset_url: null,
     lift_name: null,
     lift_weight: null,
     lift_exercise: null,

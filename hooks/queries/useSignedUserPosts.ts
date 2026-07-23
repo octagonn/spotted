@@ -7,6 +7,7 @@ import { signedPostUrls } from "@/lib/supabase";
 export type SignedPost = {
   id: string;
   media_url: string | null;
+  inset_url: string | null;
   /** The post HAS media even if signing failed this fetch — grids should show
    *  a placeholder tile, not silently drop the post. */
   hasMedia: boolean;
@@ -60,7 +61,7 @@ export function useSignedUserPosts(userId?: string | null) {
     enabled: Boolean(userId) && Boolean(raw),
     queryFn: async (): Promise<SignedPost[]> => {
       const rows = raw ?? [];
-      const signed = await signedPostUrls(rows.flatMap((post) => [post.media_url, ...(post.media_urls ?? [])]));
+      const signed = await signedPostUrls(rows.flatMap((post) => [post.media_url, post.inset_url, ...(post.media_urls ?? [])]));
       const resolve = (path: string | null | undefined): string | null => {
         if (!path) return null;
         if (path.startsWith("http")) return path;
@@ -69,6 +70,7 @@ export function useSignedUserPosts(userId?: string | null) {
       return rows.map((post) => ({
         id: post.id,
         media_url: resolve(post.media_url),
+        inset_url: resolve(post.inset_url),
         hasMedia: Boolean(post.media_url),
         media_urls: post.media_urls?.length
           ? post.media_urls.map(resolve).filter((u): u is string => Boolean(u))

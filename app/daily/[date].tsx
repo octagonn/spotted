@@ -61,6 +61,7 @@ export default function DayScreen() {
         user: { name, handle, avatarUrl },
         time: timeOf(p.created_at),
         mediaUri: p.media_url ?? undefined,
+        insetUri: p.inset_url ?? undefined,
         mediaUris: p.media_urls?.length ? p.media_urls : undefined,
         workouts: p.workouts.length ? p.workouts : undefined,
         caption: p.caption ?? undefined,

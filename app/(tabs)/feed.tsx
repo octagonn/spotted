@@ -61,6 +61,8 @@ function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
     altLoc: post.gym ? undefined : post.location_kind === "home" ? "Home Gym" : "Unlisted location",
     time,
     mediaUri: post.media_url,
+    // Dual-camera front frame → BeReal corner inset (FbMedia).
+    insetUri: post.inset_url ?? undefined,
     mediaUris: !isVideo && (post.media_urls?.length ?? 0) > 1 ? (post.media_urls as string[]) : undefined,
     video: isVideo && post.media_url ? { uri: post.media_url, trimStart, trimEnd } : undefined,
     lift: isVideo ? { lift: post.lift_name ?? "Lift", weight: post.lift_weight ?? "" } : undefined,

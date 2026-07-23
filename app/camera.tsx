@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  SquareStack,
   Tag,
   Users,
   X,
@@ -663,6 +664,10 @@ export default function CameraScreen() {
   const [liftStep, setLiftStep] = useState<LiftStep>("record");
   const [videoUri, setVideoUri] = useState<string>();
   const videoTrimRef = useRef<VideoTrim | null>(null);
+  // Dual camera (BeReal-style): the front frame captured right after the back
+  // one, rendered as a corner inset on the review + in the feed.
+  const [dualFrontUri, setDualFrontUri] = useState<string>();
+  const [dualBusy, setDualBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   // Camera zoom prop (0–1 within the active lens). Ultra-wide holds 0 (pure
@@ -1132,6 +1137,66 @@ export default function CameraScreen() {
     if (mode === "story" && uri) setEditing(true);
   }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission]);
 
+  // Dual capture (BeReal-style): grab the current lens, flip, let the session
+  // reconfigure, grab the other lens. expo-camera can't run both at once, so
+  // this is a fast sequence (~0.7s) rather than a true simultaneous capture.
+  const shootOnce = useCallback(async (mirror: boolean): Promise<string | undefined> => {
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.9, skipProcessing: true });
+      if (!photo?.uri) return undefined;
+      if (mirror) {
+        const flipped = await ImageManipulator.manipulateAsync(
+          photo.uri,
+          [{ flip: ImageManipulator.FlipType.Horizontal }],
+          { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        return flipped.uri;
+      }
+      return photo.uri;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const captureDual = useCallback(async () => {
+    if (dualBusy) return;
+    if (!permission?.granted) {
+      if (permission?.canAskAgain) void requestPermission();
+      else showToast("Enable camera access in Settings to post");
+      return;
+    }
+    setDualBusy(true);
+    triggerFlash();
+    try {
+      const startFront = facing === "front";
+      // First frame = the lens currently showing (mirror only the front lens).
+      const first = await shootOnce(startFront);
+      // Flip and wait for the session to settle before the second shot.
+      videoReadyRef.current = false;
+      setFacing(startFront ? "back" : "front");
+      const flipStart = Date.now();
+      while (!videoReadyRef.current && Date.now() - flipStart < 1600) {
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      await new Promise((r) => setTimeout(r, 120));
+      const second = await shootOnce(!startFront);
+      // Restore the starting lens for the next shot.
+      setFacing(startFront ? "front" : "back");
+      // Main = the BACK frame; inset = the FRONT frame, regardless of order.
+      const back = startFront ? second : first;
+      const front = startFront ? first : second;
+      if (!back) {
+        showToast("Couldn't take the dual shot — try again");
+        return;
+      }
+      setPhotoUri(back);
+      setDualFrontUri(front);
+      setDailyStep("review");
+    } finally {
+      setDualBusy(false);
+    }
+  }, [dualBusy, facing, permission?.canAskAgain, permission?.granted, requestPermission, shootOnce]);
+
   // Snapchat-style capture: tap = photo (capturePhoto), hold = video. Holding
   // records; sliding onto the lock keeps it recording hands-free. A recorded
   // clip routes to the video review → compose → publish flow.
@@ -1310,6 +1375,7 @@ export default function CameraScreen() {
         userId,
         photoUris: photoUri ? [...extraPhotos, photoUri] : [],
         videoUri: videoUri ?? null,
+        insetUri: dualFrontUri ?? null,
         caption: captionForPost,
         gymId: gym?.type === "gym" ? gym.id : null,
         locationKind: gym?.type ?? "other",
@@ -1486,6 +1552,16 @@ export default function CameraScreen() {
           </CircleButton>
           <StepPill>{stepLabel}</StepPill>
           <View style={{ flexDirection: "row", gap: 10 }}>
+            {/* Dual (BeReal-style front+back) — hidden while recording. */}
+            {!recording ? (
+              <CircleButton label="Dual camera shot" onPress={() => void captureDual()}>
+                {dualBusy ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <SquareStack color={colors.white} size={18} strokeWidth={2} />
+                )}
+              </CircleButton>
+            ) : null}
             <CircleButton label={flashOn ? "Flash on" : "Flash off"} onPress={() => setFlashOn((v) => !v)}>
               {flashOn ? <Zap color={tokens.accent.gold} size={19} strokeWidth={2} fill={tokens.accent.gold} /> : <ZapOff color={colors.white} size={19} strokeWidth={2} />}
             </CircleButton>
@@ -1641,12 +1717,20 @@ export default function CameraScreen() {
         ) : videoUri ? (
           <LiftVideoThumb uri={videoUri} />
         ) : (
-          <ScenePhoto
-            uri={photoUri}
-            scene="s2"
-            legibility={false}
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-          />
+          <>
+            <ScenePhoto
+              uri={photoUri}
+              scene="s2"
+              legibility={false}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+            {/* Dual-camera front frame — BeReal-style corner inset. */}
+            {dualFrontUri ? (
+              <View style={{ position: "absolute", top: insets.top + 66, left: 16, width: "30%", aspectRatio: 3 / 4, borderRadius: 14, overflow: "hidden", borderWidth: 2, borderColor: colors.black }}>
+                <ExpoImage source={{ uri: dualFrontUri }} contentFit="cover" style={{ flex: 1 }} />
+              </View>
+            ) : null}
+          </>
         )}
 
         <LinearGradient
@@ -1668,8 +1752,9 @@ export default function CameraScreen() {
           <CircleButton
             label="Retake"
             onPress={() => {
-              // Clear the recorded clip so the capture screen is live again.
+              // Clear the recorded clip / dual frame so capture is live again.
               if (videoUri) setVideoUri(undefined);
+              if (dualFrontUri) setDualFrontUri(undefined);
               setDailyStep("capture");
             }}
           >

@@ -36,6 +36,7 @@ function rowToFeedPost(row: FeedRow, signed: Map<string, string>): FeedPost {
     avatar_blurred_url: null
   };
   const mediaUrl = resolveSigned(row.media_url, signed);
+  const insetUrl = resolveSigned(row.inset_url, signed);
   const mediaUrls = row.media_urls?.length
     ? row.media_urls.map((path) => resolveSigned(path, signed)).filter((u): u is string => Boolean(u))
     : row.media_urls;
@@ -44,6 +45,7 @@ function rowToFeedPost(row: FeedRow, signed: Map<string, string>): FeedPost {
     ...post,
     // Unsigned/missing → "" (falsy) so media components show the placeholder.
     media_url: mediaUrl ?? "",
+    inset_url: insetUrl,
     media_urls: mediaUrls,
     profile,
     gym: row.gyms,
@@ -112,7 +114,7 @@ export function useFeed() {
       if (error) throw error;
       const rows = (data ?? []) as unknown as FeedRow[];
       // One batched signing call for every photo on the page (retried inside).
-      const signed = await signedPostUrls(rows.flatMap((r) => [r.media_url, ...(r.media_urls ?? [])]));
+      const signed = await signedPostUrls(rows.flatMap((r) => [r.media_url, r.inset_url, ...(r.media_urls ?? [])]));
       return rows.map((row) => rowToFeedPost(row, signed));
     },
     getNextPageParam: (lastPage) =>

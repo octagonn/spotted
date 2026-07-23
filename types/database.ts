@@ -1187,6 +1187,7 @@ export type Database = {
       }
       posts: {
         Row: {
+          inset_url: string | null
           caption: string | null
           created_at: string
           expires_at: string
@@ -1219,6 +1220,7 @@ export type Database = {
           video_trim_end: number | null
         }
         Insert: {
+          inset_url?: string | null
           caption?: string | null
           created_at?: string
           expires_at?: string
@@ -1251,6 +1253,7 @@ export type Database = {
           video_trim_end?: number | null
         }
         Update: {
+          inset_url?: string | null
           caption?: string | null
           created_at?: string
           expires_at?: string

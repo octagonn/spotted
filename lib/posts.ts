@@ -160,6 +160,8 @@ export type PublishDailyPostInput = {
   photoUris: string[];
   /** A recorded daily video (hold-to-record) — takes precedence over photos. */
   videoUri?: string | null;
+  /** Dual-camera front frame — rides as the BeReal-style corner inset. */
+  insetUri?: string | null;
   caption: string;
   /** Real gyms.id UUID, or null for home/unlisted locations. */
   gymId: string | null;
@@ -243,12 +245,30 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     paths.push(path);
   }
 
+  // Dual-camera front frame → inset_url (BeReal corner PIP).
+  let insetPath: string | null = null;
+  if (input.insetUri) {
+    const uploadUri = await compressPhoto(input.insetUri);
+    const response = await fetch(uploadUri);
+    const body = await response.arrayBuffer();
+    if (body && body.byteLength > 0) {
+      const path = `${input.userId}/${stamp}-inset.jpg`;
+      const upload = await supabase.storage.from("posts").upload(path, body, {
+        contentType: "image/jpeg",
+        upsert: false
+      });
+      if (!upload.error) insetPath = path;
+    }
+  }
+
   const insert = await supabase
     .from("posts")
     .insert({
       user_id: input.userId,
       media_url: paths[0],
-      media_urls: paths,
+      // A dual post is a single main frame + inset — not a swipeable carousel.
+      media_urls: insetPath ? null : paths,
+      inset_url: insetPath,
       media_type: "image",
       caption: input.caption.trim() ? input.caption.trim().slice(0, 200) : null,
       gym_id: input.gymId,

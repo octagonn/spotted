@@ -31,13 +31,11 @@ function ageOn(today: Date, year: number, monthIndex: number, day: number): numb
 function Wheel({
   items,
   index,
-  onChange,
-  width
+  onChange
 }: {
   items: string[];
   index: number;
   onChange: (index: number) => void;
-  width: number;
 }) {
   const scrollRef = useRef<ScrollView>(null);
 
@@ -56,7 +54,7 @@ function Wheel({
   }
 
   return (
-    <View style={{ width, height: WHEEL_HEIGHT }}>
+    <View style={{ flex: 1, height: WHEEL_HEIGHT }}>
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
@@ -146,19 +144,20 @@ export default function BirthdayScreen() {
       <Text variant="display-md" className="mt-6">
         WHEN WERE YOU BORN?
       </Text>
-      <Text variant="italic" className="mt-3">
+      <Text variant="body"  className="mt-3">
         You have to be {MIN_AGE} or older to use Spotted.
       </Text>
 
-      <View className="mt-10 flex-row justify-center gap-2 rounded-card border border-hairline-strong bg-glass-strong py-2">
-        <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} width={90} />
+      {/* Three EQUAL columns, evenly spread — mismatched widths made the
+          wheels sit off-center. */}
+      <View className="mt-10 flex-row rounded-card border border-hairline-strong bg-glass-strong px-2 py-2">
+        <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} />
         <Wheel
           items={days}
           index={Math.min(dayIndex, maxDays - 1)}
           onChange={setDayIndex}
-          width={70}
         />
-        <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} width={90} />
+        <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} />
       </View>
 
       {tooYoung ? (

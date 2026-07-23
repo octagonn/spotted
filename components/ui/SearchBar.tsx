@@ -48,7 +48,7 @@ export function SearchBar({ value, onChangeText, placeholder, containerStyle, au
         autoCorrect={false}
         autoFocus={autoFocus}
         returnKeyType="search"
-        style={{ flex: 1, padding: 0, fontSize: 14, color: colors.bone }}
+        style={{ flex: 1, padding: 0, fontSize: 14, letterSpacing: 0, fontFamily: "Geist_400Regular", color: colors.bone }}
       />
       {value.length > 0 ? (
         <Pressable onPress={() => onChangeText("")} hitSlop={8} accessibilityLabel="Clear search" haptic={false}>

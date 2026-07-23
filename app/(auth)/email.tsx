@@ -260,7 +260,7 @@ export default function EmailAuthScreen() {
         <Animated.View layout={LinearTransition.duration(300)} className="mt-12 gap-6">
           <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
             <Text variant="micro" className="text-mist">
-              {isVerify ? "VERIFY" : isCreatePassword ? "ACCOUNT SETUP" : "STEP 1 OF 6"}
+              {isVerify ? "VERIFY" : isCreatePassword ? "ACCOUNT SETUP" : "STEP 1 OF 5"}
             </Text>
           </View>
           <Text variant={isCreatePassword ? "display-sm" : "display-md"}>

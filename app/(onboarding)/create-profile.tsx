@@ -129,7 +129,7 @@ export default function OnboardingCreateProfileScreen() {
         <Text variant="display-md" className="mt-6">
           MAKE A FACE.
         </Text>
-        <Text variant="italic" className="mt-3">
+        <Text variant="body"  className="mt-3">
           Add a photo, pick a name.
         </Text>
 

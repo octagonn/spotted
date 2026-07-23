@@ -76,7 +76,7 @@ export default function PermissionsScreen() {
       <Text variant="display-md" className="mt-6">
         LET IT WATCH.
       </Text>
-      <Text variant="italic" className="mt-3">
+      <Text variant="body"  className="mt-3">
         Location finds gyms near you and verifies check-ins. Notifications make skipping public enough to matter.
       </Text>
 

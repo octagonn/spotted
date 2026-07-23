@@ -136,7 +136,7 @@ export default function HomeGymScreen() {
       <Text variant="display-md" className="mt-6">
         PICK YOUR GYM.
       </Text>
-      <Text variant="italic" className="mt-3">
+      <Text variant="body"  className="mt-3">
         {coords ? "Closest first. Yours should be near the top." : "A gym is a place, not a group."}
       </Text>
 

@@ -7,6 +7,7 @@ import { CameraView, useCameraPermissions, useMicrophonePermissions, type Camera
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import {
   ChevronLeft,
   Dumbbell,
@@ -634,6 +635,15 @@ export default function CameraScreen() {
   const userId = useAuthStore((state) => state.userId);
   const postStory = usePostStory();
   const [permission, requestPermission] = useCameraPermissions();
+  // Freeze fix: the native camera session dies quietly when the screen loses
+  // focus (saving a draft and leaving, resuming later, backgrounding). Unmount
+  // the CameraView while unfocused and remount it with a fresh key on every
+  // refocus so it always comes back with a live session.
+  const isFocused = useIsFocused();
+  const [camEpoch, setCamEpoch] = useState(0);
+  useEffect(() => {
+    if (isFocused) setCamEpoch((e) => e + 1);
+  }, [isFocused]);
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const permissionAsked = useRef(false);
   const cameraRef = useRef<CameraView>(null);
@@ -1391,13 +1401,14 @@ export default function CameraScreen() {
     const stepLabel = mode === "lift" ? "VIDEO" : mode === "story" ? "STORY" : "TODAY'S PHOTO";
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
-        {permission?.granted ? (
+        {permission?.granted && isFocused ? (
           <GestureDetector gesture={pinchZoom}>
             <View style={{ position: "absolute", inset: 0 }}>
               <CameraView
-                // Remount on mode change so onCameraReady re-fires for the new
-                // (video) session — that's the signal we wait on before recording.
-                key={camMode}
+                // Remount on mode change (onCameraReady re-fires for the new
+                // video session) AND on every screen refocus (fresh native
+                // session — the frozen-preview fix).
+                key={`${camMode}-${camEpoch}`}
                 ref={cameraRef}
                 facing={facing}
                 mode={camMode}

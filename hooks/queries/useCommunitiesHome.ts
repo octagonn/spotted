@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { randomNudgeLine } from "@/lib/nudgeLines";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import type { Gym, Profile } from "@/types/domain";
@@ -252,7 +253,11 @@ export function useNudgeCommunity() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (communityId: string): Promise<number> => {
-      const { data, error } = await supabase.rpc("nudge_community", { cid: communityId });
+      // One-button nudge: a random line from the 20-line rotation rides along.
+      const { data, error } = await supabase.rpc("nudge_community", {
+        cid: communityId,
+        p_text: randomNudgeLine()
+      });
       if (error) throw error;
       return (data as number) ?? 0;
     },

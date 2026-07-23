@@ -141,6 +141,9 @@ export function CommentsSheet({
                 value={draft}
                 onChangeText={onChangeDraft}
                 onSubmitEditing={onSubmit}
+                // Keyboard "send" posts immediately and keeps the keyboard up
+                // for the next comment (IG-style) — no extra button press.
+                submitBehavior="submit"
                 placeholder="Add a comment…"
                 placeholderTextColor={colors.ash}
                 autoFocus
@@ -159,7 +162,9 @@ export function CommentsSheet({
                 }}
               />
               <Pressable
-                onPress={onSubmit}
+                // onPressIn: fires on touch-down, BEFORE the keyboard-dismiss
+                // can swallow the tap — kills the press-twice bug.
+                onPressIn={onSubmit}
                 accessibilityLabel="Post comment"
                 style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}
               >

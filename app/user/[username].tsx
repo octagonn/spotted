@@ -8,14 +8,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
 import { StreakPopup } from "@/components/profile/StreakPopup";
 import { Avatar } from "@/components/ui/Avatar";
-import { TauntPickerSheet } from "@/components/friends/TauntPickerSheet";
 import { Button, RelButton } from "@/components/ui/Button";
-import { useSheet } from "@/components/ui/Sheet";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { useMutualFriends } from "@/hooks/queries/useFollowing";
 import { useRespondToRequest, useSendFriendRequest } from "@/hooks/queries/useFriends";
 import { useFriendshipStatus, useProfileByUsername, useUserStreak } from "@/hooks/queries/useProfile";
+import { useSendTaunt } from "@/hooks/queries/useTaunts";
 import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
 import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
 import { useTrophies } from "@/hooks/useTrophies";
@@ -24,9 +23,10 @@ import { useStories } from "@/hooks/queries/useStories";
 import { useUserCounts } from "@/hooks/queries/useUserCounts";
 import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
 import { computeGymStreak } from "@/lib/streak";
+import { randomTauntLine } from "@/lib/tauntLines";
 import { useAuthStore } from "@/stores/auth";
 import { relationshipButton, useRelationships } from "@/stores/relationships";
-import { localDateKey } from "@/stores/ui";
+import { localDateKey, showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import type { RelationshipState } from "@/types/redesign";
 
@@ -45,7 +45,6 @@ function backendState(status: ReturnType<typeof useFriendshipStatus>["data"]): R
 export default function UserProfileScreen() {
   const { username = "" } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
-  const sheet = useSheet();
   const insets = useSafeAreaInsets();
   const profileQuery = useProfileByUsername(username);
   const profile = profileQuery.data;
@@ -60,6 +59,19 @@ export default function UserProfileScreen() {
   const mutuals = useMutualFriends(profile?.id);
   const stories = useStories();
   const sendRequest = useSendFriendRequest();
+  const sendTaunt = useSendTaunt();
+  // One-button taunt: random line from the 20-line rotation, no picker.
+  const fireTaunt = () => {
+    if (!profile || sendTaunt.isPending) return;
+    const line = randomTauntLine();
+    sendTaunt.mutate(
+      { targetId: profile.id, lineId: line.id, lineText: line.text },
+      {
+        onSuccess: () => showToast("Taunt sent"),
+        onError: (error) => showToast(error.message)
+      }
+    );
+  };
   const respondRequest = useRespondToRequest();
   const relationships = useRelationships();
   const [streakOpen, setStreakOpen] = useState(false);
@@ -196,9 +208,9 @@ export default function UserProfileScreen() {
               the canned-line picker with trophy-gated extras. */}
           {isFriend && profile ? (
             <RelButton
-              label="Taunt"
+              label={sendTaunt.isPending ? "Sending…" : "Taunt"}
               kind="quiet"
-              onPress={() => sheet.open(<TauntPickerSheet targetId={profile.id} name={profile.display_name} />)}
+              onPress={fireTaunt}
             />
           ) : null}
           <RelButton label="Share" kind="quiet" onPress={shareProfile} />

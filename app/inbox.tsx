@@ -14,6 +14,7 @@ import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { useMyCommunityInvite, useRespondCommunityInvite } from "@/hooks/queries/useCommunities";
 import { useIncomingRequests, useRespondToRequest } from "@/hooks/queries/useFriends";
 import { supabase } from "@/lib/supabase";
+import { randomTauntLine } from "@/lib/tauntLines";
 import { localDateKey, showToast } from "@/stores/ui";
 import {
   useMarkNotificationsRead,
@@ -50,7 +51,9 @@ function notificationText(n: AppNotification): string {
     case "wave":
       return n.payload?.gymName ? `waved at you — they're at ${String(n.payload.gymName)}` : "waved at you";
     case "community_nudge":
-      return `nudged ${String(n.payload?.communityName ?? "your crew")} — it's been quiet`;
+      return n.payload?.text
+        ? `nudged ${String(n.payload?.communityName ?? "your crew")}: "${String(n.payload.text)}"`
+        : `nudged ${String(n.payload?.communityName ?? "your crew")} — it's been quiet`;
     case "tagged":
       return `tagged you in their ${n.payload?.kind === "story" ? "story" : "post"}`;
     case "second_workout":
@@ -65,14 +68,6 @@ function notificationText(n: AppNotification): string {
       return "sent you an update";
   }
 }
-
-/** One-tap roasts for a friend whose streak just died. */
-const TAUNTS = [
-  "The couch won today 🛋️",
-  "RIP streak 🪦 gone but not forgotten",
-  "Gym said it misses you 😂",
-  "Legs day? More like rest year 💀"
-];
 
 /**
  * Notification avatar with a small type-icon badge (#22). Friend → friend
@@ -96,46 +91,22 @@ function NotifAvatar({ name, avatar, type }: { name: string; avatar: string | nu
   );
 }
 
-function TauntSheet({ targetId, name }: { targetId: string; name: string }) {
-  const sheet = useSheet();
-  const [pending, setPending] = useState(false);
-  const send = async (text: string) => {
-    if (pending) return;
-    setPending(true);
-    const { error } = await supabase.rpc("send_taunt", { p_target: targetId, p_text: text });
-    setPending(false);
-    sheet.close();
+/** One-button taunt: sends a RANDOM line from the 20-line rotation. */
+function useDirectTaunt() {
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const sendTaunt = async (targetId: string) => {
+    if (pendingId) return;
+    setPendingId(targetId);
+    const line = randomTauntLine();
+    const { error } = await supabase.rpc("send_taunt", { p_target: targetId, p_text: line.text });
+    setPendingId(null);
     if (error) {
       showToast(error.message.includes("cooldown") ? "Easy — you already taunted them today" : "Couldn't send the taunt");
     } else {
       showToast("Taunt sent");
     }
   };
-  return (
-    <View>
-      <SheetTitle>{`Taunt ${name.split(" ")[0]}`}</SheetTitle>
-      <SheetSub>Their streak died. One tap — they get a push. Once per day.</SheetSub>
-      {TAUNTS.map((text) => (
-        <Pressable key={text} onPress={() => void send(text)} accessibilityLabel={text}>
-          <View
-            style={{
-              marginHorizontal: 20,
-              marginTop: 8,
-              paddingVertical: 13,
-              paddingHorizontal: 16,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: colors.iron,
-              backgroundColor: colors.charcoal
-            }}
-          >
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>{text}</Text>
-          </View>
-        </Pressable>
-      ))}
-      <View style={{ height: 8 }} />
-    </View>
-  );
+  return { sendTaunt, pendingId };
 }
 
 /** Join/ignore buttons on a community-invite notification. */
@@ -190,6 +161,7 @@ export default function InboxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const sheet = useSheet();
+  const directTaunt = useDirectTaunt();
   const requests = useIncomingRequests();
   const respond = useRespondToRequest();
   const notifications = useNotifications();
@@ -346,9 +318,9 @@ export default function InboxScreen() {
                     ) : null}
                     {n.type === "streak_break_friend" && n.actorId ? (
                       <RelButton
-                        label="Taunt"
+                        label={directTaunt.pendingId === n.actorId ? "Sending…" : "Taunt"}
                         kind="primary"
-                        onPress={() => sheet.open(<TauntSheet targetId={n.actorId as string} name={n.actorName} />)}
+                        onPress={() => void directTaunt.sendTaunt(n.actorId as string)}
                       />
                     ) : null}
                     {!n.read ? (

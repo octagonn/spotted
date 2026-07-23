@@ -1531,7 +1531,7 @@ export type Database = {
       community_invite_code: { Args: { cid: string }; Returns: string | null }
       regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
       join_community_by_code: { Args: { code: string }; Returns: string | null }
-      nudge_community: { Args: { cid: string }; Returns: number }
+      nudge_community: { Args: { cid: string; p_text?: string }; Returns: number }
       notify_second_workout: { Args: { p_post: string; p_name: string }; Returns: number }
       mark_message_viewed: { Args: { p_message: string }; Returns: undefined }
       delete_community: { Args: { p_community: string }; Returns: undefined }

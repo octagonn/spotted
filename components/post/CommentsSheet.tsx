@@ -24,10 +24,55 @@ export type CommentRow = {
   avatarUrl?: string | null;
   text: string;
   time: string;
+  /** Parent comment id when this row is a reply. */
+  parentId?: string | null;
 };
+
+export type ReplyTarget = { id: string; handle: string };
 
 function mono(size: number, color: string) {
   return { fontFamily: "GeistMono_400Regular", fontSize: size, color };
+}
+
+/** One comment (or reply) — sized to read comfortably, with a Reply action. */
+function CommentLine({
+  comment,
+  onOpenProfile,
+  onReply,
+  replyParent
+}: {
+  comment: CommentRow;
+  onOpenProfile: (handle: string) => void;
+  onReply?: (target: ReplyTarget | null) => void;
+  /** When rendering a reply, the top-level parent replies thread onto. */
+  replyParent?: CommentRow;
+}) {
+  return (
+    <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+      <Pressable onPress={() => onOpenProfile(comment.handle)} accessibilityLabel={`Open ${comment.handle}`}>
+        <Avatar name={comment.name} uri={comment.avatarUrl} size={replyParent ? 30 : 38} />
+      </Pressable>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text onPress={() => onOpenProfile(comment.handle)} style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white }}>
+            {comment.handle}
+          </Text>
+          <Text style={mono(11, colors.ash)}>{comment.time}</Text>
+        </View>
+        <Text style={{ marginTop: 3, fontSize: 15.5, lineHeight: 22, color: colors.bone }}>{comment.text}</Text>
+        {onReply ? (
+          <Pressable
+            onPress={() => onReply({ id: replyParent ? replyParent.id : comment.id, handle: comment.handle })}
+            accessibilityLabel={`Reply to ${comment.handle}`}
+            hitSlop={6}
+            style={{ marginTop: 4, alignSelf: "flex-start" }}
+          >
+            <Text style={{ fontSize: 12.5, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Reply</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 /**
@@ -44,6 +89,8 @@ export function CommentsSheet({
   draft,
   onChangeDraft,
   onSubmit,
+  replyTo = null,
+  onReply,
   loading = false
 }: {
   visible: boolean;
@@ -54,6 +101,10 @@ export function CommentsSheet({
   draft: string;
   onChangeDraft: (value: string) => void;
   onSubmit: () => void;
+  /** Active reply target - composer shows "Replying to @x". */
+  replyTo?: ReplyTarget | null;
+  /** Set the reply target (undefined = replies unsupported, e.g. fixtures). */
+  onReply?: (target: ReplyTarget | null) => void;
   loading?: boolean;
 }) {
   const insets = useSafeAreaInsets();
@@ -69,11 +120,10 @@ export function CommentsSheet({
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close comments" />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          {/* Popup-sized sheet (~60% of screen) — the post stays visible
-              behind it, so it reads as a menu, not a new screen. */}
+          {/* Half-screen popup — the post stays visible behind it. */}
           <View
             style={{
-              height: height * 0.6,
+              height: height * 0.5,
               backgroundColor: colors.ink,
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
@@ -101,29 +151,38 @@ export function CommentsSheet({
               showsVerticalScrollIndicator={false}
             >
               {loading && comments.length === 0 ? (
-                <Text style={{ fontSize: 12.5, color: colors.fog }}>Loading comments…</Text>
+                <Text style={{ fontSize: 13.5, color: colors.fog }}>Loading comments…</Text>
               ) : comments.length === 0 ? (
-                <Text style={{ fontSize: 12.5, color: colors.fog }}>No comments yet. Say something.</Text>
+                <Text style={{ fontSize: 13.5, color: colors.fog }}>No comments yet. Say something.</Text>
               ) : (
-                comments.map((comment) => (
-                  <View key={comment.id} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
-                    <Pressable onPress={() => openProfile(comment.handle)} accessibilityLabel={`Open ${comment.handle}`}>
-                      <Avatar name={comment.name} uri={comment.avatarUrl} size={28} />
-                    </Pressable>
-                    <Text style={{ flex: 1, fontSize: 13, color: colors.mist, lineHeight: 13 * 1.4 }}>
-                      <Text onPress={() => openProfile(comment.handle)} style={{ fontFamily: "Geist_700Bold", color: colors.white }}>
-                        {comment.handle}
-                      </Text>
-                      {"  "}
-                      {comment.text}
-                      {"  "}
-                      <Text style={mono(10, colors.ash)}>{comment.time}</Text>
-                    </Text>
-                  </View>
-                ))
+                comments
+                  .filter((c) => !c.parentId)
+                  .map((comment) => (
+                    <View key={comment.id}>
+                      <CommentLine comment={comment} onOpenProfile={openProfile} onReply={onReply} />
+                      {comments
+                        .filter((r) => r.parentId === comment.id)
+                        .map((reply) => (
+                          <View key={reply.id} style={{ paddingLeft: 44, paddingTop: 10 }}>
+                            <CommentLine comment={reply} onOpenProfile={openProfile} onReply={onReply} replyParent={comment} />
+                          </View>
+                        ))}
+                    </View>
+                  ))
               )}
             </ScrollView>
 
+            {/* Replying-to bar */}
+            {replyTo ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 8 }}>
+                <Text style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
+                  Replying to <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>@{replyTo.handle}</Text>
+                </Text>
+                <Pressable onPress={() => onReply?.(null)} accessibilityLabel="Cancel reply" hitSlop={8}>
+                  <X size={15} color={colors.fog} strokeWidth={2.2} />
+                </Pressable>
+              </View>
+            ) : null}
             {/* Input row — stays above the keyboard */}
             <View
               style={{

@@ -6,6 +6,8 @@ import { Pressable } from "@/components/ui/Pressable";
 import { colors } from "@/theme/colors";
 
 type ListRowProps = {
+  /** Larger presentation (messages inbox): taller row, bigger name/preview. */
+  big?: boolean;
   /** Leading slot — usually an <Avatar> or <GroupAvatar>. */
   left?: ReactNode;
   name: string;
@@ -26,7 +28,7 @@ type ListRowProps = {
  * List row per spec §2.5: gap 12, padding 11×18; pressed bg graphite;
  * name 600/14.5 bone, sub 12.5 fog (ellipsis), time mono 10.5 ash, 8px unread dot.
  */
-export function ListRow({ left, name, sub, subStrong, time, unread, right, onPress, onLongPress }: ListRowProps) {
+export function ListRow({ big = false, left, name, sub, subStrong, time, unread, right, onPress, onLongPress }: ListRowProps) {
   const [pressed, setPressed] = useState(false);
   return (
     <Pressable
@@ -42,8 +44,8 @@ export function ListRow({ left, name, sub, subStrong, time, unread, right, onPre
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
-          paddingVertical: 11,
+          gap: big ? 14 : 12,
+          paddingVertical: big ? 14 : 11,
           paddingHorizontal: 18,
           backgroundColor: pressed && onPress ? colors.graphite : "transparent"
         }}
@@ -53,7 +55,7 @@ export function ListRow({ left, name, sub, subStrong, time, unread, right, onPre
           <Text
             style={{
               fontFamily: "Geist_600SemiBold",
-              fontSize: 14.5,
+              fontSize: big ? 16.5 : 14.5,
               letterSpacing: 14.5 * -0.01,
               color: colors.bone
             }}
@@ -65,7 +67,7 @@ export function ListRow({ left, name, sub, subStrong, time, unread, right, onPre
               numberOfLines={1}
               style={{
                 marginTop: 2,
-                fontSize: 12.5,
+                fontSize: big ? 14 : 12.5,
                 fontFamily: subStrong ? "Geist_600SemiBold" : "Geist_400Regular",
                 color: subStrong ? colors.mist : colors.fog
               }}

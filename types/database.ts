@@ -794,6 +794,7 @@ export type Database = {
       }
       post_comments: {
         Row: {
+          parent_id: string | null
           content: string
           created_at: string
           expires_at: string
@@ -802,6 +803,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          parent_id?: string | null
           content: string
           created_at?: string
           expires_at?: string
@@ -810,6 +812,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          parent_id?: string | null
           content?: string
           created_at?: string
           expires_at?: string

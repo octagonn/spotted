@@ -1,16 +1,16 @@
 import { useRouter } from "expo-router";
-import { ChevronRight, FolderPlus, Mail, X } from "lucide-react-native";
+import { ChevronRight, Mail, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Platform, ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useInboxThreadActions, useInboxThreads } from "@/components/friends/useInboxThreads";
-import {
-  useCreateFolder,
-  useMessageFolders,
-  useMessageRequests,
-  useSetThreadFolder
-} from "@/hooks/queries/useMessagesExtras";
+import { useMessageRequests } from "@/hooks/queries/useMessagesExtras";
+import { useQuery } from "@tanstack/react-query";
+import { useSendTaunt } from "@/hooks/queries/useTaunts";
+import { randomTauntLine } from "@/lib/tauntLines";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { showToast } from "@/stores/ui";
 import { tokens } from "@/theme/tokens";
 import { Avatar } from "@/components/ui/Avatar";
 import { ListRow } from "@/components/ui/ListRow";
@@ -40,14 +40,11 @@ export default function FriendsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState("Messages");
+  // Friends tab: your full list first, discovery one hop deeper.
+  const [friendsTab, setFriendsTab] = useState("My Friends");
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
-  // Folder (#2) selection — the filter-chip row was removed per feedback.
-  const [folderId, setFolderId] = useState<string | null>(null);
   const messageRequests = useMessageRequests();
-  const folders = useMessageFolders();
-  const createFolder = useCreateFolder();
-  const setThreadFolder = useSetThreadFolder();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const inbox = useInboxThreads();
   const inboxActions = useInboxThreadActions();
@@ -56,6 +53,40 @@ export default function FriendsScreen() {
   const suggestions = useFriendSuggestions();
   const requests = useIncomingRequests();
   const sendFriendRequest = useSendFriendRequest();
+  const sendTaunt = useSendTaunt();
+  const [nudgedIds, setNudgedIds] = useState<Set<string>>(new Set());
+  // Which friends already posted (went to the gym) today — drives the Nudge
+  // button on the My Friends list.
+  const friendsPostedToday = useQuery({
+    queryKey: ["friends-posted-today", (friends.data ?? []).map((f) => f.id).join(",")],
+    enabled: isSupabaseConfigured && (friends.data ?? []).length > 0 && tab === "Friends",
+    refetchOnWindowFocus: "always",
+    queryFn: async (): Promise<Set<string>> => {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from("posts")
+        .select("user_id")
+        .gte("created_at", startOfDay.toISOString())
+        .in("user_id", (friends.data ?? []).map((f) => f.id));
+      if (error) throw error;
+      return new Set((data ?? []).map((row) => row.user_id));
+    }
+  });
+  const nudgeFriend = (friendId: string) => {
+    if (nudgedIds.has(friendId) || sendTaunt.isPending) return;
+    const line = randomTauntLine();
+    sendTaunt.mutate(
+      { targetId: friendId, lineId: line.id, lineText: line.text },
+      {
+        onSuccess: () => {
+          setNudgedIds((prev) => new Set(prev).add(friendId));
+          showToast("Nudge sent");
+        },
+        onError: (error) => showToast(error.message)
+      }
+    );
+  };
   const respondToRequest = useRespondToRequest();
   const relationships = useRelationships();
 
@@ -146,10 +177,8 @@ export default function FriendsScreen() {
   // DM list: active conversations first, then every other friend as a
   // "Tap to start conversation" row (empty threads + friends with no thread).
   const dmThreads = useMemo(() => {
-    let list = (inbox.data ?? []).filter((t) => !t.empty);
-    if (folderId) list = list.filter((t) => t.folderId === folderId);
-    return list;
-  }, [inbox.data, folderId]);
+    return (inbox.data ?? []).filter((t) => !t.empty);
+  }, [inbox.data]);
   const dmPlaceholders = useMemo(() => {
     const threaded = new Set(dmThreads.map((t) => t.profileId));
     const list: { profileId: string; name: string; avatarUrl: string | null }[] = [];
@@ -240,7 +269,7 @@ export default function FriendsScreen() {
             Friends
           </Text>
         </View>
-        <Segmented options={["Messages", "Find Friends"]} value={tab} onChange={setTab} />
+        <Segmented options={["Messages", "Friends"]} value={tab} onChange={setTab} />
 
         {tab === "Messages" ? (
           <View>
@@ -272,25 +301,6 @@ export default function FriendsScreen() {
                   </Pressable>
                 ) : null}
 
-                {/* Folder chips (#2) */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 18, paddingBottom: 10, alignItems: "center" }}>
-                  <FolderChip label="Inbox" on={folderId === null} onPress={() => setFolderId(null)} />
-                  {(folders.data ?? []).map((f) => (
-                    <FolderChip key={f.id} label={f.name} on={folderId === f.id} onPress={() => setFolderId(f.id)} />
-                  ))}
-                  <Pressable
-                    accessibilityLabel="New folder"
-                    onPress={() =>
-                      Alert.prompt?.("New folder", "Name your folder", (name) => {
-                        if (name?.trim()) createFolder.mutate(name.trim());
-                      }) ?? createFolder.mutate("Folder")
-                    }
-                  >
-                    <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
-                      <FolderPlus size={15} color={colors.silver} strokeWidth={2} />
-                    </View>
-                  </Pressable>
-                </ScrollView>
               </>
             ) : null}
 
@@ -299,7 +309,8 @@ export default function FriendsScreen() {
                 messageMatches.map((friend) => (
                   <ListRow
                     key={`msg-friend-${friend.id}`}
-                    left={<Avatar name={friend.display_name} uri={friend.avatar_url} size={46} />}
+                    big
+                    left={<Avatar name={friend.display_name} uri={friend.avatar_url} size={58} />}
                     name={friend.display_name}
                     sub={`@${friend.username}`}
                     onPress={() => router.push(`/chat/${friend.id}`)}
@@ -316,24 +327,14 @@ export default function FriendsScreen() {
                 {dmThreads.map((thread) => (
                   <ListRow
                     key={`real-${thread.profileId}`}
-                    left={<Avatar name={thread.name} uri={thread.avatarUrl} size={46} />}
+                    big
+                    left={<Avatar name={thread.name} uri={thread.avatarUrl} size={58} />}
                     name={thread.muted ? `${thread.name} · muted` : thread.name}
                     sub={thread.preview}
                     subStrong={thread.unread}
                     time={thread.time}
                     unread={thread.unread}
                     onPress={() => openThread(thread.profileId)}
-                    onLongPress={() => {
-                      const opts = (folders.data ?? []).map((f) => ({
-                        text: thread.folderId === f.id ? `✓ ${f.name}` : f.name,
-                        onPress: () => setThreadFolder.mutate({ conversationId: thread.conversationId, folderId: f.id })
-                      }));
-                      Alert.alert("Move to folder", undefined, [
-                        { text: thread.folderId === null ? "✓ Inbox" : "Inbox", onPress: () => setThreadFolder.mutate({ conversationId: thread.conversationId, folderId: null }) },
-                        ...opts,
-                        { text: "Cancel", style: "cancel" }
-                      ]);
-                    }}
                   />
                 ))}
                 {/* Every other friend — tap to start a conversation. */}
@@ -342,7 +343,8 @@ export default function FriendsScreen() {
                   return (
                     <ListRow
                       key={`ph-${person.profileId}`}
-                      left={<Avatar name={person.name} uri={person.avatarUrl} size={46} />}
+                      big
+                      left={<Avatar name={person.name} uri={person.avatarUrl} size={58} />}
                       name={person.name}
                       sub="Tap to start conversation"
                       subStrong={unread}
@@ -363,6 +365,52 @@ export default function FriendsScreen() {
           </View>
         ) : (
           <View>
+            <View style={{ paddingHorizontal: 18, paddingBottom: 10 }}>
+              <Segmented options={["My Friends", "Find Friends"]} value={friendsTab} onChange={setFriendsTab} />
+            </View>
+            {friendsTab === "My Friends" ? (
+              <View>
+                {(friends.data ?? []).length === 0 ? (
+                  <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog, paddingHorizontal: 32 }}>
+                    No friends yet. Find them in the Find Friends tab.
+                  </Text>
+                ) : (
+                  (friends.data ?? []).map((friend) => {
+                    const went = friendsPostedToday.data?.has(friend.id) ?? false;
+                    const nudged = nudgedIds.has(friend.id);
+                    return (
+                      <ListRow
+                        key={`friend-${friend.id}`}
+                        big
+                        left={<Avatar name={friend.display_name} uri={friend.avatar_url} size={58} />}
+                        name={friend.display_name}
+                        sub={`@${friend.username}`}
+                        right={
+                          went ? (
+                            <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(232,180,76,0.14)", borderWidth: 1, borderColor: "rgba(232,180,76,0.45)" }}>
+                              <Text style={{ fontSize: 11.5, fontFamily: "Geist_600SemiBold", color: tokens.accent.gold }}>Went today</Text>
+                            </View>
+                          ) : (
+                            <Pressable
+                              accessibilityLabel={`Nudge ${friend.display_name}`}
+                              onPress={() => nudgeFriend(friend.id)}
+                              disabled={nudged}
+                              style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: nudged ? colors.iron : colors.slate }}
+                            >
+                              <Text style={{ fontSize: 12, fontFamily: "Geist_600SemiBold", color: nudged ? colors.fog : colors.white }}>
+                                {nudged ? "Nudged" : "Nudge"}
+                              </Text>
+                            </Pressable>
+                          )
+                        }
+                        onPress={() => router.push(`/user/${friend.username}`)}
+                      />
+                    );
+                  })
+                )}
+              </View>
+            ) : (
+            <View>
             <SearchBar
               value={search}
               onChangeText={setSearch}
@@ -423,6 +471,8 @@ export default function FriendsScreen() {
                   </Text>
                 )}
               </>
+            )}
+            </View>
             )}
           </View>
         )}
@@ -537,14 +587,4 @@ function QuickAddRow({
   );
 }
 
-/** Instagram-style activity button: heart icon + unread badge, top-right. */
-function FolderChip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress}>
-      <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: on ? colors.charcoal : "transparent", borderWidth: 1, borderColor: on ? colors.slate : colors.iron }}>
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: on ? colors.white : colors.fog }}>{label}</Text>
-      </View>
-    </Pressable>
-  );
-}
 

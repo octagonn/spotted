@@ -11,6 +11,8 @@ export type PostComment = {
   avatarUrl: string | null;
   text: string;
   createdAt: string;
+  /** Parent comment id when this is a reply (one level of threading). */
+  parentId: string | null;
 };
 
 /** Real comments for a post (empty for fixture/demo posts). */
@@ -22,7 +24,7 @@ export function usePostComments(postId: string, enabled: boolean) {
     queryFn: async (): Promise<PostComment[]> => {
       const { data, error } = await supabase
         .from("post_comments")
-        .select("id, user_id, content, created_at, profiles:user_id(username, display_name, avatar_url)")
+        .select("id, user_id, content, created_at, parent_id, profiles:user_id(username, display_name, avatar_url)")
         .eq("post_id", postId)
         .order("created_at", { ascending: true })
         .limit(200);
@@ -32,6 +34,7 @@ export function usePostComments(postId: string, enabled: boolean) {
         user_id: string;
         content: string;
         created_at: string;
+        parent_id: string | null;
         profiles: { username: string; display_name: string; avatar_url: string | null } | null;
       }[]).map((row) => ({
         id: row.id,
@@ -40,7 +43,8 @@ export function usePostComments(postId: string, enabled: boolean) {
         handle: row.profiles?.username ?? "someone",
         avatarUrl: row.profiles?.avatar_url ?? null,
         text: row.content,
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        parentId: row.parent_id ?? null
       }));
     }
   });
@@ -50,12 +54,14 @@ export function useAddComment(postId: string) {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
   return useMutation({
-    mutationFn: async (text: string) => {
+    mutationFn: async (input: string | { text: string; parentId?: string | null }) => {
+      const text = typeof input === "string" ? input : input.text;
+      const parentId = typeof input === "string" ? null : input.parentId ?? null;
       const trimmed = text.trim();
       if (!isSupabaseConfigured || !userId || !trimmed) return;
       const { error } = await supabase
         .from("post_comments")
-        .insert({ post_id: postId, user_id: userId, content: trimmed.slice(0, 500) });
+        .insert({ post_id: postId, user_id: userId, content: trimmed.slice(0, 500), parent_id: parentId });
       if (error) throw error;
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["post-comments", postId] })

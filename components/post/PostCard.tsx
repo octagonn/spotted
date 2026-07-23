@@ -5,7 +5,7 @@ import { Camera, Check, Flame, Heart, Home, MapPin, Medal, MessageCircle, MoreHo
 import { useCallback, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { CommentsSheet, type CommentRow } from "@/components/post/CommentsSheet";
+import { CommentsSheet, type CommentRow, type ReplyTarget } from "@/components/post/CommentsSheet";
 import { MediaFrame } from "@/components/post/MediaFrame";
 import { ReactionsSheet } from "@/components/post/ReactionsSheet";
 import { ContentMenu } from "@/components/ContentMenu";
@@ -102,8 +102,10 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
     handle: c.handle,
     avatarUrl: c.avatarUrl,
     text: c.text,
-    time: relTime(c.createdAt)
+    time: relTime(c.createdAt),
+    parentId: c.parentId
   }));
+  const [commentReplyTo, setCommentReplyTo] = useState<ReplyTarget | null>(null);
   const fixtureComments: CommentRow[] = post.comments.map((c, i) => ({
     id: `f-${i}`,
     name: c.name ?? c.handle,
@@ -148,8 +150,10 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
       return;
     }
     setDraft("");
+    const parentId = commentReplyTo?.id ?? null;
+    setCommentReplyTo(null);
     if (isRealPost) {
-      addComment.mutate(text, { onError: () => showToast("Couldn't post comment") });
+      addComment.mutate({ text, parentId }, { onError: () => showToast("Couldn't post comment") });
     } else {
       showToast("Comment posted");
     }
@@ -474,6 +478,8 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         draft={draft}
         onChangeDraft={setDraft}
         onSubmit={postComment}
+        replyTo={commentReplyTo}
+        onReply={isRealPost ? setCommentReplyTo : undefined}
         loading={commentsQuery.isLoading}
       />
 

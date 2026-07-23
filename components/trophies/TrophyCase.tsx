@@ -1,15 +1,14 @@
-import { useMemo, useState } from "react";
-import { Text, View, useWindowDimensions } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useMemo, useState } from "react";
+import { LayoutAnimation, Text, View, useWindowDimensions } from "react-native";
 
 import { EarnedTrophyCard } from "@/components/trophies/EarnedTrophyCard";
-import { PersonalRecordsSection } from "@/components/trophies/PersonalRecordsSection";
 import { TrophyCategorySection } from "@/components/trophies/TrophyCategorySection";
 import { TrophyDetailSheet } from "@/components/trophies/TrophyDetailSheet";
 import { TrophyGrid, trophyCardWidth } from "@/components/trophies/TrophyGrid";
 import { TrophySegmentedControl, type TrophyTab } from "@/components/trophies/TrophySegmentedControl";
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
-import { usePersonalRecords } from "@/hooks/usePersonalRecords";
 import { useTrophies } from "@/hooks/useTrophies";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { useSetFeaturedTrophies } from "@/hooks/queries/useProfileExtras";
@@ -26,7 +25,6 @@ import { colors } from "@/theme/colors";
 export function TrophyCase({ userId }: { userId?: string | null }) {
   const { width } = useWindowDimensions();
   const { sections, earned, ladderFor, newlyEarned, dismissNewlyEarned } = useTrophies(userId);
-  // Workout-session PRs (any exercise) — they belong in the case too.
   const profile = useMyProfile().data;
   const myId = profile?.id ?? null;
   const isOwn = !userId || userId === myId;
@@ -45,8 +43,32 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
     }
     return ids;
   }, [featured, sections]);
-  const personalRecords = usePersonalRecords(userId ?? myId);
   const [tab, setTab] = useState<TrophyTab>("Categories");
+  // Collapsible sections (5b): default expanded; collapse choices persist so
+  // the case reopens the way it was left.
+  const COLLAPSED_KEY = "trophy-sections-collapsed";
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    void AsyncStorage.getItem(COLLAPSED_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const arr = JSON.parse(raw) as string[];
+        if (Array.isArray(arr)) setCollapsedSections(new Set(arr));
+      } catch {
+        // corrupt state: fall back to all-expanded
+      }
+    });
+  }, []);
+  const toggleSection = (category: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(220, "easeInEaseOut", "opacity"));
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      void AsyncStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])).catch(() => undefined);
+      return next;
+    });
+  };
   const [openId, setOpenId] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<TrophyShareData | null>(null);
 
@@ -75,12 +97,18 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
 
       {tab === "Categories" ? (
         <>
-          <PersonalRecordsSection records={personalRecords.records} />
           {sections.map((section) => (
-            <TrophyCategorySection key={section.category} section={section} cardWidth={cardWidth} onOpen={setOpenId} />
+            <TrophyCategorySection
+              key={section.category}
+              section={section}
+              cardWidth={cardWidth}
+              collapsed={collapsedSections.has(section.category)}
+              onToggle={toggleSection}
+              onOpen={setOpenId}
+            />
           ))}
         </>
-      ) : earned.length === 0 && personalRecords.records.length === 0 ? (
+      ) : earned.length === 0 ? (
         <View style={{ alignItems: "center", paddingTop: 48, paddingHorizontal: 40 }}>
           <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.fog, textAlign: "center" }}>
             No trophies earned yet. Post, check in, and hit the gym to start your case.
@@ -88,7 +116,6 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
         </View>
       ) : (
         <View style={{ paddingTop: 6 }}>
-          <PersonalRecordsSection records={personalRecords.records} />
           <TrophyGrid>
             {earned.map((entry) => (
               <EarnedTrophyCard key={entry.key} entry={entry} width={cardWidth} onPress={() => setOpenId(entry.def.id)} />

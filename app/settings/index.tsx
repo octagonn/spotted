@@ -109,7 +109,7 @@ export default function SettingsScreen() {
         <SettingsRow
           icon={<Bell size={19} color={ICON} strokeWidth={2} />}
           label="Notifications"
-          onPress={() => router.push("/settings/coming-soon?title=Notifications" as Href)}
+          onPress={() => router.push("/settings/notifications" as Href)}
         />
         <SettingsRow
           icon={<Ban size={19} color={ICON} strokeWidth={2} />}

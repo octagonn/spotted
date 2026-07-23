@@ -14,6 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      notification_preferences: {
+        Row: {
+          user_id: string
+          push_token: string | null
+          push_permission_status: "not_asked" | "granted" | "denied"
+          push_prompt_shown_at: string | null
+          timezone: string
+          gym_reminders_enabled: boolean
+          daily_nudge_time: string
+          taunts_enabled: boolean
+          friend_checkins_scope: "my_gym" | "all_friends" | "off"
+          messages_enabled: boolean
+          friend_requests_enabled: boolean
+          reactions_enabled: boolean
+          quiet_hours_start: string
+          quiet_hours_end: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          push_token?: string | null
+          push_permission_status?: "not_asked" | "granted" | "denied"
+          push_prompt_shown_at?: string | null
+          timezone?: string
+          gym_reminders_enabled?: boolean
+          daily_nudge_time?: string
+          taunts_enabled?: boolean
+          friend_checkins_scope?: "my_gym" | "all_friends" | "off"
+          messages_enabled?: boolean
+          friend_requests_enabled?: boolean
+          reactions_enabled?: boolean
+          quiet_hours_start?: string
+          quiet_hours_end?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          push_token?: string | null
+          push_permission_status?: "not_asked" | "granted" | "denied"
+          push_prompt_shown_at?: string | null
+          timezone?: string
+          gym_reminders_enabled?: boolean
+          daily_nudge_time?: string
+          taunts_enabled?: boolean
+          friend_checkins_scope?: "my_gym" | "all_friends" | "off"
+          messages_enabled?: boolean
+          friend_requests_enabled?: boolean
+          reactions_enabled?: boolean
+          quiet_hours_start?: string
+          quiet_hours_end?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      taunt_mutes: {
+        Row: { user_id: string; muted_id: string; created_at: string }
+        Insert: { user_id: string; muted_id: string; created_at?: string }
+        Update: { user_id?: string; muted_id?: string; created_at?: string }
+        Relationships: []
+      }
       checkins: {
         Row: {
           checked_in_at: string

@@ -6,11 +6,34 @@ import { Platform } from "react-native";
 import { logger } from "@/lib/logger";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
+/** Record the OS permission decision on the prefs row (spec tracking). */
+async function recordPermissionStatus(userId: string, granted: boolean) {
+  try {
+    await supabase
+      .from("notification_preferences")
+      .upsert(
+        {
+          user_id: userId,
+          push_permission_status: granted ? "granted" : "denied",
+          push_prompt_shown_at: new Date().toISOString()
+        },
+        { onConflict: "user_id" }
+      );
+  } catch {
+    // prefs tracking is best-effort; never block registration
+  }
+}
+
+/**
+ * Fire the OS permission prompt (only from the priming flow — never at cold
+ * launch, per spec) and register the token. Records granted/denied either way.
+ */
 export async function registerDeviceToken(userId: string) {
   if (Platform.OS !== "ios" || !Device.isDevice) {
     return null;
   }
   const permission = await Notifications.requestPermissionsAsync();
+  await recordPermissionStatus(userId, permission.granted);
   if (!permission.granted) {
     return null;
   }

@@ -26,6 +26,7 @@ import "react-native-reanimated";
 
 import { GrainOverlay } from "@/components/GrainOverlay";
 import { NotificationBanner } from "@/components/NotificationBanner";
+import { PushPrimingHost } from "@/components/PushPrimingHost";
 import { FlashOverlay } from "@/components/ui/Flash";
 import { SheetProvider } from "@/components/ui/Sheet";
 import { ToastHost } from "@/components/ui/Toast";
@@ -233,6 +234,7 @@ export default function RootLayout() {
               </Stack>
               <ToastHost />
               <NotificationBanner />
+              <PushPrimingHost />
               <GrainOverlay />
               <FlashOverlay />
               <StatusBar style="light" />

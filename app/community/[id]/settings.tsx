@@ -17,6 +17,7 @@ import {
   useCommunityInviteCode,
   useCommunityJoinRequests,
   useCommunityMuted,
+  useDeleteCommunity,
   useLeaveCommunity,
   useRegenerateInviteCode,
   useRespondJoinRequest,
@@ -43,6 +44,10 @@ export default function CommunitySettingsScreen() {
   const community = useCommunity(id);
   const update = useUpdateCommunity(id);
   const leave = useLeaveCommunity();
+  const deleteCommunity = useDeleteCommunity();
+  // Type-the-name confirmation for deletion (deliberate, hard to fat-finger).
+  const [deleteDraft, setDeleteDraft] = useState("");
+  const [deleteArmed, setDeleteArmed] = useState(false);
 
   const isMember = community.data?.isMember ?? false;
   const isAdmin = community.data?.isAdmin ?? false;
@@ -318,6 +323,76 @@ export default function CommunitySettingsScreen() {
                 Save changes
               </Button>
             </View>
+
+            {/* ---- Danger zone: creator-only permanent deletion (6b) ---- */}
+            {isCreator ? (
+              <View style={{ marginTop: 34, borderWidth: 1, borderColor: "rgba(229,72,77,0.4)", borderRadius: 16, padding: 16 }}>
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: "#E5484D" }}>Delete community</Text>
+                <Text style={{ marginTop: 6, fontSize: 12.5, lineHeight: 18, color: colors.fog }}>
+                  Permanent. Removes the community, its chat, and its memberships for every member. Posts stay on their owners&apos; profiles.
+                </Text>
+                {!deleteArmed ? (
+                  <Pressable
+                    accessibilityLabel="Delete community"
+                    onPress={() => setDeleteArmed(true)}
+                    style={{ marginTop: 14, alignSelf: "flex-start", borderWidth: 1, borderColor: "#E5484D", borderRadius: 999, paddingVertical: 9, paddingHorizontal: 18 }}
+                  >
+                    <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: "#E5484D" }}>Delete…</Text>
+                  </Pressable>
+                ) : (
+                  <>
+                    <Text style={{ marginTop: 14, fontSize: 12.5, color: colors.silver }}>
+                      Type <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>{community.data?.name ?? ""}</Text> to confirm:
+                    </Text>
+                    <TextInput
+                      value={deleteDraft}
+                      onChangeText={setDeleteDraft}
+                      autoFocus
+                      autoCapitalize="none"
+                      placeholder="Community name"
+                      placeholderTextColor={colors.fog}
+                      style={[inputStyle, { marginTop: 8, borderColor: "rgba(229,72,77,0.5)" }]}
+                    />
+                    <View style={{ marginTop: 12, flexDirection: "row", gap: 10 }}>
+                      <Pressable
+                        accessibilityLabel="Confirm delete community"
+                        disabled={deleteDraft.trim() !== (community.data?.name ?? "").trim() || deleteCommunity.isPending}
+                        onPress={() =>
+                          deleteCommunity.mutate(id as string, {
+                            onSuccess: () => {
+                              showToast("Community deleted");
+                              router.replace("/(tabs)/map");
+                            },
+                            onError: () => showToast("Couldn't delete — try again")
+                          })
+                        }
+                        style={{
+                          borderRadius: 999,
+                          paddingVertical: 9,
+                          paddingHorizontal: 18,
+                          backgroundColor:
+                            deleteDraft.trim() === (community.data?.name ?? "").trim() ? "#E5484D" : "rgba(229,72,77,0.25)"
+                        }}
+                      >
+                        <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: colors.white }}>
+                          {deleteCommunity.isPending ? "Deleting…" : "Delete forever"}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityLabel="Cancel delete"
+                        onPress={() => {
+                          setDeleteArmed(false);
+                          setDeleteDraft("");
+                        }}
+                        style={{ borderRadius: 999, paddingVertical: 9, paddingHorizontal: 18, borderWidth: 1, borderColor: colors.iron }}
+                      >
+                        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.silver }}>Cancel</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+              </View>
+            ) : null}
           </>
         ) : null}
       </ScrollView>

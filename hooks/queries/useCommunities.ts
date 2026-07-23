@@ -343,6 +343,19 @@ export type CreateCommunityInput = {
 };
 
 /** Create a community (non-gym) and auto-join it as the admin. */
+/** Creator-only hard delete (6b). Server RPC verifies ownership; every
+ *  dependent table cascades, so members just see it vanish from their lists. */
+export function useDeleteCommunity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (communityId: string) => {
+      const { error } = await supabase.rpc("delete_community", { p_community: communityId });
+      if (error) throw error;
+    },
+    onSuccess: (_data, communityId) => invalidateCommunityCaches(queryClient, communityId)
+  });
+}
+
 export function useCreateCommunity() {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);

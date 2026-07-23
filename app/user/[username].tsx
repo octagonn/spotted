@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Flame, Grid3x3, Lock, MapPin, Tag } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, ScrollView, Share, Text, View } from "react-native";
+import { Modal, Linking, ScrollView, Share, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
@@ -20,6 +20,7 @@ import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
 import { useTrophies } from "@/hooks/useTrophies";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
 import { useStories } from "@/hooks/queries/useStories";
+import { usePostedState } from "@/hooks/queries/usePostedState";
 import { useUserCounts } from "@/hooks/queries/useUserCounts";
 import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
 import { computeGymStreak } from "@/lib/streak";
@@ -75,6 +76,10 @@ export default function UserProfileScreen() {
   const respondRequest = useRespondToRequest();
   const relationships = useRelationships();
   const [streakOpen, setStreakOpen] = useState(false);
+  const [avatarZoom, setAvatarZoom] = useState(false);
+  // You must post your own daily before you can see anyone else's profile
+  // below the header (same gate philosophy as the home feed lock).
+  const { postedToday, resolved: postedResolved } = usePostedState();
 
   const key = profile?.id ?? username;
   const initialState = backendState(friendship.data);
@@ -136,7 +141,15 @@ export default function UserProfileScreen() {
 
         {/* Avatar + stats */}
         <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingTop: 8 }}>
-          <Pressable disabled={!hasActiveStory} onPress={() => profile && router.push(`/story?user=${profile.id}`)}>
+          <Pressable
+            disabled={!hasActiveStory && !profile?.avatar_url}
+            onPress={() => {
+              if (hasActiveStory && profile) router.push(`/story?user=${profile.id}`);
+              else if (profile?.avatar_url) setAvatarZoom(true);
+            }}
+            onLongPress={() => profile?.avatar_url && setAvatarZoom(true)}
+            delayLongPress={220}
+          >
             <View
               style={{
                 width: 88,
@@ -238,7 +251,7 @@ export default function UserProfileScreen() {
           </Pressable>
         ) : null}
 
-        {canView ? (
+        {canView && (postedToday || !postedResolved) ? (
           <>
             {/* Inline stats */}
             <View style={{ paddingHorizontal: 18, paddingTop: 24, flexDirection: "row" }}>
@@ -337,6 +350,23 @@ export default function UserProfileScreen() {
               </View>
             )}
           </>
+        ) : canView ? (
+          // You haven't posted your daily — their content is locked (feed-lock
+          // philosophy: post to see others).
+          <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
+            <View style={{ width: 58, height: 58, borderRadius: 29, borderWidth: 1.5, borderColor: colors.gold, backgroundColor: "rgba(232,180,76,0.12)", alignItems: "center", justifyContent: "center" }}>
+              <Lock size={22} color={colors.gold} strokeWidth={2} />
+            </View>
+            <Text style={{ marginTop: 16, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white, textAlign: "center" }}>
+              Post to unlock {name.split(" ")[0]}&apos;s profile
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 12.5, lineHeight: 18, color: colors.fog, textAlign: "center" }}>
+              Drop today&apos;s SPOTTED to see their streak, posts, and progress.
+            </Text>
+            <View style={{ paddingTop: 18, alignSelf: "stretch", paddingHorizontal: 40 }}>
+              <Button onPress={() => router.push("/camera?mode=daily")}>Post today&apos;s SPOTTED</Button>
+            </View>
+          </View>
         ) : (
           // Private account — locked state.
           <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
@@ -369,6 +399,17 @@ export default function UserProfileScreen() {
       </ScrollView>
 
       <StreakPopup visible={streakOpen} name={name} streak={currentStreak} onClose={() => setStreakOpen(false)} />
+
+      {/* Hold-to-enlarge avatar (Instagram-style). */}
+      <Modal visible={avatarZoom} transparent animationType="fade" onRequestClose={() => setAvatarZoom(false)} statusBarTranslucent>
+        <Pressable onPress={() => setAvatarZoom(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <View style={{ width: "100%", aspectRatio: 1, maxWidth: 380, borderRadius: 24, overflow: "hidden", backgroundColor: colors.graphite }}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} contentFit="cover" style={{ flex: 1 }} transition={120} />
+            ) : null}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

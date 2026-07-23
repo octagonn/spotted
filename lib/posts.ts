@@ -158,6 +158,8 @@ export type PublishDailyPostInput = {
   userId: string;
   /** Local file URIs from expo-camera — first is the cover; up to 4. */
   photoUris: string[];
+  /** A recorded daily video (hold-to-record) — takes precedence over photos. */
+  videoUri?: string | null;
   caption: string;
   /** Real gyms.id UUID, or null for home/unlisted locations. */
   gymId: string | null;
@@ -178,6 +180,45 @@ export type PublishDailyPostInput = {
  * path at read time, so `media_url` stores the path, not a URL.
  */
 export async function publishDailyPost(input: PublishDailyPostInput): Promise<string> {
+  // Video daily post (hold-to-record) — upload the clip + poster frame and
+  // insert a video daily-drop row (the feed renders it via RealVideoMedia).
+  if (input.videoUri) {
+    const response = await fetch(input.videoUri);
+    const body = await response.arrayBuffer();
+    if (!body || body.byteLength === 0) {
+      throw new Error("The recorded video could not be read.");
+    }
+    const stamp = Date.now();
+    const ext = input.videoUri.toLowerCase().endsWith(".mp4") ? "mp4" : "mov";
+    const path = `${input.userId}/daily-${stamp}.${ext}`;
+    const upload = await supabase.storage.from("posts").upload(path, body, {
+      contentType: ext === "mp4" ? "video/mp4" : "video/quicktime",
+      upsert: false
+    });
+    if (upload.error) throw upload.error;
+    const thumbnailPath = await generateAndUploadThumbnail(input.videoUri, input.userId, stamp);
+    const insert = await supabase
+      .from("posts")
+      .insert({
+        user_id: input.userId,
+        media_url: path,
+        media_type: "video",
+        thumbnail_url: thumbnailPath,
+        caption: input.caption.trim() ? input.caption.trim().slice(0, 200) : null,
+        gym_id: input.gymId,
+        location_kind: input.locationKind,
+        music_title: input.musicTitle,
+        music_artist: input.musicArtist,
+        music_preview_url: input.musicPreviewUrl,
+        music_artwork_url: input.musicArtworkUrl,
+        music_clip_start: input.musicClipStart,
+        is_daily_drop: true
+      })
+      .select("id")
+      .single();
+    if (insert.error) throw insert.error;
+    return insert.data.id;
+  }
   if (input.photoUris.length === 0) {
     throw new Error("No photos to upload.");
   }

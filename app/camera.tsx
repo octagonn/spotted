@@ -713,7 +713,10 @@ export default function CameraScreen() {
   // remount + wait was the recording lag). Daily is photo-only → "picture" for
   // full-sensor quality. Story/lift can record → "video" so holding starts
   // recording instantly; 1080p stills are fine for ephemeral stories.
-  const camMode: "picture" | "video" = mode === "daily" ? "picture" : "video";
+  // Video mode for every flow so hold-to-record works AND tap-to-photo still
+  // captures (takePictureAsync works in video mode). Daily was "picture" before,
+  // which made holding the shutter hang recordAsync forever (infinite "saving").
+  const camMode: "picture" | "video" = "video";
   const [photoUri, setPhotoUri] = useState<string>();
   /** Earlier shots in a multi-photo daily post (carousel). Max 4 total. */
   const [extraPhotos, setExtraPhotos] = useState<string[]>([]);
@@ -1161,8 +1164,14 @@ export default function CameraScreen() {
         if (result?.uri) {
           videoTrimRef.current = null;
           setVideoUri(result.uri);
-          setMode("lift");
-          setLiftStep("review");
+          // Daily video stays in the daily flow (photo carousel becomes a clip);
+          // story/lift holds route to the lift review as before.
+          if (mode === "daily") {
+            setDailyStep("review");
+          } else {
+            setMode("lift");
+            setLiftStep("review");
+          }
         } else {
           showToast("Recording didn't save — try again");
         }
@@ -1287,8 +1296,8 @@ export default function CameraScreen() {
       router.replace("/(tabs)/feed");
       return;
     }
-    if (!photoUri) {
-      Alert.alert("No photo", "The photo didn't save. Go back and retake it.");
+    if (!photoUri && !videoUri) {
+      Alert.alert("No media", "The shot didn't save. Go back and retake it.");
       return;
     }
     setPublishing(true);
@@ -1299,7 +1308,8 @@ export default function CameraScreen() {
         .join(" ");
       const postId = await publishDailyPost({
         userId,
-        photoUris: [...extraPhotos, photoUri],
+        photoUris: photoUri ? [...extraPhotos, photoUri] : [],
+        videoUri: videoUri ?? null,
         caption: captionForPost,
         gymId: gym?.type === "gym" ? gym.id : null,
         locationKind: gym?.type ?? "other",
@@ -1597,7 +1607,7 @@ export default function CameraScreen() {
             </Text>
           ) : (
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.55)" }}>
-              {mode === "daily" ? "TAP TO CAPTURE TODAY'S SPOTTED" : "TAP FOR PHOTO \u00b7 HOLD FOR VIDEO"}
+              {"TAP FOR PHOTO \u00b7 HOLD FOR VIDEO"}
             </Text>
           )}
         </View>
@@ -1628,6 +1638,8 @@ export default function CameraScreen() {
           >
             <ScenePhoto uri={photoUri} scene="s2" legibility={false} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
           </Pressable>
+        ) : videoUri ? (
+          <LiftVideoThumb uri={videoUri} />
         ) : (
           <ScenePhoto
             uri={photoUri}
@@ -1653,7 +1665,14 @@ export default function CameraScreen() {
             justifyContent: "space-between"
           }}
         >
-          <CircleButton label="Retake" onPress={() => setDailyStep("capture")}>
+          <CircleButton
+            label="Retake"
+            onPress={() => {
+              // Clear the recorded clip so the capture screen is live again.
+              if (videoUri) setVideoUri(undefined);
+              setDailyStep("capture");
+            }}
+          >
             <ChevronLeft color={colors.white} size={20} />
           </CircleButton>
           <StepPill>{mode === "story" ? "STORY" : "YOUR SHOT"}</StepPill>
@@ -1664,8 +1683,9 @@ export default function CameraScreen() {
                 <Pencil size={18} color={colors.white} strokeWidth={2.2} />
               </View>
             </Pressable>
-          ) : extraPhotos.length + 1 < 4 ? (
-            /* Multi-photo: bank this shot and go take another (carousel post). */
+          ) : !videoUri && extraPhotos.length + 1 < 4 ? (
+            /* Multi-photo: bank this shot and go take another (carousel post).
+               Hidden for video daily posts — a clip stands alone. */
             <Pressable
               onPress={() => {
                 if (!photoUri) return;

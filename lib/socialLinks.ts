@@ -1,4 +1,4 @@
-import { Globe, Instagram, Music2, Twitter, Youtube, type LucideIcon } from "lucide-react-native";
+import { Globe, Instagram, Music2, X as XIcon, Youtube, type LucideIcon } from "lucide-react-native";
 
 /**
  * Social links live in profiles.social_links as a small JSON object keyed by
@@ -40,7 +40,7 @@ export const SOCIAL_PLATFORMS: PlatformMeta[] = [
   {
     key: "x",
     label: "X",
-    icon: Twitter,
+    icon: XIcon,
     prefix: "x.com/",
     placeholder: "username",
     toUrl: (h) => `https://x.com/${h.replace(/^@/, "")}`

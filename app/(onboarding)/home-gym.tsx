@@ -130,7 +130,7 @@ export default function HomeGymScreen() {
     <View className="flex-1 bg-black px-4" style={{ paddingTop: insets.top + 16 }}>
       <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
         <Text variant="micro" className="text-mist">
-          STEP 5 OF 5
+          STEP 6 OF 6
         </Text>
       </View>
       <Text variant="display-md" className="mt-6">

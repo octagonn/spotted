@@ -123,7 +123,7 @@ export default function OnboardingCreateProfileScreen() {
       >
         <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
           <Text variant="micro" className="text-mist">
-            STEP 3 OF 5
+            STEP 3 OF 6
           </Text>
         </View>
         <Text variant="display-md" className="mt-6">

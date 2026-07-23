@@ -1319,6 +1319,12 @@ export type Database = {
       }
       profiles: {
         Row: {
+          is_private: boolean
+          location_audience: string
+          quiet_checkin_default: boolean
+          account_status: string
+          deletion_requested_at: string | null
+          purge_scheduled_at: string | null
           arrival_notifs_enabled: boolean
           last_seen_at: string | null
           show_activity: boolean
@@ -1347,6 +1353,12 @@ export type Database = {
           username: string
         }
         Insert: {
+          is_private?: boolean
+          location_audience?: string
+          quiet_checkin_default?: boolean
+          account_status?: string
+          deletion_requested_at?: string | null
+          purge_scheduled_at?: string | null
           arrival_notifs_enabled?: boolean
           last_seen_at?: string | null
           show_activity?: boolean
@@ -1375,6 +1387,12 @@ export type Database = {
           username: string
         }
         Update: {
+          is_private?: boolean
+          location_audience?: string
+          quiet_checkin_default?: boolean
+          account_status?: string
+          deletion_requested_at?: string | null
+          purge_scheduled_at?: string | null
           arrival_notifs_enabled?: boolean
           last_seen_at?: string | null
           show_activity?: boolean
@@ -1599,6 +1617,7 @@ export type Database = {
       join_community_by_code: { Args: { code: string }; Returns: string | null }
       nudge_community: { Args: { cid: string; p_text?: string }; Returns: number }
       notify_second_workout: { Args: { p_post: string; p_name: string }; Returns: number }
+      check_age_gate: { Args: { p_email: string; p_device_id: string; p_dob: string }; Returns: string }
       mark_message_viewed: { Args: { p_message: string }; Returns: undefined }
       delete_community: { Args: { p_community: string }; Returns: undefined }
       evaluate_trophies: {

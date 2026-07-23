@@ -5,6 +5,7 @@ import { Alert, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEv
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
+import { getDeviceId } from "@/lib/deviceId";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 
@@ -120,9 +121,29 @@ export default function BirthdayScreen() {
     setSubmitting(true);
     try {
       const birthDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      // Server-side age gate (§1): verifies >=13 and enforces the 12-month
+      // retry block by hashed email/device. Never trusts a client age flag.
+      const email = useAuthStore.getState().session?.user.email ?? "";
+      const deviceId = await getDeviceId();
+      const { data: gate, error: gateError } = await supabase.rpc("check_age_gate", {
+        p_email: email,
+        p_device_id: deviceId,
+        p_dob: birthDate
+      });
+      if (gateError) throw gateError;
+      if (gate !== "ok") {
+        // Hard block: no account, no explanation of the threshold, no retry.
+        router.replace("/blocked");
+        return;
+      }
       const { error } = await supabase.auth.updateUser({ data: { birth_date: birthDate } });
       if (error) {
         throw error;
+      }
+      // Persist DOB to the profile too (server age calc + immutability guard).
+      const uid = useAuthStore.getState().userId;
+      if (uid) {
+        await supabase.from("profiles").update({ birth_date: birthDate }).eq("id", uid);
       }
       useAuthStore.setState({ needsBirthdate: false });
       router.push("/create-profile");
@@ -138,14 +159,11 @@ export default function BirthdayScreen() {
     <Screen>
       <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
         <Text variant="micro" className="text-mist">
-          STEP 2 OF 5
+          STEP 2 OF 6
         </Text>
       </View>
       <Text variant="display-md" className="mt-6">
         WHEN WERE YOU BORN?
-      </Text>
-      <Text variant="body"  className="mt-3">
-        You have to be {MIN_AGE} or older to use Spotted.
       </Text>
 
       {/* Three EQUAL columns, evenly spread — mismatched widths made the

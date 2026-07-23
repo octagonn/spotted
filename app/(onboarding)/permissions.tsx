@@ -70,7 +70,7 @@ export default function PermissionsScreen() {
     <Screen>
       <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
         <Text variant="micro" className="text-mist">
-          STEP 4 OF 5
+          STEP 4 OF 6
         </Text>
       </View>
       <Text variant="display-md" className="mt-6">
@@ -123,7 +123,7 @@ export default function PermissionsScreen() {
         loading={busy}
         onPress={() => {
           void advanceOnboarding(userId, "home-gym");
-          router.push("/home-gym");
+          router.push("/privacy");
         }}
       >
         Continue
@@ -132,7 +132,7 @@ export default function PermissionsScreen() {
         className="mt-4 self-center"
         onPress={() => {
           void advanceOnboarding(userId, "home-gym");
-          router.push("/home-gym");
+          router.push("/privacy");
         }}
       >
         <Text variant="micro" className="text-mist">

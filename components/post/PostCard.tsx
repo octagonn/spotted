@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, Check, Flame, Home, MapPin, MessageCircle, MoreHorizontal, Users } from "lucide-react-native";
+import { Camera, Check, Flame, Heart, Home, MapPin, MessageCircle, MoreHorizontal, Users, Volume2, VolumeX } from "lucide-react-native";
 import { useCallback, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -22,6 +22,7 @@ import { useAddComment, usePostComments } from "@/hooks/queries/usePostComments"
 import { useMyReactions, useToggleLike } from "@/hooks/queries/usePostReactions";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { type FeedCtxIcon, type FeedMockPost } from "@/lib/redesignData";
+import { useAudioStore } from "@/stores/audio";
 import { showToast, useUiStore } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
@@ -75,9 +76,13 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [draft, setDraft] = useState("");
 
-  // Heart like (double-tap) — separate from the selfie reaction rail.
+  // Heart like (double-tap or the heart button) — separate from the selfie
+  // reaction rail.
   const myReactions = useMyReactions();
   const toggleLike = useToggleLike();
+  // Global feed audio switch — drives the IG-style speaker on musical posts.
+  const audioMuted = useAudioStore((st) => st.muted);
+  const toggleAudioMuted = useAudioStore((st) => st.toggleMuted);
   const liked = isRealPost && (myReactions.data ?? []).includes(post.id);
 
   // Video mute (single tap) registered by the media so it routes through
@@ -220,22 +225,51 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
 
       {/* Media — pinch to zoom, double-tap to like; single taps (video mute)
           route through the same gesture frame so they can't steal the double. */}
-      <MediaFrame
-        locked={locked}
-        onLike={() => {
-          if (isRealPost && !liked) {
-            toggleLike.mutate({ postId: post.id, liked: true });
-          }
-        }}
-        onSingleTap={() => mediaTapRef.current?.()}
-      >
-        <PostMedia
-          post={post}
-          blurRadius={blurRadius}
-          active={audible && !locked}
-          onRegisterTap={registerMediaTap}
-        />
-      </MediaFrame>
+      <View>
+        <MediaFrame
+          locked={locked}
+          onLike={() => {
+            if (isRealPost && !liked) {
+              toggleLike.mutate({ postId: post.id, liked: true });
+            }
+          }}
+          onSingleTap={() => mediaTapRef.current?.()}
+        >
+          <PostMedia
+            post={post}
+            blurRadius={blurRadius}
+            active={audible && !locked}
+            onRegisterTap={registerMediaTap}
+          />
+        </MediaFrame>
+        {/* IG-style speaker, bottom-right of the media — only on posts with
+            audio (attached music). Videos keep their own tap-to-mute. */}
+        {post.music?.previewUrl && !post.video && !locked ? (
+          <Pressable
+            onPress={toggleAudioMuted}
+            accessibilityLabel={audioMuted ? "Unmute sound" : "Mute sound"}
+            hitSlop={8}
+            haptic={false}
+            style={{
+              position: "absolute",
+              bottom: 12,
+              right: 12,
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              backgroundColor: "rgba(0,0,0,0.65)",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            {audioMuted ? (
+              <VolumeX size={15} color={colors.white} strokeWidth={2.2} />
+            ) : (
+              <Volume2 size={15} color={colors.white} strokeWidth={2.2} />
+            )}
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* "Answered the Call" — posted within 3h of a taunt (spec B). */}
       {post.answeredCall ? (
@@ -295,6 +329,20 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
 
       {/* Reactions row */}
       <View style={[{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 }, textBlur]}>
+        {isRealPost ? (
+          <Pressable
+            onPress={() => !locked && toggleLike.mutate({ postId: post.id, liked: !liked })}
+            accessibilityLabel={liked ? "Unlike" : "Like"}
+            hitSlop={6}
+          >
+            <Heart
+              size={24}
+              color={liked ? tokens.accent.gold : colors.silver}
+              fill={liked ? tokens.accent.gold : "transparent"}
+              strokeWidth={2}
+            />
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={handleReact}
           accessibilityLabel="Add live reaction"

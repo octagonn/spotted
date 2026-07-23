@@ -1,10 +1,9 @@
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Image } from "expo-image";
-import { Music, VolumeX } from "lucide-react-native";
+import { Music } from "lucide-react-native";
 import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 
-import { Pressable } from "@/components/ui/Pressable";
 import { useAudioStore } from "@/stores/audio";
 import { colors } from "@/theme/colors";
 
@@ -38,7 +37,6 @@ export function MusicChip({
   const clipStart = music.clipStart ?? 0;
   // Mute is the shared global feed switch (same one videos use).
   const muted = useAudioStore((s) => s.muted);
-  const toggleMuted = useAudioStore((s) => s.toggleMuted);
   const wasActive = useRef(false);
 
   const safePause = () => {
@@ -122,20 +120,10 @@ export function MusicChip({
       >
         {music.title} · {music.artist}
       </Text>
-      {muted && active ? <VolumeX size={12} color={colors.fog} strokeWidth={2} /> : null}
     </View>
   );
 
-  if (!music.previewUrl || disabled) {
-    return body;
-  }
-  return (
-    <Pressable
-      onPress={toggleMuted}
-      accessibilityLabel={muted ? "Unmute" : "Mute"}
-      haptic={false}
-    >
-      {body}
-    </Pressable>
-  );
+  // Display-only: muting moved to the IG-style speaker button on the media
+  // (bottom-right) — the song line is no longer a tap target.
+  return body;
 }

@@ -32,6 +32,9 @@ export function usePostReactionSelfies(postId: string) {
         .from("post_reactions")
         .select("user_id, media_url, reaction, created_at, profiles:user_id(display_name, username, avatar_url)")
         .eq("post_id", postId)
+        // LIVE reactions only: selfie rows. Heart-likes and legacy emoji
+        // reactions live in the same table but don't belong in the rail.
+        .not("media_url", "is", null)
         .order("created_at", { ascending: false })
         .limit(30);
       if (error) {

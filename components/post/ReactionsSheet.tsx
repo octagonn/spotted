@@ -54,18 +54,13 @@ export function ReactionsSheet({ reactors, postId }: { reactors: ReactionSelfie[
             sub={r.mine ? "Hold to remove" : `@${r.username}`}
             onLongPress={r.mine ? confirmRemove : undefined}
             right={
-              // Always show WHAT they reacted with: their emoji, or a selfie
-              // thumbnail (with a camera glyph) when it was a photo reaction.
-              r.emoji ? (
-                <Text style={{ fontSize: 24 }}>{r.emoji}</Text>
-              ) : r.mediaUrl ? (
+              // Live reactions are selfie-only — show the shot they reacted with.
+              r.mediaUrl ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Camera size={14} color={colors.fog} strokeWidth={2} />
                   <Image source={{ uri: r.mediaUrl }} style={{ width: 30, height: 30, borderRadius: 8 }} contentFit="cover" />
                 </View>
-              ) : (
-                <Text style={{ fontSize: 22 }}>🔥</Text>
-              )
+              ) : undefined
             }
             onPress={() => {
               sheet.close();

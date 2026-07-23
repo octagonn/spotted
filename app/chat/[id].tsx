@@ -52,12 +52,12 @@ import {
   useMessageHides,
   useMessageReactions,
   useReactToMessage,
-  useSetBlocked,
   useSetConversationMuted,
   useUnsendMessage
 } from "@/hooks/queries/useMessagesExtras";
 import { useActivityStatus, useChatPresence, useHeartbeat } from "@/hooks/queries/useChatPresence";
 import { useProfileById } from "@/hooks/queries/useProfile";
+import { useBlockUser, useUnblockUser } from "@/hooks/queries/useSafety";
 import { ReportSheet } from "@/components/ReportSheet";
 import { useSheet } from "@/components/ui/Sheet";
 import { signedMessageUrl, signedPostUrl } from "@/lib/supabase";
@@ -372,7 +372,8 @@ export default function ChatScreen() {
   const hides = useMessageHides();
   const hide = useHideMessage();
   const blocked = useBlockedUsers();
-  const setBlocked = useSetBlocked();
+  const blockUser = useBlockUser();
+  const unblockUser = useUnblockUser();
   const muted = useConversationMuted(conversationId);
   const setMuted = useSetConversationMuted(conversationId);
   const presence = useChatPresence(conversationId, realProfileId);
@@ -547,11 +548,11 @@ export default function ChatScreen() {
       {
         text: isBlocked ? "Unblock" : "Block",
         style: isBlocked ? "default" : "destructive",
-        onPress: () =>
-          setBlocked.mutate(
-            { otherUserId: realProfileId, blocked: !isBlocked },
-            { onSuccess: () => showToast(isBlocked ? "Unblocked" : "Blocked") }
-          )
+        onPress: () => {
+          // Retroactive, silent block (§5) — severs friendship + presence.
+          const m = isBlocked ? unblockUser : blockUser;
+          m.mutate(realProfileId, { onSuccess: () => showToast(isBlocked ? "Unblocked" : "Blocked") });
+        }
       },
       {
         text: "Report",

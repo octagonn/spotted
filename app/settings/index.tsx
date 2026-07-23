@@ -1,5 +1,5 @@
 import { router, type Href } from "expo-router";
-import { Ban, Bell, ChevronRight, FileText, Lock, LogOut, ShieldCheck, Trash2, UserRound } from "lucide-react-native";
+import { Ban, Bell, ChevronRight, FileText, Lock, LogOut, ShieldCheck, Trash2, UserMinus, UserRound } from "lucide-react-native";
 import { type ReactNode, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
 
@@ -114,7 +114,12 @@ export default function SettingsScreen() {
         <SettingsRow
           icon={<Ban size={19} color={ICON} strokeWidth={2} />}
           label="Blocked Users"
-          onPress={() => router.push("/settings/coming-soon?title=Blocked%20Users" as Href)}
+          onPress={() => router.push("/settings/blocked" as Href)}
+        />
+        <SettingsRow
+          icon={<UserMinus size={19} color={ICON} strokeWidth={2} />}
+          label="Restricted Users"
+          onPress={() => router.push("/settings/restricted" as Href)}
         />
 
         <SectionLabel>Legal</SectionLabel>

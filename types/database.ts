@@ -68,6 +68,24 @@ export type Database = {
         }
         Relationships: []
       }
+      restrictions: {
+        Row: { id: string; restrictor_id: string; restricted_id: string; created_at: string }
+        Insert: { id?: string; restrictor_id: string; restricted_id: string; created_at?: string }
+        Update: { id?: string; restrictor_id?: string; restricted_id?: string; created_at?: string }
+        Relationships: []
+      }
+      close_friends: {
+        Row: { user_id: string; friend_id: string; created_at: string }
+        Insert: { user_id: string; friend_id: string; created_at?: string }
+        Update: { user_id?: string; friend_id?: string; created_at?: string }
+        Relationships: []
+      }
+      data_export_requests: {
+        Row: { id: string; user_id: string; requested_at: string; fulfilled_at: string | null; download_expires_at: string | null }
+        Insert: { id?: string; user_id: string; requested_at?: string; fulfilled_at?: string | null; download_expires_at?: string | null }
+        Update: { id?: string; user_id?: string; requested_at?: string; fulfilled_at?: string | null; download_expires_at?: string | null }
+        Relationships: []
+      }
       taunt_mutes: {
         Row: { user_id: string; muted_id: string; created_at: string }
         Insert: { user_id: string; muted_id: string; created_at?: string }
@@ -1618,6 +1636,10 @@ export type Database = {
       nudge_community: { Args: { cid: string; p_text?: string }; Returns: number }
       notify_second_workout: { Args: { p_post: string; p_name: string }; Returns: number }
       check_age_gate: { Args: { p_email: string; p_device_id: string; p_dob: string }; Returns: string }
+      block_user: { Args: { p_target: string }; Returns: undefined }
+      unblock_user: { Args: { p_target: string }; Returns: undefined }
+      restrict_user: { Args: { p_target: string }; Returns: undefined }
+      unrestrict_user: { Args: { p_target: string }; Returns: undefined }
       mark_message_viewed: { Args: { p_message: string }; Returns: undefined }
       delete_community: { Args: { p_community: string }; Returns: undefined }
       evaluate_trophies: {

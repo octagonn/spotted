@@ -863,8 +863,8 @@ export default function StoryViewer() {
               >
                 <Heart
                   size={26}
-                  color={liked.data ? tokens.accent.gold : colors.white}
-                  fill={liked.data ? tokens.accent.gold : "transparent"}
+                  color={liked.data ? "#FF2D55" : colors.white}
+                  fill={liked.data ? "#FF2D55" : "transparent"}
                   strokeWidth={2}
                 />
               </Pressable>
@@ -979,7 +979,7 @@ export default function StoryViewer() {
                         <Text style={{ marginTop: 1, fontSize: 12, color: colors.fog }}>@{v.username}</Text>
                       </View>
                       {likers.data?.has(v.id) ? (
-                        <Heart size={16} color={tokens.accent.gold} fill={tokens.accent.gold} strokeWidth={2} />
+                        <Heart size={16} color="#FF2D55" fill="#FF2D55" strokeWidth={2} />
                       ) : null}
                       <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.fog }}>{timeAgo(v.viewedAt)}</Text>
                     </Pressable>

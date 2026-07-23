@@ -337,8 +337,8 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
           >
             <Heart
               size={24}
-              color={liked ? tokens.accent.gold : colors.silver}
-              fill={liked ? tokens.accent.gold : "transparent"}
+              color={liked ? "#FF2D55" : colors.silver}
+              fill={liked ? "#FF2D55" : "transparent"}
               strokeWidth={2}
             />
           </Pressable>

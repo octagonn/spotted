@@ -1,14 +1,16 @@
-import { router } from "expo-router";
-import { Bell, ChevronRight, FileText, Lock, LogOut, ShieldCheck, UserRound } from "lucide-react-native";
+import { router, type Href } from "expo-router";
+import { Ban, Bell, ChevronRight, FileText, Lock, LogOut, ShieldCheck, Trash2, UserRound } from "lucide-react-native";
 import { type ReactNode, useState } from "react";
-import { Linking, Platform, View } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 
-import { LegalModal } from "@/components/LegalModal";
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/ui/BackButton";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
 import { useAuthStore } from "@/stores/auth";
+
+const RED = "#E5484D";
+const ICON = "#C9C9CE";
 
 function SettingsRow({
   icon,
@@ -51,71 +53,97 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Account settings hub (8a): Account / Privacy / Notifications / Blocked
+ * Users / Legal / Danger Zone. Stubbed sections route to a clean coming-soon
+ * screen — no dead taps. Legal docs are routed screens fed from
+ * lib/legalContent.ts (8b). Deletion is fully functional (8c).
+ */
 export default function SettingsScreen() {
   const signOut = useAuthStore((state) => state.signOut);
-  const [legal, setLegal] = useState<"terms" | "privacy" | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
-  const handleSignOut = async () => {
-    if (signingOut) return;
-    setSigningOut(true);
-    try {
-      await signOut();
-      router.replace("/(auth)/welcome");
-    } finally {
-      setSigningOut(false);
-    }
+  const confirmSignOut = () => {
+    Alert.alert("Log out?", "You'll need to sign back in to post.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            if (signingOut) return;
+            setSigningOut(true);
+            try {
+              await signOut();
+              router.replace("/(auth)/welcome");
+            } finally {
+              setSigningOut(false);
+            }
+          })();
+        }
+      }
+    ]);
   };
 
   return (
     <Screen>
       <BackButton fallback="/(tabs)/profile" style={{ marginBottom: 18 }} />
-      <Text variant="display-sm">SETTINGS</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <Text variant="display-sm">SETTINGS</Text>
 
-      <SectionLabel>Your account</SectionLabel>
-      <SettingsRow
-        icon={<UserRound size={19} color="#C9C9CE" strokeWidth={2} />}
-        label="Account"
-        sub="Email, password, delete account"
-        onPress={() => router.push("/settings/account")}
-      />
-      <SettingsRow
-        icon={<Lock size={19} color="#C9C9CE" strokeWidth={2} />}
-        label="Privacy"
-        sub="Ghost mode, discoverability, activity"
-        onPress={() => router.push("/settings/privacy")}
-      />
-      <SettingsRow
-        icon={<Bell size={19} color="#C9C9CE" strokeWidth={2} />}
-        label="Notifications"
-        sub="Push permissions live in your device settings"
-        onPress={() => {
-          if (Platform.OS !== "web") void Linking.openSettings();
-        }}
-      />
-
-      <SectionLabel>Legal</SectionLabel>
-      <SettingsRow
-        icon={<FileText size={19} color="#C9C9CE" strokeWidth={2} />}
-        label="Terms of Service"
-        onPress={() => setLegal("terms")}
-      />
-      <SettingsRow
-        icon={<ShieldCheck size={19} color="#C9C9CE" strokeWidth={2} />}
-        label="Privacy Policy"
-        onPress={() => setLegal("privacy")}
-      />
-
-      <View className="mt-8">
+        <SectionLabel>Account</SectionLabel>
         <SettingsRow
-          icon={<LogOut size={19} color="#E5484D" strokeWidth={2} />}
-          label={signingOut ? "Signing out…" : "Sign out"}
-          danger
-          onPress={() => void handleSignOut()}
+          icon={<UserRound size={19} color={ICON} strokeWidth={2} />}
+          label="Account"
+          sub="Email, password, profile"
+          onPress={() => router.push("/settings/account")}
         />
-      </View>
 
-      <LegalModal visible={legal !== null} initialTab={legal ?? "terms"} onClose={() => setLegal(null)} />
+        <SectionLabel>Preferences</SectionLabel>
+        <SettingsRow
+          icon={<Lock size={19} color={ICON} strokeWidth={2} />}
+          label="Privacy"
+          sub="Ghost mode, discoverability, activity"
+          onPress={() => router.push("/settings/privacy")}
+        />
+        <SettingsRow
+          icon={<Bell size={19} color={ICON} strokeWidth={2} />}
+          label="Notifications"
+          onPress={() => router.push("/settings/coming-soon?title=Notifications" as Href)}
+        />
+        <SettingsRow
+          icon={<Ban size={19} color={ICON} strokeWidth={2} />}
+          label="Blocked Users"
+          onPress={() => router.push("/settings/coming-soon?title=Blocked%20Users" as Href)}
+        />
+
+        <SectionLabel>Legal</SectionLabel>
+        <SettingsRow
+          icon={<FileText size={19} color={ICON} strokeWidth={2} />}
+          label="Terms of Service"
+          onPress={() => router.push("/settings/legal/terms" as Href)}
+        />
+        <SettingsRow
+          icon={<ShieldCheck size={19} color={ICON} strokeWidth={2} />}
+          label="Privacy Policy"
+          onPress={() => router.push("/settings/legal/privacy" as Href)}
+        />
+
+        <SectionLabel>Danger Zone</SectionLabel>
+        <SettingsRow
+          icon={<LogOut size={19} color={RED} strokeWidth={2} />}
+          label={signingOut ? "Signing out…" : "Log out"}
+          danger
+          onPress={confirmSignOut}
+        />
+        <SettingsRow
+          icon={<Trash2 size={19} color={RED} strokeWidth={2} />}
+          label="Delete Account"
+          sub="Permanently erase your account and data"
+          danger
+          onPress={() => router.push("/settings/delete-account" as Href)}
+        />
+      </ScrollView>
     </Screen>
   );
 }

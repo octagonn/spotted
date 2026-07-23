@@ -29,13 +29,25 @@ serve(async (request) => {
       }
     }
 
-    // 2) Public data — profile delete cascades through everything user-owned.
+    // 2) Communities the user created (custom types only — gym hubs survive
+    //    as ownerless, per the WS6 creator-is-admin ownership rule).
+    //    Members/messages/links cascade from the community row.
+    const { error: communityError } = await supabase
+      .from("communities")
+      .delete()
+      .eq("created_by", user.id)
+      .neq("type", "gym");
+    if (communityError) {
+      return jsonResponse({ error: `community_delete_failed: ${communityError.message}` }, 500);
+    }
+
+    // 3) Public data — profile delete cascades through everything user-owned.
     const { error: profileError } = await supabase.from("profiles").delete().eq("id", user.id);
     if (profileError) {
       return jsonResponse({ error: `profile_delete_failed: ${profileError.message}` }, 500);
     }
 
-    // 3) Auth user (frees the email). Public data is already gone at this point.
+    // 4) Auth user (frees the email). Public data is already gone at this point.
     const { error } = await supabase.auth.admin.deleteUser(user.id);
     if (error) {
       return jsonResponse({ error: error.message }, 500);

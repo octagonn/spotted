@@ -55,7 +55,7 @@ function Bullet({ children }: { children: ReactNode }) {
   );
 }
 
-function Terms() {
+export function Terms() {
   return (
     <View>
       <Text variant="display-sm" className="text-white">
@@ -224,7 +224,7 @@ function Terms() {
   );
 }
 
-function Privacy() {
+export function Privacy() {
   return (
     <View>
       <Text variant="display-sm" className="text-white">

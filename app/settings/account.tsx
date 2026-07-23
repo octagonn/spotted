@@ -17,9 +17,6 @@ export default function AccountSettingsScreen() {
   const signOut = useAuthStore((state) => state.signOut);
 
   const [signingOut, setSigningOut] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const profileQuery = useQuery({
     queryKey: ["account-profile", userId],
@@ -70,27 +67,6 @@ export default function AccountSettingsScreen() {
     }
   }
 
-  async function handleDeleteAccount() {
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      if (isSupabaseConfigured) {
-        const { error } = await supabase.functions.invoke("delete-account");
-        if (error) {
-          throw error;
-        }
-      }
-      await signOut();
-      router.replace("/(auth)/welcome");
-    } catch (error) {
-      logger.error("account_deletion_failed", {
-        message: error instanceof Error ? error.message : String(error)
-      });
-      setDeleteError("Deletion failed. Try again or contact support.");
-      setDeleting(false);
-    }
-  }
-
   return (
     <Screen>
       <BackButton fallback="/settings" style={{ marginBottom: 18 }} />
@@ -117,35 +93,9 @@ export default function AccountSettingsScreen() {
         </Button>
       </View>
 
-      <View className="mt-10 border border-hairline-strong bg-ink p-4">
-        <Text variant="body-strong">Delete account</Text>
-        <Text variant="caption" className="mt-2 text-mist">
-          Permanently removes your profile, posts, streaks, messages, and media. This cannot be
-          undone.
-        </Text>
-        {!confirmingDelete ? (
-          <Button className="mt-4" variant="danger" onPress={() => setConfirmingDelete(true)}>
-            Delete Account
-          </Button>
-        ) : (
-          <View className="mt-4 gap-3">
-            <Text variant="caption" className="text-white">
-              Are you sure? This is permanent.
-            </Text>
-            <Button variant="danger" loading={deleting} onPress={handleDeleteAccount}>
-              Yes, Permanently Delete
-            </Button>
-            <Button variant="ghost" disabled={deleting} onPress={() => setConfirmingDelete(false)}>
-              Cancel
-            </Button>
-          </View>
-        )}
-        {deleteError ? (
-          <Text variant="caption" className="mt-3 text-fog">
-            {deleteError}
-          </Text>
-        ) : null}
-      </View>
+      <Text variant="caption" className="mt-10 text-fog">
+        Looking to delete your account? It moved to Settings → Danger Zone.
+      </Text>
     </Screen>
   );
 }

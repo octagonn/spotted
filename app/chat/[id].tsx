@@ -9,7 +9,7 @@ import {
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Camera, ChevronLeft, CornerUpLeft, Eye, Flame, ImagePlus, Mic, MoreVertical, Pause, Play, Send, Share2, Square, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -284,13 +284,25 @@ function ViewOnceBubble({
   );
 }
 
-/** Full-screen one-shot photo viewer; closing burns the view. */
-function ViewOnceViewer({ path, onClose }: { path: string; onClose: () => void }) {
+/**
+ * Full-screen one-shot photo viewer. Consumes ON OPEN (7c): the moment the
+ * signed image is in hand, onConsume marks it viewed server-side — which also
+ * destroys the storage object — so killing the app mid-view still counts.
+ * The already-fetched image stays visible until the viewer closes.
+ */
+function ViewOnceViewer({ path, onConsume, onClose }: { path: string; onConsume: () => void; onClose: () => void }) {
   const media = useQuery({
     queryKey: ["msg-media", path],
     staleTime: 50 * 60_000,
     queryFn: () => signedMessageUrl(path)
   });
+  const consumedRef = useRef(false);
+  useEffect(() => {
+    if (media.data && !consumedRef.current) {
+      consumedRef.current = true;
+      onConsume();
+    }
+  }, [media.data, onConsume]);
   return (
     <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
       {media.data ? (
@@ -426,21 +438,6 @@ export default function ChatScreen() {
     }
   };
 
-  const takePhoto = async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        showToast("Enable camera access in Settings to send photos");
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
-      if (result.canceled || !result.assets[0]) return;
-      // Camera shots are view-once, Snapchat-style.
-      setPendingMedia({ uri: result.assets[0].uri, kind: "image", viewOnce: true });
-    } catch {
-      showToast("Couldn't open the camera");
-    }
-  };
   useMessagesRealtime(conversationId);
   useMarkConversationRead(conversationId, messages.data?.length);
 
@@ -688,7 +685,7 @@ export default function ChatScreen() {
                               else if ((message.shared_kind === "checkin" || message.shared_kind === "stream") && message.shared_id) router.push(`/gym/${message.shared_id}`);
                             }}
                           />
-                        ) : message.media_url && message.view_once ? (
+                        ) : message.view_once ? (
                           <ViewOnceBubble message={message} mine={mine} onOpen={setViewOnceOpen} />
                         ) : message.media_url ? (
                           <ChatMediaBubble path={message.media_url} mine={mine} />
@@ -814,7 +811,12 @@ export default function ChatScreen() {
             }}
           >
             {!mock && sendReady ? (
-              <Pressable onPress={() => void takePhoto()} accessibilityLabel="Take a view-once photo" hitSlop={6} disabled={sendMedia.isPending}>
+              <Pressable
+                onPress={() => conversationId && router.push(`/chat-camera?conversation=${conversationId}` as Href)}
+                accessibilityLabel="Take a view-once photo"
+                hitSlop={6}
+                disabled={sendMedia.isPending || !conversationId}
+              >
                 <Camera size={20} color={sendMedia.isPending ? colors.iron : colors.silver} strokeWidth={2} />
               </Pressable>
             ) : null}
@@ -882,10 +884,8 @@ export default function ChatScreen() {
       {viewOnceOpen?.media_url ? (
         <ViewOnceViewer
           path={viewOnceOpen.media_url}
-          onClose={() => {
-            markViewed.mutate(viewOnceOpen.id);
-            setViewOnceOpen(null);
-          }}
+          onConsume={() => markViewed.mutate(viewOnceOpen.id)}
+          onClose={() => setViewOnceOpen(null)}
         />
       ) : null}
 

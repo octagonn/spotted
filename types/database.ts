@@ -1187,6 +1187,9 @@ export type Database = {
       }
       posts: {
         Row: {
+          moderation_status: string
+          moderation_score: Json | null
+          moderated_at: string | null
           inset_url: string | null
           caption: string | null
           created_at: string
@@ -1220,6 +1223,9 @@ export type Database = {
           video_trim_end: number | null
         }
         Insert: {
+          moderation_status?: string
+          moderation_score?: Json | null
+          moderated_at?: string | null
           inset_url?: string | null
           caption?: string | null
           created_at?: string
@@ -1253,6 +1259,9 @@ export type Database = {
           video_trim_end?: number | null
         }
         Update: {
+          moderation_status?: string
+          moderation_score?: Json | null
+          moderated_at?: string | null
           inset_url?: string | null
           caption?: string | null
           created_at?: string
@@ -1647,6 +1656,10 @@ export type Database = {
       reactivate_account: { Args: Record<string, never>; Returns: undefined }
       request_account_deletion: { Args: Record<string, never>; Returns: string }
       restore_account: { Args: Record<string, never>; Returns: undefined }
+      flag_post_from_report: { Args: { p_post: string }; Returns: undefined }
+      review_queue: { Args: Record<string, never>; Returns: { post_id: string; user_id: string; media_url: string | null; inset_url: string | null; moderation_score: Json | null; created_at: string }[] }
+      review_resolve: { Args: { p_post: string; p_approve: boolean }; Returns: undefined }
+      is_admin: { Args: { p_user: string }; Returns: boolean }
       mark_message_viewed: { Args: { p_message: string }; Returns: undefined }
       delete_community: { Args: { p_community: string }; Returns: undefined }
       evaluate_trophies: {

@@ -227,6 +227,16 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         </View>
       ) : null}
 
+      {/* Owner-only: this post is hidden from others pending moderation review. */}
+      {post.underReview ? (
+        <View style={{ marginHorizontal: 18, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: "rgba(232,180,76,0.4)", backgroundColor: "rgba(232,180,76,0.10)" }}>
+          <Flame size={14} color={colors.gold} strokeWidth={2.2} />
+          <Text style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
+            Under review — hidden from others until it&apos;s checked.
+          </Text>
+        </View>
+      ) : null}
+
       {/* Media — pinch to zoom, double-tap to like; single taps (video mute)
           route through the same gesture frame so they can't steal the double. */}
       <View>

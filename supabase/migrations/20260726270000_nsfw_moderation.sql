@@ -1,0 +1,8 @@
+-- NSFW image moderation pipeline (App Store UGC 1.2). A self-hosted NSFWJS
+-- worker pulls from moderation_jobs, classifies, and calls resolve_moderation_job.
+-- Policy in the DB: nsfw>=0.90 auto-delete, >=0.60 flag+review, else approve.
+-- Applied via MCP; mirrors deployed state. See moderation-worker/ for the worker.
+-- Objects: posts.moderation_status/score/moderated_at, moderation_jobs,
+-- enqueue_moderation trigger, claim_moderation_jobs, resolve_moderation_job,
+-- flag_post_from_report, app_admins, is_admin, review_queue, review_resolve,
+-- and the posts SELECT policy hiding 'flagged' from non-owners.

@@ -1,5 +1,5 @@
 import { router, type Href } from "expo-router";
-import { Ban, Bell, ChevronRight, Download, FileText, Lock, LogOut, MoonStar, ShieldCheck, Trash2, UserMinus, UserRound } from "lucide-react-native";
+import { Ban, Bell, ChevronRight, Download, FileText, Lock, LogOut, MoonStar, Shield, ShieldCheck, Trash2, UserMinus, UserRound } from "lucide-react-native";
 import { type ReactNode, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
 
@@ -8,6 +8,7 @@ import { BackButton } from "@/components/ui/BackButton";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
 import { useDeactivateAccount, useLatestExportRequest, useRequestDataExport } from "@/hooks/queries/useAccountLifecycle";
+import { useIsAdmin } from "@/hooks/queries/useModeration";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
 
@@ -65,6 +66,7 @@ export default function SettingsScreen() {
   const signOut = useAuthStore((state) => state.signOut);
   const [signingOut, setSigningOut] = useState(false);
   const deactivate = useDeactivateAccount();
+  const isAdmin = useIsAdmin();
   const requestExport = useRequestDataExport();
   const latestExport = useLatestExportRequest();
 
@@ -193,6 +195,18 @@ export default function SettingsScreen() {
           sub="Hide everything; your streak freezes. Reversible on login."
           onPress={onDeactivate}
         />
+
+        {isAdmin.data ? (
+          <>
+            <SectionLabel>Moderation</SectionLabel>
+            <SettingsRow
+              icon={<Shield size={19} color={ICON} strokeWidth={2} />}
+              label="Review queue"
+              sub="Flagged posts awaiting review"
+              onPress={() => router.push("/settings/review" as Href)}
+            />
+          </>
+        ) : null}
 
         <SectionLabel>Danger Zone</SectionLabel>
         <SettingsRow

@@ -74,6 +74,15 @@ export function useReportContent() {
         note: input.note ?? null
       });
       if (error) throw error;
+      // Reporting a POST hides it immediately pending review (App Store: act on
+      // reports fast). Best-effort — the report itself is already filed.
+      if (input.contentType === "post") {
+        try {
+          await supabase.rpc("flag_post_from_report", { p_post: input.contentId });
+        } catch {
+          // best-effort — the report is already filed
+        }
+      }
     }
   });
 }

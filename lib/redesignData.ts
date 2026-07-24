@@ -319,6 +319,8 @@ export type FeedMockPost = {
   inset?: FeedScene;
   mediaUri?: string;
   insetUri?: string;
+  /** Owner-only: this post is hidden pending moderation review. */
+  underReview?: boolean;
   /** Multi-photo carousel (real posts): signed URLs, first = cover. */
   mediaUris?: string[];
   /** Real video post: signed URL + soft-trim window (seconds). */

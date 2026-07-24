@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
@@ -506,6 +507,11 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
   const uris = post.mediaUris as string[];
   const [index, setIndex] = useState(0);
   const [width, setWidth] = useState(0);
+  // Warm every frame up front so paging between photos is instant instead of
+  // decoding on-demand as you swipe.
+  useEffect(() => {
+    if (uris?.length) void Image.prefetch(uris);
+  }, [uris]);
   return (
     <View
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}

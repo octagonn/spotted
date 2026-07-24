@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { Send, X } from "lucide-react-native";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -110,15 +111,19 @@ export function CommentsSheet({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const router = useRouter();
-  const openProfile = (handle: string) => {
+  const dismissAndClose = () => {
+    Keyboard.dismiss();
     onClose();
+  };
+  const openProfile = (handle: string) => {
+    dismissAndClose();
     router.push(`/user/${handle.replace(/^@/, "")}`);
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={dismissAndClose} statusBarTranslucent>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close comments" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismissAndClose} accessibilityLabel="Close comments" />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
           {/* Half-screen popup — the post stays visible behind it. */}
           <View
@@ -139,7 +144,7 @@ export function CommentsSheet({
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 12, paddingBottom: 12 }}>
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white }}>Comments</Text>
-              <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", right: 16, top: 10 }}>
+              <Pressable onPress={dismissAndClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", right: 16, top: 10 }}>
                 <X size={18} color={colors.fog} strokeWidth={2.4} />
               </Pressable>
             </View>
@@ -205,7 +210,6 @@ export function CommentsSheet({
                 submitBehavior="submit"
                 placeholder="Add a comment…"
                 placeholderTextColor={colors.ash}
-                autoFocus
                 returnKeyType="send"
                 style={{
                   flex: 1,

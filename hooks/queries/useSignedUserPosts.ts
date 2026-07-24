@@ -22,6 +22,7 @@ export type SignedPost = {
   isDailyDrop: boolean;
   /** Attached workout slides, oldest first (2nd+ of the day badged). */
   workouts: FeedWorkout[];
+  music: { title: string; artist: string; previewUrl: string | null; artworkUrl: string | null; clipStart: number } | null;
 };
 
 /** Attached-workout rows → feed slide shape (same mapping as useFeed). */
@@ -84,7 +85,10 @@ export function useSignedUserPosts(userId?: string | null) {
         created_at: post.created_at,
         permanent: post.permanent,
         isDailyDrop: post.is_daily_drop,
-        workouts: toFeedWorkouts(post.attached_workouts)
+        workouts: toFeedWorkouts(post.attached_workouts),
+        music: post.music_title
+          ? { title: post.music_title, artist: post.music_artist ?? "", previewUrl: post.music_preview_url, artworkUrl: post.music_artwork_url, clipStart: post.music_clip_start ?? 0 }
+          : null
       }));
     }
   });

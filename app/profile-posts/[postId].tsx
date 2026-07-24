@@ -1,6 +1,7 @@
+import { useIsFocused } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { router, useLocalSearchParams, type Href } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 import { PostCard } from "@/components/post/PostCard";
@@ -60,6 +61,9 @@ export default function ProfilePostsScreen() {
         mediaUris: post.media_urls?.length ? post.media_urls : undefined,
         workouts: post.workouts.length ? post.workouts : undefined,
         caption: post.caption ?? undefined,
+        music: post.music
+          ? { title: post.music.title, artist: post.music.artist, artworkUrl: post.music.artworkUrl, previewUrl: post.music.previewUrl, clipStart: post.music.clipStart }
+          : undefined,
         reactions: [],
         comments: []
       })),
@@ -70,6 +74,16 @@ export default function ProfilePostsScreen() {
     0,
     feedPosts.findIndex((p) => p.id === postId)
   );
+
+  const isFocused = useIsFocused();
+  const [activePostId, setActivePostId] = useState<string | null>(null);
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: { isViewable: boolean; item?: FeedMockPost }[] }) => {
+      const first = viewableItems.find((v) => v.isViewable && v.item);
+      setActivePostId(first?.item?.id ?? null);
+    }
+  ).current;
 
   const openReactionCapture = (id: string) => {
     sheet.open(<ReactionCaptureSheet postId={id} onClose={sheet.close} />);
@@ -101,10 +115,12 @@ export default function ProfilePostsScreen() {
         data={feedPosts}
         keyExtractor={(item: FeedMockPost) => item.id}
         initialScrollIndex={initialIndex}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
         renderItem={({ item }: { item: FeedMockPost }) => (
-          <PostCard post={item} locked={false} onReact={openReactionCapture} />
+          <PostCard post={item} locked={false} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
         )}
         ListEmptyComponent={
           <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>

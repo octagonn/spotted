@@ -175,7 +175,7 @@ export function useUserStreak(userId?: string | null) {
 
 export type UserPost = Pick<
   Post,
-  "id" | "media_url" | "caption" | "created_at" | "saved" | "permanent" | "is_daily_drop" | "media_type"
+  "id" | "media_url" | "caption" | "created_at" | "saved" | "permanent" | "is_daily_drop" | "media_type" | "music_title" | "music_artist" | "music_preview_url" | "music_artwork_url" | "music_clip_start"
 > & {
   thumbnail_url: string | null;
   /** Carousel photo paths (unsigned) — everything posted that day. */
@@ -208,6 +208,11 @@ export function useUserPosts(userId?: string | null) {
             thumbnail_url: null,
             media_urls: post.media_urls ?? null,
             inset_url: null,
+            music_title: null,
+            music_artist: null,
+            music_preview_url: null,
+            music_artwork_url: null,
+            music_clip_start: 0,
             attached_workouts: null
           }));
       }
@@ -216,7 +221,7 @@ export function useUserPosts(userId?: string | null) {
       const { data, error } = await supabase
         .from("posts")
         .select(
-          "id, media_url, caption, created_at, saved, permanent, is_daily_drop, media_type, thumbnail_url, media_urls, inset_url, attached_workouts:workouts!workouts_post_id_fkey(id, name, duration_seconds, started_at, data)"
+          "id, media_url, caption, created_at, saved, permanent, is_daily_drop, media_type, thumbnail_url, media_urls, inset_url, music_title, music_artist, music_preview_url, music_artwork_url, music_clip_start, attached_workouts:workouts!workouts_post_id_fkey(id, name, duration_seconds, started_at, data)"
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })

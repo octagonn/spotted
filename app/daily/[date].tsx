@@ -1,6 +1,7 @@
+import { useIsFocused } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 import { PostCard } from "@/components/post/PostCard";
@@ -66,6 +67,9 @@ export default function DayScreen() {
         mediaUris: p.media_urls?.length ? p.media_urls : undefined,
         workouts: p.workouts.length ? p.workouts : undefined,
         caption: p.caption ?? undefined,
+        music: p.music
+          ? { title: p.music.title, artist: p.music.artist, artworkUrl: p.music.artworkUrl, previewUrl: p.music.previewUrl, clipStart: p.music.clipStart }
+          : undefined,
         reactions: [],
         comments: []
       })),
@@ -76,6 +80,16 @@ export default function DayScreen() {
     0,
     feedPosts.findIndex((p) => p.id === post)
   );
+
+  const isFocused = useIsFocused();
+  const [activePostId, setActivePostId] = useState<string | null>(null);
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: { isViewable: boolean; item?: FeedMockPost }[] }) => {
+      const first = viewableItems.find((v) => v.isViewable && v.item);
+      setActivePostId(first?.item?.id ?? null);
+    }
+  ).current;
 
   const openReactionCapture = (id: string) => {
     sheet.open(<ReactionCaptureSheet postId={id} onClose={sheet.close} />);
@@ -95,10 +109,12 @@ export default function DayScreen() {
         data={feedPosts}
         keyExtractor={(item: FeedMockPost) => item.id}
         initialScrollIndex={initialIndex}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
         renderItem={({ item }: { item: FeedMockPost }) => (
-          <PostCard post={item} locked={false} onReact={openReactionCapture} />
+          <PostCard post={item} locked={false} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
         )}
         ListEmptyComponent={
           <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>

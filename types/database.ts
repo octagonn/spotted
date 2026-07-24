@@ -1497,6 +1497,7 @@ export type Database = {
       }
       stories: {
         Row: {
+          overlay_text: string | null
           id: string
           user_id: string
           media_url: string
@@ -1509,6 +1510,7 @@ export type Database = {
           music_clip_start: number
         }
         Insert: {
+          overlay_text?: string | null
           id?: string
           user_id: string
           media_url: string
@@ -1521,6 +1523,7 @@ export type Database = {
           music_clip_start?: number
         }
         Update: {
+          overlay_text?: string | null
           id?: string
           user_id?: string
           media_url?: string

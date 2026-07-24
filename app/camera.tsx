@@ -773,6 +773,7 @@ export default function CameraScreen() {
     typeof params.community === "string" && params.community ? [params.community] : []
   );
   const [caption, setCaption] = useState("");
+  const [storyOverlayText, setStoryOverlayText] = useState("");
   const [coords, setCoords] = useState<GymSearchCoords | null>(null);
   const [locationSettled, setLocationSettled] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -1074,7 +1075,8 @@ export default function CameraScreen() {
             clipStart: storyTrack.clipStart ?? 0
           }
         : null,
-      tagUserIds: storyTags
+      tagUserIds: storyTags,
+      overlayText: storyOverlayText
     };
     // #24: post optimistically — the story shows immediately (optimistic cache
     // insert), we navigate to the feed at once, and the upload retries in the
@@ -1476,8 +1478,9 @@ export default function CameraScreen() {
       <EditorBoundary onClose={() => setEditing(false)}>
         <PhotoEditor
           uri={photoUri}
-          onDone={(edited) => {
+          onDone={(edited, overlayText) => {
             setPhotoUri(edited);
+            setStoryOverlayText(overlayText);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}

@@ -139,6 +139,8 @@ export type PostStoryInput = {
   music?: StoryMusic | null;
   /** Tagged friend ids — rendered as tappable chips when the story is viewed. */
   tagUserIds?: string[];
+  /** Raw text overlays (baked into the image) — saved for slur scanning. */
+  overlayText?: string;
 };
 
 /** Upload a story photo (reuses the posts bucket) and insert the story row. */
@@ -150,7 +152,7 @@ export function usePostStory() {
     // backoff before surfacing an error, so a flaky network doesn't drop a story.
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
-    mutationFn: async ({ photoUri, music, tagUserIds }: PostStoryInput) => {
+    mutationFn: async ({ photoUri, music, tagUserIds, overlayText }: PostStoryInput) => {
       if (!isSupabaseConfigured || !userId) return;
       const uploadUri = await compressStoryPhoto(photoUri);
       const response = await fetch(uploadUri);
@@ -169,7 +171,8 @@ export function usePostStory() {
         music_artist: music?.artist ?? null,
         music_preview_url: music?.previewUrl ?? null,
         music_artwork_url: music?.artworkUrl ?? null,
-        music_clip_start: music?.clipStart ?? 0
+        music_clip_start: music?.clipStart ?? 0,
+        overlay_text: overlayText && overlayText.trim() ? overlayText.trim().slice(0, 500) : null
       }).select("id").single();
       if (insert.error) {
         await supabase.storage.from("posts").remove([path]).catch(() => {});

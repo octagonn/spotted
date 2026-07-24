@@ -1,0 +1,6 @@
+-- Text/slur moderation (post captions + story overlay_text) + watchlist +
+-- admin audit + admin_overview. Only SEVERE terms flag; common profanity
+-- allowed. Applied via MCP; mirrors deployed state. Objects: stories.overlay_text,
+-- blocked_terms, text_moderation_flags, normalize_for_match, scan_text_profanity,
+-- flag_text, caption/story scan triggers, watchlist, moderation_actions,
+-- admin_overview.

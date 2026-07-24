@@ -158,7 +158,7 @@ export function PhotoEditor({
   onCancel
 }: {
   uri: string;
-  onDone: (editedUri: string) => void;
+  onDone: (editedUri: string, overlayText: string) => void;
   onCancel: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -346,7 +346,9 @@ export function PhotoEditor({
       // No native capture available — post the original photo rather than fail.
     }
     setSaving(false);
-    onDone(out);
+    // Hand the raw overlay text back so it can be scanned for slurs server-side
+    // (it's baked into the image otherwise, unreadable to text moderation).
+    onDone(out, texts.map((t) => t.text).join(" ").trim());
   };
 
   return (

@@ -101,7 +101,8 @@ async function processJob(job) {
     console.error(`resolve failed for job ${job.job_id}: ${error.message}`);
     return;
   }
-  console.log(`job ${job.job_id} post ${job.post_id} -> ${action} (nsfw=${scores.nsfw})`);
+  const target = job.post_id ? `post ${job.post_id}` : job.story_id ? `story ${job.story_id}` : "unknown";
+  console.log(`job ${job.job_id} ${target} -> ${action} (nsfw=${scores.nsfw})`);
 }
 
 async function tick() {

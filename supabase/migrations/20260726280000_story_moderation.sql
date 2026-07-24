@@ -1,0 +1,4 @@
+-- Extend NSFW moderation to stories (share the posts bucket). Adds
+-- stories.moderation_status + moderation_jobs.story_id; enqueue trigger on
+-- story insert; claim/resolve handle post_id OR story_id; stories read policy
+-- hides 'flagged' from non-owners. Applied via MCP; mirrors deployed state.

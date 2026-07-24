@@ -333,7 +333,7 @@ export default function WorkoutScreen() {
     if (!name) return;
     const item: LibraryItem =
       picker === "cardio"
-        ? { name, muscle: "Cardio", min: 20, mi: 2, custom: true }
+        ? { name, muscle: "Cardio", min: 20, mi: 2, inc: 0, custom: true }
         : { name, muscle: "Full Body", w: 45, r: 10, custom: true };
     setCustomItems((prev) => (prev.some((c) => c.name === name) ? prev : [...prev, item]));
     setCustomText("");

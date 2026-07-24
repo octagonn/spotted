@@ -5,12 +5,14 @@ import { logger } from "@/lib/logger";
 import { supabase } from "@/lib/supabase";
 
 /**
- * Feed images render near screen width; 1440px keeps them crisp on 3x displays
- * without bloating uploads, and 0.9 JPEG preserves detail (the previous 1080px
- * @ 0.7 was visibly soft).
+ * Feed/story images: 1080px is the Instagram standard — sharp on a phone while
+ * roughly halving the pixels vs 1440 (faster loads, less egress). 0.85 quality
+ * keeps it crisp (the old 1080 was soft only because it used 0.7).
  */
-const MAX_UPLOAD_WIDTH = 1440;
-const JPEG_QUALITY = 0.9;
+const MAX_UPLOAD_WIDTH = 1080;
+/** Grid/thumbnail width — grids only need a small image, not the full photo. */
+const THUMB_WIDTH = 320;
+const JPEG_QUALITY = 0.85;
 
 /**
  * Downscale (only if larger than the target) + re-encode before upload. A raw
@@ -82,6 +84,29 @@ async function generateAndUploadThumbnail(videoUri: string, userId: string, stam
     logger.warn("video_thumbnail_failed", {
       message: error instanceof Error ? error.message : String(error)
     });
+    return null;
+  }
+}
+
+/**
+ * Small (~320px) grid thumbnail for a photo post. Grids load this instead of
+ * the full ~1080px image, cutting a 3-column grid from megabytes to kilobytes.
+ * Best-effort — a failure just means the grid falls back to the full image.
+ */
+async function makePhotoThumbnail(photoUri: string, userId: string, stamp: number): Promise<string | null> {
+  try {
+    const context = ImageManipulator.manipulate(photoUri);
+    context.resize({ width: THUMB_WIDTH });
+    const image = await context.renderAsync();
+    const saved = await image.saveAsync({ compress: 0.6, format: SaveFormat.JPEG });
+    const response = await fetch(saved.uri);
+    const body = await response.arrayBuffer();
+    if (body.byteLength === 0) return null;
+    const path = `${userId}/pthumb-${stamp}.jpg`;
+    const upload = await supabase.storage.from("posts").upload(path, body, { contentType: "image/jpeg", upsert: false });
+    if (upload.error) return null;
+    return path;
+  } catch {
     return null;
   }
 }
@@ -261,6 +286,9 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     }
   }
 
+  // Small grid thumbnail from the cover photo (fast grids).
+  const thumbPath = await makePhotoThumbnail(input.photoUris[0], input.userId, stamp);
+
   const insert = await supabase
     .from("posts")
     .insert({
@@ -269,6 +297,7 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
       // A dual post is a single main frame + inset — not a swipeable carousel.
       media_urls: insetPath ? null : paths,
       inset_url: insetPath,
+      thumbnail_url: thumbPath,
       media_type: "image",
       caption: input.caption.trim() ? input.caption.trim().slice(0, 200) : null,
       gym_id: input.gymId,

@@ -553,7 +553,9 @@ function AchievementButton({
  */
 function GridCell({ post }: { post: { media_url: string | null; media_type?: string; thumbnail_url?: string | null } }) {
   const isVideo = post.media_type === "video";
-  const src = isVideo ? post.thumbnail_url ?? null : post.media_url;
+  // Prefer the small thumbnail for ALL grid cells (photos + videos); fall back
+  // to the full image only for legacy posts that have no thumbnail yet.
+  const src = post.thumbnail_url ?? post.media_url;
   return (
     // Placeholder frame while the image streams in (spec #18) — expo-image
     // decodes async + caches to disk, so cells fade in instead of popping.

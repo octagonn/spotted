@@ -80,11 +80,34 @@ export function publicAvatarUrl(path?: string | null) {
   return data.publicUrl;
 }
 
+/**
+ * Signed-URL cache. A private-bucket image is fetched via a signed URL with a
+ * unique token; re-signing the same path produces a NEW url every time, which
+ * makes expo-image's disk cache miss on every refetch (the token changed) and
+ * costs a signing round-trip. Caching the signed url per path — stable until
+ * near expiry — makes the same image resolve to the same url, so the on-device
+ * cache actually hits and we stop re-signing. URLs are signed for 6h; we reuse
+ * them until 30 min before expiry.
+ */
+const SIGN_TTL_SECONDS = 6 * 60 * 60;
+const SIGN_REUSE_MS = (SIGN_TTL_SECONDS - 30 * 60) * 1000;
+const signedUrlCache = new Map<string, { url: string; at: number }>();
+
+function cachedSigned(path: string, now: number): string | null {
+  const hit = signedUrlCache.get(path);
+  if (hit && now - hit.at < SIGN_REUSE_MS) return hit.url;
+  return null;
+}
+
 export async function signedPostUrl(path: string) {
-  const { data, error } = await supabase.storage.from("posts").createSignedUrl(path, 60 * 60);
+  const now = Date.now();
+  const hit = cachedSigned(path, now);
+  if (hit) return hit;
+  const { data, error } = await supabase.storage.from("posts").createSignedUrl(path, SIGN_TTL_SECONDS);
   if (error) {
     throw error;
   }
+  signedUrlCache.set(path, { url: data.signedUrl, at: now });
   return data.signedUrl;
 }
 
@@ -97,16 +120,25 @@ export async function signedPostUrl(path: string) {
  */
 export async function signedPostUrls(paths: (string | null | undefined)[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
+  const now = Date.now();
   const unique = [...new Set(paths.filter((p): p is string => Boolean(p) && !(p as string).startsWith("http")))];
   if (!unique.length) return map;
+  // Reuse cached signed URLs so the same path is stable across refetches.
+  for (const path of unique) {
+    const hit = cachedSigned(path, now);
+    if (hit) map.set(path, hit);
+  }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const missing = unique.filter((p) => !map.has(p));
     if (!missing.length) break;
     try {
-      const { data, error } = await supabase.storage.from("posts").createSignedUrls(missing, 60 * 60);
+      const { data, error } = await supabase.storage.from("posts").createSignedUrls(missing, SIGN_TTL_SECONDS);
       if (error) throw error;
       for (const row of data ?? []) {
-        if (row.path && row.signedUrl && !row.error) map.set(row.path, row.signedUrl);
+        if (row.path && row.signedUrl && !row.error) {
+          map.set(row.path, row.signedUrl);
+          signedUrlCache.set(row.path, { url: row.signedUrl, at: now });
+        }
       }
     } catch {
       // swallow and retry once; leftovers stay unsigned

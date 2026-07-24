@@ -204,6 +204,7 @@ function MediaPreview({
   mode,
   photoUri,
   videoUri,
+  photos,
   photoCount = 1,
   lift,
   weight,
@@ -212,12 +213,17 @@ function MediaPreview({
   mode: Mode;
   photoUri?: string;
   videoUri?: string;
+  /** All photos for a multi-photo daily post — swipeable preview. */
+  photos?: string[];
   photoCount?: number;
   lift: string;
   weight: string;
   width?: `${number}%`;
 }) {
   const isLift = mode === "lift";
+  const [pageW, setPageW] = useState(0);
+  const [page, setPage] = useState(0);
+  const gallery = !isLift && photos && photos.length > 1 ? photos : null;
   return (
     <View
       style={{
@@ -234,6 +240,28 @@ function MediaPreview({
     >
       {isLift && videoUri ? (
         <LiftVideoThumb uri={videoUri} />
+      ) : gallery ? (
+        <View style={{ flex: 1 }} onLayout={(e) => setPageW(e.nativeEvent.layout.width)}>
+          {pageW > 0 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
+            >
+              {gallery.map((uri) => (
+                <View key={uri} style={{ width: pageW, height: "100%" }}>
+                  <ScenePhoto uri={uri} scene="s2" />
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
+          <View pointerEvents="none" style={{ position: "absolute", bottom: 10, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 }}>
+            {gallery.map((_, i) => (
+              <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i === page ? colors.white : "rgba(255,255,255,0.4)" }} />
+            ))}
+          </View>
+        </View>
       ) : (
         <ScenePhoto uri={isLift ? undefined : photoUri} scene={isLift ? "s6" : "s2"} />
       )}
@@ -1996,6 +2024,7 @@ export default function CameraScreen() {
           mode={mode}
           photoUri={photoUri}
           videoUri={videoUri}
+          photos={photoUri ? [...extraPhotos, photoUri] : extraPhotos}
           photoCount={extraPhotos.length + 1}
           lift={liftName}
           weight={resolvedWeight}

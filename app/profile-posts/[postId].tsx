@@ -50,10 +50,11 @@ export default function ProfilePostsScreen() {
     () =>
       list.map((post: SignedPost) => ({
         id: post.id,
-        kind: "fb",
         user: { name, handle, avatarUrl },
         time: relTime(post.created_at),
-        mediaUri: post.media_url ?? undefined,
+        kind: post.mediaType === "video" ? "video" : "fb",
+        mediaUri: post.mediaType === "video" ? undefined : post.media_url ?? undefined,
+        video: post.mediaType === "video" && post.media_url ? { uri: post.media_url, trimStart: 0, trimEnd: 0 } : undefined,
         insetUri: post.inset_url ?? undefined,
         // Everything from that day: extra photos + attached workout slides.
         mediaUris: post.media_urls?.length ? post.media_urls : undefined,

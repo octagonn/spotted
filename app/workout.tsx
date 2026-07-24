@@ -1225,7 +1225,7 @@ export default function WorkoutScreen() {
                   onPress={logSet}
                   style={{ paddingVertical: 17, borderRadius: radius.md, backgroundColor: tokens.accent.gold, alignItems: "center" }}
                 >
-                  <Text style={{ fontFamily: DISP, fontSize: 17, color: colors.black }}>{isLift ? "Log set" : "Log interval"}</Text>
+                  <Text style={{ fontFamily: DISP, fontSize: 17, color: colors.black }}>{isLift ? "+ Add set" : "+ Add interval"}</Text>
                 </Pressable>
               </View>
 

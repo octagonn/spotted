@@ -13,6 +13,9 @@ export type SignedPost = {
   hasMedia: boolean;
   /** Every photo posted that day (signed) — first = cover. */
   media_urls: string[] | null;
+  mediaType: string;
+  /** Signed video poster frame (video posts) — used for grid + placeholder. */
+  thumbnailUrl: string | null;
   caption: string | null;
   created_at: string;
   permanent: boolean;
@@ -71,6 +74,8 @@ export function useSignedUserPosts(userId?: string | null) {
         id: post.id,
         media_url: resolve(post.media_url),
         inset_url: resolve(post.inset_url),
+        mediaType: post.media_type,
+        thumbnailUrl: resolve(post.thumbnail_url),
         hasMedia: Boolean(post.media_url),
         media_urls: post.media_urls?.length
           ? post.media_urls.map(resolve).filter((u): u is string => Boolean(u))

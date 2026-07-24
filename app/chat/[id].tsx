@@ -198,7 +198,21 @@ function ShareCard({
   );
 }
 
-function ChatMediaBubble({ path, mine }: { path: string; mine: boolean }) {
+/** Full-screen chat photo viewer — tap anywhere to dismiss. */
+function ChatPhotoViewer({ uri, onClose }: { uri: string; onClose: () => void }) {
+  return (
+    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
+      <Pressable onPress={onClose} accessibilityLabel="Close photo" style={{ flex: 1 }}>
+        <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
+      </Pressable>
+      <View pointerEvents="none" style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
+        <X size={20} color={colors.white} strokeWidth={2.2} />
+      </View>
+    </View>
+  );
+}
+
+function ChatMediaBubble({ path, mine, onOpen }: { path: string; mine: boolean; onOpen?: (uri: string) => void }) {
   const media = useQuery({
     queryKey: ["msg-media", path],
     staleTime: 50 * 60_000,
@@ -223,7 +237,9 @@ function ChatMediaBubble({ path, mine }: { path: string; mine: boolean }) {
       }}
     >
       {media.data ? (
-        <Image source={{ uri: media.data }} style={{ width: 210, height: 270 }} contentFit="cover" />
+        <RNPressable onPress={() => onOpen?.(media.data as string)} accessibilityLabel="View photo">
+          <Image source={{ uri: media.data }} style={{ width: 210, height: 270 }} contentFit="cover" />
+        </RNPressable>
       ) : (
         <View style={{ width: 210, height: 270 }} />
       )}
@@ -305,19 +321,20 @@ function ViewOnceViewer({ path, onConsume, onClose }: { path: string; onConsume:
   }, [media.data, onConsume]);
   return (
     <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
-      {media.data ? (
-        <Image source={{ uri: media.data }} style={{ flex: 1 }} contentFit="contain" />
-      ) : (
-        <View style={{ flex: 1 }} />
-      )}
-      <Pressable
-        onPress={onClose}
-        accessibilityLabel="Close photo"
-        hitSlop={10}
+      {/* Tap anywhere to close. */}
+      <Pressable onPress={onClose} accessibilityLabel="Close photo" style={{ flex: 1 }}>
+        {media.data ? (
+          <Image source={{ uri: media.data }} style={{ flex: 1 }} contentFit="contain" />
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
+      </Pressable>
+      <View
+        pointerEvents="none"
         style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}
       >
         <X size={20} color={colors.white} strokeWidth={2.2} />
-      </Pressable>
+      </View>
       <View pointerEvents="none" style={{ position: "absolute", bottom: 46, left: 0, right: 0, alignItems: "center" }}>
         <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.silver }}>
           View once — it disappears when you close it
@@ -365,6 +382,7 @@ export default function ChatScreen() {
   // never auto-sent. Camera shots go out as view-once.
   const [pendingMedia, setPendingMedia] = useState<{ uri: string; kind: "image" | "video"; viewOnce: boolean } | null>(null);
   const [viewOnceOpen, setViewOnceOpen] = useState<ChatMessage | null>(null);
+  const [photoViewer, setPhotoViewer] = useState<string | null>(null);
   const markViewed = useMarkMessageViewed(conversationId);
   const reactions = useMessageReactions(conversationId, (messages.data ?? []).map((m) => m.id));
   const react = useReactToMessage(conversationId);
@@ -689,7 +707,7 @@ export default function ChatScreen() {
                         ) : message.view_once ? (
                           <ViewOnceBubble message={message} mine={mine} onOpen={setViewOnceOpen} />
                         ) : message.media_url ? (
-                          <ChatMediaBubble path={message.media_url} mine={mine} />
+                          <ChatMediaBubble path={message.media_url} mine={mine} onOpen={setPhotoViewer} />
                         ) : (
                           <MessageBubble mine={mine} text={message.content ?? ""} />
                         )}
@@ -882,6 +900,8 @@ export default function ChatScreen() {
       </KeyboardAvoidingView>
 
       {/* One-shot view-once photo overlay — closing marks it viewed. */}
+      {photoViewer ? <ChatPhotoViewer uri={photoViewer} onClose={() => setPhotoViewer(null)} /> : null}
+
       {viewOnceOpen?.media_url ? (
         <ViewOnceViewer
           path={viewOnceOpen.media_url}

@@ -1,6 +1,7 @@
 # NSFWJS needs tfjs-node's native bindings — Debian slim has the glibc they
-# expect (Alpine/musl does not build tfjs-node cleanly).
-FROM node:20-slim
+# expect (Alpine/musl does not build tfjs-node cleanly). Node 22+ for the
+# built-in WebSocket that supabase-js's realtime client requires.
+FROM node:22-slim
 
 WORKDIR /app
 

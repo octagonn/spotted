@@ -57,10 +57,11 @@ export default function DayScreen() {
     () =>
       dayPosts.map((p: SignedPost) => ({
         id: p.id,
-        kind: "fb",
         user: { name, handle, avatarUrl },
         time: timeOf(p.created_at),
-        mediaUri: p.media_url ?? undefined,
+        kind: p.mediaType === "video" ? "video" : "fb",
+        mediaUri: p.mediaType === "video" ? undefined : p.media_url ?? undefined,
+        video: p.mediaType === "video" && p.media_url ? { uri: p.media_url, trimStart: 0, trimEnd: 0 } : undefined,
         insetUri: p.inset_url ?? undefined,
         mediaUris: p.media_urls?.length ? p.media_urls : undefined,
         workouts: p.workouts.length ? p.workouts : undefined,

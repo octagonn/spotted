@@ -996,9 +996,12 @@ export default function CameraScreen() {
    *  Allowed mid-recording (#8) — expo-camera keeps the clip going across the
    *  facing change; we don't reset zoom while recording so the shot isn't jarred. */
   const flipCamera = () => {
+    // expo-camera can't switch the capture device mid-recording on iOS — doing
+    // so ends the clip. Block the flip while recording instead of losing the take.
+    if (recording) return;
     if (flipLockRef.current) return;
     flipLockRef.current = true;
-    if (!recording) setVirtualZoom(0);
+    setVirtualZoom(0);
     setFacing((value) => (value === "back" ? "front" : "back"));
     setTimeout(() => {
       flipLockRef.current = false;

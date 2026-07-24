@@ -1,5 +1,5 @@
 import { useVideoPlayer, VideoView } from "expo-video";
-import { Pause, Play, RotateCcw } from "lucide-react-native";
+import { Check, Pause, Play, RotateCcw } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -254,7 +254,7 @@ export function LiftVideoReview({
         <Button variant="ghost" style={{ flex: 1 }} onPress={onRetake} icon={<RotateCcw size={16} color={colors.bone} strokeWidth={2} />}>
           Restart
         </Button>
-        <Button style={{ flex: 1 }} onPress={() => onContinue(trimRef.current)}>
+        <Button style={{ flex: 1 }} onPress={() => onContinue(trimRef.current)} icon={<Check size={16} color={colors.black} strokeWidth={2.4} />}>
           Continue
         </Button>
       </View>

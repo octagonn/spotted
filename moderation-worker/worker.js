@@ -39,6 +39,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 });
 
 let model = null;
+let totalProcessed = 0;
 
 /** Decode any image buffer to a tensor NSFWJS can classify. */
 function toTensor(buffer, contentType) {
@@ -101,15 +102,29 @@ async function processJob(job) {
     console.error(`resolve failed for job ${job.job_id}: ${error.message}`);
     return;
   }
+  totalProcessed += 1;
   const target = job.post_id ? `post ${job.post_id}` : job.story_id ? `story ${job.story_id}` : "unknown";
   console.log(`job ${job.job_id} ${target} -> ${action} (nsfw=${scores.nsfw})`);
 }
 
+// Transient errors (cold-start DNS, a stale PostgREST schema cache after a
+// migration) resolve themselves within a few polls. Don't spam the log with
+// them — only surface a claim error once it has persisted for several ticks.
+let consecutiveClaimErrors = 0;
+
 async function tick() {
   const { data: jobs, error } = await supabase.rpc("claim_moderation_jobs", { p_limit: BATCH });
   if (error) {
-    console.error(`claim failed: ${error.message}`);
+    consecutiveClaimErrors += 1;
+    // 3 misses ≈ 15s of real trouble before we log — blips stay silent.
+    if (consecutiveClaimErrors >= 3) {
+      console.error(`claim failing (${consecutiveClaimErrors}x): ${error.message}`);
+    }
     return;
+  }
+  if (consecutiveClaimErrors > 0) {
+    if (consecutiveClaimErrors >= 3) console.log("claim recovered");
+    consecutiveClaimErrors = 0;
   }
   if (!jobs || jobs.length === 0) return;
   for (const job of jobs) {
@@ -125,13 +140,26 @@ async function main() {
   console.log("Loading NSFWJS model…");
   model = await nsfw.load(); // MobileNetV2, bundled
   console.log(`Model ready. Polling every ${POLL_INTERVAL_MS}ms, batch ${BATCH}.`);
+  // Heartbeat every 10 min so the log never goes ambiguously silent — you can
+  // always confirm the loop is alive even when there's no work + no errors.
+  const HEARTBEAT_MS = 10 * 60_000;
+  let lastBeat = Date.now();
+  let processedSinceBeat = 0;
+  const beat = () => {
+    console.log(`alive — polling, ${processedSinceBeat} processed in the last ${Math.round(HEARTBEAT_MS / 60000)}m`);
+    processedSinceBeat = 0;
+    lastBeat = Date.now();
+  };
   // Simple sequential loop — one tick can't overlap the next.
   for (;;) {
     try {
+      const before = totalProcessed;
       await tick();
+      processedSinceBeat += totalProcessed - before;
     } catch (e) {
       console.error(`tick error: ${e.message}`);
     }
+    if (Date.now() - lastBeat >= HEARTBEAT_MS) beat();
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
 }

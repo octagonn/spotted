@@ -15,4 +15,6 @@ RUN npm install --omit=dev
 
 COPY worker.js ./
 
-CMD ["node", "worker.js"]
+# --no-deprecation silences the harmless util.isNullOrUndefined warning from a
+# transitive dependency; it is not our code and not actionable.
+CMD ["node", "--no-deprecation", "worker.js"]

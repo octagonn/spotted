@@ -1,7 +1,7 @@
 import { Dumbbell } from "lucide-react-native";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT, type MapStyleElement } from "react-native-maps";
+import MapView, { Marker, PROVIDER_DEFAULT, type MapStyleElement, type Region } from "react-native-maps";
 
 import type { MapGym } from "@/hooks/queries/useMapGyms";
 import { colors } from "@/theme/colors";
@@ -19,15 +19,26 @@ const darkMapStyle: MapStyleElement[] = [
 const OC_CENTER = { latitude: 33.66, longitude: -117.78 };
 const LON_SCALE = Math.cos((33.7 * Math.PI) / 180);
 
+/**
+ * Hard cap on simultaneously mounted markers. The previous design mounted
+ * every tier's markers up front (~400-700 views) and toggled opacity —
+ * react-native-maps crashed on fast zoom-out no matter how the churn was
+ * trimmed. Viewport rendering keeps the native map at double-digit marker
+ * counts at all times.
+ */
+const MAX_MARKERS = 90;
+
+/** Below this latitudeDelta (≈2km tall viewport) show individual pins only. */
+const NO_CLUSTER_DELTA = 0.02;
+
 type Cluster = { id: string; latitude: number; longitude: number; gyms: MapGym[] };
-type Tier = { key: string; clusters: Cluster[] };
 
 /**
  * Distance-based greedy clustering (NOT grid): each gym joins the nearest
  * existing cluster within `radius` (degrees), else starts a new one; a merge
  * pass then combines clusters that ended up within 0.9*radius. Grid bucketing
  * was the old bug — two gyms straddling a cell edge produced overlapping
- * bubbles. This guarantees cluster centers are ≥~radius apart.
+ * bubbles. Bounded full-sweep merge passes (not restart-on-every-merge).
  */
 function clusterGyms(gyms: MapGym[], radius: number): Cluster[] {
   const acc: { latSum: number; lonSum: number; gyms: MapGym[] }[] = [];
@@ -51,9 +62,6 @@ function clusterGyms(gyms: MapGym[], radius: number): Cluster[] {
       acc.push({ latSum: gym.latitude, lonSum: gym.longitude, gyms: [gym] });
     }
   }
-  // Merge clusters that ended up within 0.9*radius. Bounded full-sweep passes
-  // (NOT restart-on-every-merge, which was O(n³) and froze the JS thread at
-  // ~600+ gyms); each pass keeps scanning after a merge, repeating until stable.
   let changed = true;
   let guard = 0;
   while (changed && guard++ < 20) {
@@ -77,8 +85,11 @@ function clusterGyms(gyms: MapGym[], radius: number): Cluster[] {
       }
     }
   }
-  return acc.map((c, index) => ({
-    id: `c${index}`,
+  return acc.map((c) => ({
+    // Key encodes everything the marker DISPLAYS (anchor gym + count), so a
+    // marker's children never change under tracksViewChanges={false}. When
+    // membership shifts, the key shifts → clean remount of that one marker.
+    id: `${c.gyms[0].id}-${c.gyms.length}`,
     latitude: c.latSum / c.gyms.length,
     longitude: c.lonSum / c.gyms.length,
     gyms: c.gyms
@@ -86,46 +97,11 @@ function clusterGyms(gyms: MapGym[], radius: number): Cluster[] {
 }
 
 /**
- * Tier radii (degrees) + the latitudeDelta at which each activates. Each
- * radius is ~0.075×(its activation delta), which keeps bubble centers ≥~50px
- * apart (no overlap) at that zoom while merging only genuinely-close gyms:
- * far ≈5km, mid ≈1.5km, cmid ≈0.7km, near ≈0.3km. Tighter + one more tier than
- * before, so zooming out no longer collapses far-apart gyms into one bubble.
- */
-const TIERS_DEF = [
-  { key: "far", radius: 0.045 },
-  { key: "mid", radius: 0.014 },
-  { key: "cmid", radius: 0.0065 },
-  { key: "near2", radius: 0.0028 }
-] as const;
-
-function tierForDelta(delta: number): number {
-  if (delta >= 0.35) return 0; // far
-  if (delta >= 0.16) return 1; // mid
-  if (delta >= 0.075) return 2; // cmid
-  if (delta >= 0.035) return 3; // near2
-  return 4; // individual pins
-}
-
-/** Individual-pins tier index (one past the cluster tiers). */
-const PIN_TIER = TIERS_DEF.length;
-
-/**
- * STABILITY CONTRACT — no native marker view is EVER added or removed after
- * mount (new-arch react-native-maps hard-crashes Expo Go otherwise). All
- * markers are mounted once; changing zoom only toggles per-marker `opacity`
- * (NOT zIndex — zIndex changes force native view reordering across every
- * marker, which crashed on fast zoom). Parent mounts this only after
- * location + gyms settle; initialRegion is final (no animateToRegion).
- *
- * Marker-count discipline (fast zoom-out crashed at ~700 mounted views):
- * - Single-gym clusters are NOT mounted per tier — they'd render identically
- *   to the gym's individual pin, so that pin is reused (made visible) at any
- *   tier where the gym clusters alone. Only multi-gym bubbles mount per tier.
- * - Tier flips are debounced so a fast pinch from street to far applies one
- *   visibility update, not four cascading re-renders mid-gesture.
- * - Pins/bubbles are memoized so a flip re-renders only markers whose
- *   visibility actually changed.
+ * VIEWPORT-RENDERED MAP — the standard production pattern. Only markers
+ * inside the visible region (plus margin) are mounted, capped at MAX_MARKERS,
+ * recomputed 250ms after each region change settles (never mid-gesture).
+ * Cluster radius scales with zoom so bubbles merge exactly the gyms whose
+ * pins would overlap on screen — nothing merges "from far away".
  */
 export function MapCanvas({
   gyms,
@@ -138,47 +114,62 @@ export function MapCanvas({
   onGym: (gym: MapGym) => void;
   onCluster: (gyms: MapGym[]) => void;
 }) {
-  const frozen = useRef<{
-    tiers: Tier[];
-    soloAtTier: Set<string>[]; // per tier: gym ids that cluster alone
-    gyms: MapGym[];
-    coords: typeof coords;
-  } | null>(null);
-  if (!frozen.current) {
-    const tiers = TIERS_DEF.map((t) => ({ key: t.key, clusters: clusterGyms(gyms, t.radius) }));
-    const soloAtTier = tiers.map((t) => {
-      const solo = new Set<string>();
-      for (const c of t.clusters) if (c.gyms.length === 1) solo.add(c.gyms[0].id);
-      return solo;
-    });
-    frozen.current = { tiers, soloAtTier, gyms, coords };
+  const initial = useRef<Region | null>(null);
+  if (!initial.current) {
+    const center = coords ?? OC_CENTER;
+    const delta = coords ? 0.05 : 0.45;
+    initial.current = {
+      latitude: center.latitude,
+      longitude: center.longitude,
+      latitudeDelta: delta,
+      longitudeDelta: delta
+    };
   }
-  const data = frozen.current;
-  const center = data.coords ?? OC_CENTER;
-  const initialDelta = data.coords ? 0.05 : 0.45;
-  const [tier, setTier] = useState<number>(tierForDelta(initialDelta));
+  const [region, setRegion] = useState<Region>(initial.current);
 
-  // Coalesce rapid tier flips (fast pinch fires several region-complete
-  // events back to back) into a single visibility update, applied only after
-  // the map has been quiet for a beat — never mid-gesture.
-  const pendingTier = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounce region updates: fast pinches fire several region-complete events
+  // back to back; markers recompute once, after the map has been quiet.
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
-    if (pendingTier.current) clearTimeout(pendingTier.current);
+    if (pending.current) clearTimeout(pending.current);
   }, []);
-  const scheduleTier = (next: number) => {
-    if (pendingTier.current) clearTimeout(pendingTier.current);
-    pendingTier.current = setTimeout(() => {
-      setTier((prev) => (prev === next ? prev : next));
-    }, 220);
+  const scheduleRegion = (next: Region) => {
+    if (pending.current) clearTimeout(pending.current);
+    pending.current = setTimeout(() => setRegion(next), 250);
   };
 
-  // Stable callbacks so memoized markers never re-render from prop identity.
+  // Stable callbacks so memoized markers don't re-render on parent renders.
   const onGymRef = useRef(onGym);
   onGymRef.current = onGym;
   const onClusterRef = useRef(onCluster);
   onClusterRef.current = onCluster;
   const pressGym = useCallback((gym: MapGym) => onGymRef.current(gym), []);
   const pressCluster = useCallback((clusterGyms: MapGym[]) => onClusterRef.current(clusterGyms), []);
+
+  const markers = useMemo(() => {
+    // Visible bbox with 40% margin each side so panning has pins ready.
+    const latPad = region.latitudeDelta * 0.7;
+    const lonPad = region.longitudeDelta * 0.7;
+    const visible = gyms.filter(
+      (g) =>
+        Math.abs(g.latitude - region.latitude) < latPad &&
+        Math.abs(g.longitude - region.longitude) < lonPad
+    );
+    // Merge radius ≈ one bubble-width at this zoom (34px of ~700px viewport),
+    // so bubbles combine only gyms whose pins would overlap on screen.
+    const radius = region.latitudeDelta * 0.05;
+    const clusters =
+      region.latitudeDelta <= NO_CLUSTER_DELTA
+        ? visible.map((g) => ({ id: g.id, latitude: g.latitude, longitude: g.longitude, gyms: [g] }))
+        : clusterGyms(visible, radius);
+    // Cap: keep the clusters nearest the view center.
+    clusters.sort(
+      (a, b) =>
+        Math.hypot(a.latitude - region.latitude, (a.longitude - region.longitude) * LON_SCALE) -
+        Math.hypot(b.latitude - region.latitude, (b.longitude - region.longitude) * LON_SCALE)
+    );
+    return clusters.slice(0, MAX_MARKERS);
+  }, [gyms, region]);
 
   return (
     <MapView
@@ -187,58 +178,35 @@ export function MapCanvas({
       showsCompass={false}
       showsUserLocation
       showsMyLocationButton={false}
-      // Cap zoom-out (~level 9 ≈ 80km across — the whole county). The map only
-      // loads the ~250 gyms nearest the viewer, so zooming further shows
-      // nothing new; unbounded fast zoom-out was also the crash trigger
-      // (hundreds of annotation updates while MapKit rescales to state view).
+      // Cap zoom-out (~level 9 ≈ 80km across — the whole county). Only the
+      // ~250 gyms nearest the viewer are loaded, so wider zoom adds nothing.
       minZoomLevel={9}
-      initialRegion={{
-        latitude: center.latitude,
-        longitude: center.longitude,
-        latitudeDelta: initialDelta,
-        longitudeDelta: initialDelta
-      }}
-      onRegionChangeComplete={(region) => scheduleTier(tierForDelta(region.latitudeDelta))}
+      initialRegion={initial.current}
+      onRegionChangeComplete={scheduleRegion}
       style={{ flex: 1 }}
     >
-      {data.tiers.map((t, tierIndex) =>
-        t.clusters
-          .filter((cluster) => cluster.gyms.length > 1)
-          .map((cluster) => (
-            <ClusterPin
-              key={`${t.key}-${cluster.id}`}
-              cluster={cluster}
-              on={tier === tierIndex}
-              onPress={pressCluster}
-            />
-          ))
+      {markers.map((cluster) =>
+        cluster.gyms.length === 1 ? (
+          <SinglePin key={cluster.gyms[0].id} gym={cluster.gyms[0]} onPress={pressGym} />
+        ) : (
+          <ClusterPin key={cluster.id} cluster={cluster} onPress={pressCluster} />
+        )
       )}
-      {data.gyms.map((gym) => (
-        <SinglePin
-          key={`pin-${gym.id}`}
-          gym={gym}
-          on={tier === PIN_TIER || data.soloAtTier[tier].has(gym.id)}
-          onPress={pressGym}
-        />
-      ))}
     </MapView>
   );
 }
 
 const SinglePin = memo(function SinglePin({
   gym,
-  on,
   onPress
 }: {
   gym: MapGym;
-  on: boolean;
   onPress: (gym: MapGym) => void;
 }) {
   return (
     <Marker
       coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
-      onPress={() => on && onPress(gym)}
-      opacity={on ? 1 : 0}
+      onPress={() => onPress(gym)}
       tracksViewChanges={false}
     >
       <GymMarker />
@@ -248,18 +216,15 @@ const SinglePin = memo(function SinglePin({
 
 const ClusterPin = memo(function ClusterPin({
   cluster,
-  on,
   onPress
 }: {
   cluster: Cluster;
-  on: boolean;
   onPress: (gyms: MapGym[]) => void;
 }) {
   return (
     <Marker
       coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
-      onPress={() => on && onPress(cluster.gyms)}
-      opacity={on ? 1 : 0}
+      onPress={() => onPress(cluster.gyms)}
       tracksViewChanges={false}
     >
       <ClusterMarker count={cluster.gyms.length} />
@@ -290,7 +255,7 @@ function GymMarker() {
 
 function ClusterMarker({ count }: { count: number }) {
   // Scale gently with size so a 50-gym bubble reads bigger than a 3-gym one,
-  // but never large enough to overlap neighbours at its tier.
+  // but never large enough to overlap neighbours at its zoom.
   const size = count >= 25 ? 44 : count >= 8 ? 40 : 34;
   return (
     <View style={{ width: size + 4, height: size + 4, alignItems: "center", justifyContent: "center" }}>

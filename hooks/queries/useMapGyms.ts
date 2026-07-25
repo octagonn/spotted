@@ -19,12 +19,11 @@ const OC_CENTER = { latitude: 33.66, longitude: -117.78 };
 const LON_SCALE = Math.cos((33.7 * Math.PI) / 180);
 
 /**
- * Max markers handed to the native map. react-native-maps mounts every marker
- * at once (MapCanvas' stability contract), so the full ~660-gym dataset crashes
- * on zoom-out and stalls clustering. Showing the nearest N to the viewer keeps
- * it fast and stable — N well above what's ever visible at once.
+ * Max gyms handed to the map. The GL map (MapLibre in a WebView) clusters and
+ * renders thousands of points on the GPU, so this is a data-size guard, not a
+ * render limit — the whole regional dataset fits comfortably.
  */
-export const MAP_GYM_LIMIT = 250;
+export const MAP_GYM_LIMIT = 2000;
 
 /** Nearest `limit` gyms to `center` (falls back to OC center if null). */
 export function nearestGyms(

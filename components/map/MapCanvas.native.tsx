@@ -1,5 +1,5 @@
 import { Dumbbell } from "lucide-react-native";
-import { useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT, type MapStyleElement } from "react-native-maps";
 
@@ -107,12 +107,24 @@ function tierForDelta(delta: number): number {
   return 4; // individual pins
 }
 
+/** Individual-pins tier index (one past the cluster tiers). */
+const PIN_TIER = TIERS_DEF.length;
+
 /**
  * STABILITY CONTRACT — no native marker view is EVER added or removed after
- * mount (new-arch react-native-maps hard-crashes Expo Go otherwise). Every
- * tier's clusters AND all individual gyms are mounted once; changing zoom only
- * toggles per-marker `opacity`/`zIndex`. Parent mounts this only after
- * location + gyms settle; initialRegion is final (no animateToRegion).
+ * mount (new-arch react-native-maps hard-crashes Expo Go otherwise). All
+ * markers are mounted once; changing zoom only toggles per-marker
+ * `opacity`/`zIndex`. Parent mounts this only after location + gyms settle;
+ * initialRegion is final (no animateToRegion).
+ *
+ * Marker-count discipline (fast zoom-out crashed at ~700 mounted views):
+ * - Single-gym clusters are NOT mounted per tier — they'd render identically
+ *   to the gym's individual pin, so that pin is reused (made visible) at any
+ *   tier where the gym clusters alone. Only multi-gym bubbles mount per tier.
+ * - Tier flips are debounced so a fast pinch from street to far applies one
+ *   visibility update, not four cascading re-renders mid-gesture.
+ * - Pins/bubbles are memoized so a flip re-renders only markers whose
+ *   visibility actually changed.
  */
 export function MapCanvas({
   gyms,
@@ -125,18 +137,46 @@ export function MapCanvas({
   onGym: (gym: MapGym) => void;
   onCluster: (gyms: MapGym[]) => void;
 }) {
-  const frozen = useRef<{ tiers: Tier[]; gyms: MapGym[]; coords: typeof coords } | null>(null);
+  const frozen = useRef<{
+    tiers: Tier[];
+    soloAtTier: Set<string>[]; // per tier: gym ids that cluster alone
+    gyms: MapGym[];
+    coords: typeof coords;
+  } | null>(null);
   if (!frozen.current) {
-    frozen.current = {
-      tiers: TIERS_DEF.map((t) => ({ key: t.key, clusters: clusterGyms(gyms, t.radius) })),
-      gyms,
-      coords
-    };
+    const tiers = TIERS_DEF.map((t) => ({ key: t.key, clusters: clusterGyms(gyms, t.radius) }));
+    const soloAtTier = tiers.map((t) => {
+      const solo = new Set<string>();
+      for (const c of t.clusters) if (c.gyms.length === 1) solo.add(c.gyms[0].id);
+      return solo;
+    });
+    frozen.current = { tiers, soloAtTier, gyms, coords };
   }
   const data = frozen.current;
   const center = data.coords ?? OC_CENTER;
   const initialDelta = data.coords ? 0.05 : 0.45;
   const [tier, setTier] = useState<number>(tierForDelta(initialDelta));
+
+  // Coalesce rapid tier flips (fast pinch fires several region-complete
+  // events back to back) into a single visibility update.
+  const pendingTier = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (pendingTier.current) clearTimeout(pendingTier.current);
+  }, []);
+  const scheduleTier = (next: number) => {
+    if (pendingTier.current) clearTimeout(pendingTier.current);
+    pendingTier.current = setTimeout(() => {
+      setTier((prev) => (prev === next ? prev : next));
+    }, 120);
+  };
+
+  // Stable callbacks so memoized markers never re-render from prop identity.
+  const onGymRef = useRef(onGym);
+  onGymRef.current = onGym;
+  const onClusterRef = useRef(onCluster);
+  onClusterRef.current = onCluster;
+  const pressGym = useCallback((gym: MapGym) => onGymRef.current(gym), []);
+  const pressCluster = useCallback((clusterGyms: MapGym[]) => onClusterRef.current(clusterGyms), []);
 
   return (
     <MapView
@@ -151,48 +191,76 @@ export function MapCanvas({
         latitudeDelta: initialDelta,
         longitudeDelta: initialDelta
       }}
-      onRegionChangeComplete={(region) => {
-        const next = tierForDelta(region.latitudeDelta);
-        setTier((prev) => (prev === next ? prev : next));
-      }}
+      onRegionChangeComplete={(region) => scheduleTier(tierForDelta(region.latitudeDelta))}
       style={{ flex: 1 }}
     >
       {data.tiers.map((t, tierIndex) =>
-        t.clusters.map((cluster) => {
-          const on = tier === tierIndex;
-          const single = cluster.gyms.length === 1;
-          return (
-            <Marker
+        t.clusters
+          .filter((cluster) => cluster.gyms.length > 1)
+          .map((cluster) => (
+            <ClusterPin
               key={`${t.key}-${cluster.id}`}
-              coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
-              onPress={() => on && (single ? onGym(cluster.gyms[0]) : onCluster(cluster.gyms))}
-              opacity={on ? 1 : 0}
-              zIndex={on ? 3 : 0}
-              tracksViewChanges={false}
-            >
-              {single ? <GymMarker /> : <ClusterMarker count={cluster.gyms.length} />}
-            </Marker>
-          );
-        })
+              cluster={cluster}
+              on={tier === tierIndex}
+              onPress={pressCluster}
+            />
+          ))
       )}
-      {data.gyms.map((gym) => {
-        const on = tier === 4;
-        return (
-          <Marker
-            key={`near-${gym.id}`}
-            coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
-            onPress={() => on && onGym(gym)}
-            opacity={on ? 1 : 0}
-            zIndex={on ? 3 : 0}
-            tracksViewChanges={false}
-          >
-            <GymMarker />
-          </Marker>
-        );
-      })}
+      {data.gyms.map((gym) => (
+        <SinglePin
+          key={`pin-${gym.id}`}
+          gym={gym}
+          on={tier === PIN_TIER || data.soloAtTier[tier].has(gym.id)}
+          onPress={pressGym}
+        />
+      ))}
     </MapView>
   );
 }
+
+const SinglePin = memo(function SinglePin({
+  gym,
+  on,
+  onPress
+}: {
+  gym: MapGym;
+  on: boolean;
+  onPress: (gym: MapGym) => void;
+}) {
+  return (
+    <Marker
+      coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
+      onPress={() => on && onPress(gym)}
+      opacity={on ? 1 : 0}
+      zIndex={on ? 3 : 0}
+      tracksViewChanges={false}
+    >
+      <GymMarker />
+    </Marker>
+  );
+});
+
+const ClusterPin = memo(function ClusterPin({
+  cluster,
+  on,
+  onPress
+}: {
+  cluster: Cluster;
+  on: boolean;
+  onPress: (gyms: MapGym[]) => void;
+}) {
+  return (
+    <Marker
+      coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+      onPress={() => on && onPress(cluster.gyms)}
+      opacity={on ? 1 : 0}
+      zIndex={on ? 3 : 0}
+      tracksViewChanges={false}
+    >
+      <ClusterMarker count={cluster.gyms.length} />
+    </Marker>
+  );
+});
 
 function GymMarker() {
   return (

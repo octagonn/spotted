@@ -113,9 +113,10 @@ const PIN_TIER = TIERS_DEF.length;
 /**
  * STABILITY CONTRACT — no native marker view is EVER added or removed after
  * mount (new-arch react-native-maps hard-crashes Expo Go otherwise). All
- * markers are mounted once; changing zoom only toggles per-marker
- * `opacity`/`zIndex`. Parent mounts this only after location + gyms settle;
- * initialRegion is final (no animateToRegion).
+ * markers are mounted once; changing zoom only toggles per-marker `opacity`
+ * (NOT zIndex — zIndex changes force native view reordering across every
+ * marker, which crashed on fast zoom). Parent mounts this only after
+ * location + gyms settle; initialRegion is final (no animateToRegion).
  *
  * Marker-count discipline (fast zoom-out crashed at ~700 mounted views):
  * - Single-gym clusters are NOT mounted per tier — they'd render identically
@@ -158,7 +159,8 @@ export function MapCanvas({
   const [tier, setTier] = useState<number>(tierForDelta(initialDelta));
 
   // Coalesce rapid tier flips (fast pinch fires several region-complete
-  // events back to back) into a single visibility update.
+  // events back to back) into a single visibility update, applied only after
+  // the map has been quiet for a beat — never mid-gesture.
   const pendingTier = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (pendingTier.current) clearTimeout(pendingTier.current);
@@ -167,7 +169,7 @@ export function MapCanvas({
     if (pendingTier.current) clearTimeout(pendingTier.current);
     pendingTier.current = setTimeout(() => {
       setTier((prev) => (prev === next ? prev : next));
-    }, 120);
+    }, 220);
   };
 
   // Stable callbacks so memoized markers never re-render from prop identity.
@@ -185,6 +187,11 @@ export function MapCanvas({
       showsCompass={false}
       showsUserLocation
       showsMyLocationButton={false}
+      // Cap zoom-out (~level 9 ≈ 80km across — the whole county). The map only
+      // loads the ~250 gyms nearest the viewer, so zooming further shows
+      // nothing new; unbounded fast zoom-out was also the crash trigger
+      // (hundreds of annotation updates while MapKit rescales to state view).
+      minZoomLevel={9}
       initialRegion={{
         latitude: center.latitude,
         longitude: center.longitude,
@@ -232,7 +239,6 @@ const SinglePin = memo(function SinglePin({
       coordinate={{ latitude: gym.latitude, longitude: gym.longitude }}
       onPress={() => on && onPress(gym)}
       opacity={on ? 1 : 0}
-      zIndex={on ? 3 : 0}
       tracksViewChanges={false}
     >
       <GymMarker />
@@ -254,7 +260,6 @@ const ClusterPin = memo(function ClusterPin({
       coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
       onPress={() => on && onPress(cluster.gyms)}
       opacity={on ? 1 : 0}
-      zIndex={on ? 3 : 0}
       tracksViewChanges={false}
     >
       <ClusterMarker count={cluster.gyms.length} />

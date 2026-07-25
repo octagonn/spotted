@@ -1586,8 +1586,9 @@ export default function CameraScreen() {
           </CircleButton>
           <StepPill>{stepLabel}</StepPill>
           <View style={{ flexDirection: "row", gap: 10 }}>
-            {/* Dual (BeReal-style front+back) — hidden while recording. */}
-            {!recording ? (
+            {/* Dual (BeReal-style front+back) — daily posts only; hidden for
+                stories and while recording. */}
+            {!recording && mode !== "story" ? (
               <CircleButton label="Dual camera shot" onPress={() => void captureDual()}>
                 {dualBusy ? (
                   <ActivityIndicator color={colors.white} size="small" />

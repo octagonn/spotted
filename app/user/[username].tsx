@@ -1,14 +1,14 @@
 import { Image } from "expo-image";
 import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Flame, Grid3x3, Lock, MapPin, Tag } from "lucide-react-native";
+import { ChevronDown, Flame, Grid3x3, Lock, MapPin, Send, Share2, Tag, UserPlus, type LucideIcon } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Linking, ScrollView, Share, Text, View } from "react-native";
+import { LayoutAnimation, Modal, Linking, ScrollView, Share, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
 import { StreakPopup } from "@/components/profile/StreakPopup";
 import { Avatar } from "@/components/ui/Avatar";
-import { Button, RelButton } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { useMutualFriends } from "@/hooks/queries/useFollowing";
@@ -30,6 +30,51 @@ import { relationshipButton, useRelationships } from "@/stores/relationships";
 import { localDateKey, showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import type { RelationshipState } from "@/types/redesign";
+
+/** Even, icon-labelled profile action button. `compact` = square icon-only. */
+function ActionButton({
+  label,
+  icon: Icon,
+  onPress,
+  primary = false,
+  disabled = false,
+  compact = false
+}: {
+  label: string;
+  icon?: LucideIcon;
+  onPress: () => void;
+  primary?: boolean;
+  disabled?: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} pressScale={0.97} style={compact ? undefined : { flex: 1 }}>
+      <View
+        style={{
+          height: 40,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          paddingHorizontal: compact ? 0 : 12,
+          width: compact ? 44 : undefined,
+          borderRadius: 10,
+          borderWidth: primary ? 0 : 1,
+          borderColor: colors.iron,
+          backgroundColor: primary ? colors.white : "transparent",
+          opacity: disabled ? 0.55 : 1
+        }}
+      >
+        {Icon ? <Icon size={16} color={primary ? colors.black : colors.white} strokeWidth={2} /> : null}
+        {!compact ? (
+          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: primary ? colors.black : colors.white }}>
+            {label}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
 
 function backendState(status: ReturnType<typeof useFriendshipStatus>["data"]): RelationshipState {
   if (status === "accepted") return "friend";
@@ -76,6 +121,11 @@ export default function UserProfileScreen() {
   const respondRequest = useRespondToRequest();
   const relationships = useRelationships();
   const [streakOpen, setStreakOpen] = useState(false);
+  const [calOpen, setCalOpen] = useState(false); // streak calendar — collapsed by default
+  const toggleCal = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(220, "easeInEaseOut", "opacity"));
+    setCalOpen((v) => !v);
+  };
   const [avatarZoom, setAvatarZoom] = useState(false);
   // You must post your own daily before you can see anyone else's profile
   // below the header (same gate philosophy as the home feed lock).
@@ -211,22 +261,27 @@ export default function UserProfileScreen() {
           ) : null}
         </View>
 
-        {/* Add / Message / Share — one relationship model: friends. */}
-        <View style={{ paddingHorizontal: 18, paddingTop: 16, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <RelButton label={button.label} kind={button.kind} disabled={button.disabled} onPress={advance} />
+        {/* Action row — even, icon-labelled buttons. Friends: Message (primary)
+            + Taunt + Share. Otherwise: Add/Following (primary) + Share. */}
+        <View style={{ paddingHorizontal: 18, paddingTop: 16, flexDirection: "row", gap: 8 }}>
           {isFriend && profile ? (
-            <RelButton label="Message" kind="quiet" onPress={() => router.push(`/chat/${profile.id}`)} />
-          ) : null}
-          {/* Taunt (spec B) — server enforces eligibility/limits; the sheet is
-              the canned-line picker with trophy-gated extras. */}
-          {isFriend && profile ? (
-            <RelButton
-              label={sendTaunt.isPending ? "Sending…" : "Taunt"}
-              kind="quiet"
-              onPress={fireTaunt}
-            />
-          ) : null}
-          <RelButton label="Share" kind="quiet" onPress={shareProfile} />
+            <>
+              <ActionButton primary label="Message" icon={Send} onPress={() => router.push(`/chat/${profile.id}`)} />
+              <ActionButton label={sendTaunt.isPending ? "Sending…" : "Taunt"} icon={Flame} onPress={fireTaunt} disabled={sendTaunt.isPending} />
+              <ActionButton label="Share" icon={Share2} onPress={shareProfile} compact />
+            </>
+          ) : (
+            <>
+              <ActionButton
+                primary={button.kind === "primary"}
+                label={button.label}
+                icon={button.kind === "primary" ? UserPlus : undefined}
+                onPress={advance}
+                disabled={button.disabled}
+              />
+              <ActionButton label="Share" icon={Share2} onPress={shareProfile} />
+            </>
+          )}
         </View>
 
         {/* Mutual friends row */}
@@ -276,22 +331,27 @@ export default function UserProfileScreen() {
               />
             </View>
 
-            {/* Streak calendar */}
+            {/* Streak calendar — collapsible, collapsed by default. */}
             <View style={{ paddingTop: 24 }}>
-              <View
-                style={{
-                  marginHorizontal: 18,
-                  borderRadius: 16,
-                  backgroundColor: colors.ink,
-                  paddingVertical: 16,
-                  overflow: "hidden"
-                }}
-              >
-                <StreakCalendar
-                  days={streakDays.data ?? new Map()}
-                  createdAt={profile?.created_at}
-                  onDayPress={(dateKey) => profile && router.push(`/daily/${dateKey}?user=${profile.id}` as Href)}
-                />
+              <View style={{ marginHorizontal: 18, borderRadius: 16, backgroundColor: colors.ink, overflow: "hidden" }}>
+                <Pressable onPress={toggleCal} accessibilityRole="button" accessibilityState={{ expanded: calOpen }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14 }}>
+                    <Flame size={15} color={colors.gold} strokeWidth={2.2} />
+                    <Text style={{ marginLeft: 8, flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>
+                      Streak calendar
+                    </Text>
+                    <ChevronDown size={17} color={colors.fog} strokeWidth={2} style={{ transform: [{ rotate: calOpen ? "180deg" : "0deg" }] }} />
+                  </View>
+                </Pressable>
+                {calOpen ? (
+                  <View style={{ paddingBottom: 16 }}>
+                    <StreakCalendar
+                      days={streakDays.data ?? new Map()}
+                      createdAt={profile?.created_at}
+                      onDayPress={(dateKey) => profile && router.push(`/daily/${dateKey}?user=${profile.id}` as Href)}
+                    />
+                  </View>
+                ) : null}
               </View>
             </View>
 

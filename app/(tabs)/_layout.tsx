@@ -6,6 +6,7 @@ import { Pressable as RNPressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { selectionHaptic } from "@/lib/haptics";
+import { useTabActions } from "@/stores/tabActions";
 import { colors } from "@/theme/colors";
 import { radius, tokens } from "@/theme/tokens";
 
@@ -110,7 +111,15 @@ function RedesignTabBar({ state, navigation }: BottomTabBarProps) {
   const router = useRouter();
 
   const isFocused = (name: TabName) => state.routes[state.index]?.name === name;
-  const goTo = (name: TabName) => navigation.navigate(name);
+  const bumpFeedReset = useTabActions((s) => s.bumpFeedReset);
+  const goTo = (name: TabName) => {
+    // Re-tapping the already-focused Home tab scrolls to top + refreshes.
+    if (name === "feed" && isFocused("feed")) {
+      bumpFeedReset();
+      return;
+    }
+    navigation.navigate(name);
+  };
 
   return (
     <View

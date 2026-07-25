@@ -2,7 +2,7 @@ import { useIsFocused, useScrollToTop } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { Bell } from "lucide-react-native";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, RefreshControl, Text as RNText, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,6 +20,7 @@ import { useFriends } from "@/hooks/queries/useFriends";
 import { type FeedMockPost } from "@/lib/redesignData";
 import { usePostedState } from "@/hooks/queries/usePostedState";
 import { useAuthStore } from "@/stores/auth";
+import { useTabActions } from "@/stores/tabActions";
 import { colors } from "@/theme/colors";
 
 const NAV_H = 84;
@@ -158,6 +159,18 @@ export default function HomeScreen() {
   const listRef = useRef<React.ComponentRef<typeof FlashList<FeedMockPost>>>(null);
   // Tapping the Home tab while on the feed scrolls back to the top.
   useScrollToTop(listRef as never);
+  // Re-tapping the Home tab (custom tab bar) → jump to top + refresh.
+  const feedResetNonce = useTabActions((st) => st.feedResetNonce);
+  useEffect(() => {
+    if (feedResetNonce === 0) return;
+    try {
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    } catch {
+      // list not mounted yet
+    }
+    void feed.refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedResetNonce]);
 
   const refresh = () => {
     setShuffleSeed((s) => s + 1);

@@ -41,7 +41,7 @@ type FsqPlace = {
 // clubs, etc. with a category name containing "gym"/"fitness". Reject anything
 // whose venue name (or category) matches these — they are not public
 // gyms/yoga/pilates studios.
-const EXCLUDE = /(high school|middle school|elementary|\bschool\b|college|university|\bpool\b|poolside|swim|tennis|racquet|\bgolf\b|country club|volleyball|basketball|baseball|soccer|\bhotel\b|marriott|hilton|hyatt|courtyard|parking lot|rhythmic|martial art|\bdojo\b|karate|taekwondo|jiu.?jitsu|kung fu)/i;
+const EXCLUDE = /(high school|middle school|elementary|\bschool\b|college|university|\bpool\b|poolside|swim|aquatic|water polo|tennis|racquet|\bgolf\b|country club|volleyball|basketball|baseball|soccer|\bhotel\b|marriott|hilton|hyatt|courtyard|parking lot|rhythmic|martial art|\bdojo\b|karate|taekwondo|jiu.?jitsu|kung fu|\bymca\b|rec center|recreation center|senior center|physical therapy|chiropractic)/i;
 
 /** Classify a place to gym | yoga | pilates, or null to skip it. */
 function classify(place: FsqPlace): "gym" | "yoga" | "pilates" | null {

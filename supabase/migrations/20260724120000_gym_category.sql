@@ -7,9 +7,10 @@ alter table public.gyms add column if not exists source text;
 alter table public.gyms add column if not exists external_id text;
 
 -- Foursquare places are upserted on external_id so refreshes update in place.
+-- A plain (non-partial) unique index is required for ON CONFLICT (external_id);
+-- Postgres treats NULLs as distinct, so many null-external_id rows still coexist.
 create unique index if not exists gyms_external_id_idx
-  on public.gyms (external_id)
-  where external_id is not null;
+  on public.gyms (external_id);
 
 -- Onboarding "pick your gym" — restrict results to fitness venues only.
 create or replace function public.search_gyms(

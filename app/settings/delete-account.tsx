@@ -16,9 +16,9 @@ const RED = "#E5484D";
 /**
  * Danger-zone account deletion (8c) — App Store requirement. A dedicated
  * screen that spells out the consequences, requires an explicit armed
- * confirm, calls the delete-account edge function (storage → owned custom
- * communities → profile cascade → auth user), signs out, and returns to
- * onboarding.
+ * confirm, requests a 30-day deletion (request_account_deletion): the account
+ * hides immediately and is restorable by logging back in until the purge date,
+ * then account_purge_sweep hard-deletes it. Signs out and returns to onboarding.
  */
 export default function DeleteAccountScreen() {
   const insets = useSafeAreaInsets();

@@ -1,0 +1,11 @@
+-- Chat retention: DM messages/images sent to someone else survive UNTIL BOTH
+-- participants are deleted (was: deleting one cascade-deleted the whole convo).
+--  • conversations.participant_a/b -> ON DELETE SET NULL (nullable)
+--  • account_purge_sweep rewritten: snapshot sender name, delete the user's OWN
+--    media (posts/avatars/reactions) but NOT chat images, delete the profile,
+--    then delete only conversations now fully orphaned (both participants gone),
+--    removing their chat images from storage first.
+--  • community (group) chat: community_messages.sender_id -> SET NULL so a
+--    deleted member's messages survive until the community itself is deleted.
+-- Applied via MCP; mirrors deployed state. See migrations
+-- 20260726240000 (lifecycle) for request_account_deletion / restore_account.

@@ -51,7 +51,7 @@ import {
   type LivePresenceRow
 } from "@/hooks/queries/useCommunitiesHome";
 import { useFriends } from "@/hooks/queries/useFriends";
-import { useMapGyms, type MapGym } from "@/hooks/queries/useMapGyms";
+import { nearestGyms, useMapGyms, type MapGym } from "@/hooks/queries/useMapGyms";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { useDeleteWorkout, useWorkouts, type WorkoutRow } from "@/hooks/queries/useWorkouts";
 import { COMMUNITY_ICONS } from "@/lib/communityTypes";
@@ -342,6 +342,11 @@ export default function MapTabScreen() {
       cancelled = true;
     };
   }, []);
+
+  // Cap to the nearest gyms once — MapCanvas freezes its marker set at mount,
+  // and re-sorting the full dataset on every parent re-render is wasted work.
+  const mapGymData = mapGyms.data;
+  const gymsForMap = useMemo(() => nearestGyms(mapGymData ?? [], coords), [mapGymData, coords]);
 
   const openGym = (gym: MapGym) => {
     sheet.open(<GymPreviewSheet gym={gym} close={sheet.close} />);
@@ -899,7 +904,7 @@ export default function MapTabScreen() {
               <ActivityIndicator color={colors.white} />
             </View>
           ) : (
-            <MapCanvas gyms={mapGyms.data ?? []} coords={coords} onGym={openGym} onCluster={openCluster} />
+            <MapCanvas gyms={gymsForMap} coords={coords} onGym={openGym} onCluster={openCluster} />
           )}
         </View>
       )}

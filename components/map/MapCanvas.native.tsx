@@ -51,10 +51,14 @@ function clusterGyms(gyms: MapGym[], radius: number): Cluster[] {
       acc.push({ latSum: gym.latitude, lonSum: gym.longitude, gyms: [gym] });
     }
   }
-  let merged = true;
-  while (merged) {
-    merged = false;
-    outer: for (let i = 0; i < acc.length; i++) {
+  // Merge clusters that ended up within 0.9*radius. Bounded full-sweep passes
+  // (NOT restart-on-every-merge, which was O(n³) and froze the JS thread at
+  // ~600+ gyms); each pass keeps scanning after a merge, repeating until stable.
+  let changed = true;
+  let guard = 0;
+  while (changed && guard++ < 20) {
+    changed = false;
+    for (let i = 0; i < acc.length; i++) {
       for (let j = i + 1; j < acc.length; j++) {
         const a = acc[i];
         const b = acc[j];
@@ -67,8 +71,8 @@ function clusterGyms(gyms: MapGym[], radius: number): Cluster[] {
           a.lonSum += b.lonSum;
           a.gyms.push(...b.gyms);
           acc.splice(j, 1);
-          merged = true;
-          break outer;
+          j -= 1;
+          changed = true;
         }
       }
     }

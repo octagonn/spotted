@@ -24,7 +24,7 @@ const LON_SCALE = Math.cos((33.7 * Math.PI) / 180);
  * on zoom-out and stalls clustering. Showing the nearest N to the viewer keeps
  * it fast and stable — N well above what's ever visible at once.
  */
-export const MAP_GYM_LIMIT = 300;
+export const MAP_GYM_LIMIT = 250;
 
 /** Nearest `limit` gyms to `center` (falls back to OC center if null). */
 export function nearestGyms(

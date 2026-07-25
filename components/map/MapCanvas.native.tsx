@@ -86,21 +86,25 @@ function clusterGyms(gyms: MapGym[], radius: number): Cluster[] {
 }
 
 /**
- * Tier radii + the max latitudeDelta each tier stays clean at, derived from
- * bubble size B and map height H≈700: cleanUpTo = radius*0.9*H/B. Thresholds
- * below sit inside every tier's clean range.
+ * Tier radii (degrees) + the latitudeDelta at which each activates. Each
+ * radius is ~0.075×(its activation delta), which keeps bubble centers ≥~50px
+ * apart (no overlap) at that zoom while merging only genuinely-close gyms:
+ * far ≈5km, mid ≈1.5km, cmid ≈0.7km, near ≈0.3km. Tighter + one more tier than
+ * before, so zooming out no longer collapses far-apart gyms into one bubble.
  */
 const TIERS_DEF = [
-  { key: "far", radius: 0.075 },
-  { key: "mid", radius: 0.03 },
-  { key: "cmid", radius: 0.012 }
+  { key: "far", radius: 0.045 },
+  { key: "mid", radius: 0.014 },
+  { key: "cmid", radius: 0.0065 },
+  { key: "near2", radius: 0.0028 }
 ] as const;
 
 function tierForDelta(delta: number): number {
-  if (delta >= 0.3) return 0; // far
-  if (delta >= 0.12) return 1; // mid
-  if (delta >= 0.045) return 2; // cmid
-  return 3; // near — individual pins
+  if (delta >= 0.35) return 0; // far
+  if (delta >= 0.16) return 1; // mid
+  if (delta >= 0.075) return 2; // cmid
+  if (delta >= 0.035) return 3; // near2
+  return 4; // individual pins
 }
 
 /**
@@ -172,7 +176,7 @@ export function MapCanvas({
         })
       )}
       {data.gyms.map((gym) => {
-        const on = tier === 3;
+        const on = tier === 4;
         return (
           <Marker
             key={`near-${gym.id}`}

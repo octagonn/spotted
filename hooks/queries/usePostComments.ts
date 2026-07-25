@@ -67,3 +67,16 @@ export function useAddComment(postId: string) {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["post-comments", postId] })
   });
 }
+
+/** Delete a comment. RLS allows the comment author OR the post owner. */
+export function useDeleteComment(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      if (!isSupabaseConfigured) return;
+      const { error } = await supabase.from("post_comments").delete().eq("id", commentId);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["post-comments", postId] })
+  });
+}

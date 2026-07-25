@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { Send, X } from "lucide-react-native";
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -20,6 +21,8 @@ import { colors } from "@/theme/colors";
 
 export type CommentRow = {
   id: string;
+  /** Author's user id — for the "can I delete this?" check. */
+  userId?: string | null;
   name: string;
   handle: string;
   avatarUrl?: string | null;
@@ -40,13 +43,17 @@ function CommentLine({
   comment,
   onOpenProfile,
   onReply,
-  replyParent
+  replyParent,
+  canDelete = false,
+  onDelete
 }: {
   comment: CommentRow;
   onOpenProfile: (handle: string) => void;
   onReply?: (target: ReplyTarget | null) => void;
   /** When rendering a reply, the top-level parent replies thread onto. */
   replyParent?: CommentRow;
+  canDelete?: boolean;
+  onDelete?: (commentId: string) => void;
 }) {
   return (
     <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
@@ -61,16 +68,31 @@ function CommentLine({
           <Text style={mono(11, colors.ash)}>{comment.time}</Text>
         </View>
         <Text style={{ marginTop: 3, fontSize: 15.5, lineHeight: 22, color: colors.bone }}>{comment.text}</Text>
-        {onReply ? (
-          <Pressable
-            onPress={() => onReply({ id: replyParent ? replyParent.id : comment.id, handle: comment.handle })}
-            accessibilityLabel={`Reply to ${comment.handle}`}
-            hitSlop={6}
-            style={{ marginTop: 4, alignSelf: "flex-start" }}
-          >
-            <Text style={{ fontSize: 12.5, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Reply</Text>
-          </Pressable>
-        ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 4 }}>
+          {onReply ? (
+            <Pressable
+              onPress={() => onReply({ id: replyParent ? replyParent.id : comment.id, handle: comment.handle })}
+              accessibilityLabel={`Reply to ${comment.handle}`}
+              hitSlop={6}
+            >
+              <Text style={{ fontSize: 12.5, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Reply</Text>
+            </Pressable>
+          ) : null}
+          {canDelete && onDelete ? (
+            <Pressable
+              onPress={() =>
+                Alert.alert("Delete comment?", "This removes it for everyone.", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Delete", style: "destructive", onPress: () => onDelete(comment.id) }
+                ])
+              }
+              accessibilityLabel="Delete comment"
+              hitSlop={6}
+            >
+              <Text style={{ fontSize: 12.5, fontFamily: "Geist_600SemiBold", color: "#E5484D" }}>Delete</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -92,6 +114,9 @@ export function CommentsSheet({
   onSubmit,
   replyTo = null,
   onReply,
+  myUserId,
+  canModerate = false,
+  onDelete,
   loading = false
 }: {
   visible: boolean;
@@ -106,6 +131,12 @@ export function CommentsSheet({
   replyTo?: ReplyTarget | null;
   /** Set the reply target (undefined = replies unsupported, e.g. fixtures). */
   onReply?: (target: ReplyTarget | null) => void;
+  /** Signed-in user id — lets you delete your own comments. */
+  myUserId?: string | null;
+  /** Post owner — can delete ANY comment on their post. */
+  canModerate?: boolean;
+  /** Delete a comment by id (undefined = deletion unsupported). */
+  onDelete?: (commentId: string) => void;
   loading?: boolean;
 }) {
   const insets = useSafeAreaInsets();
@@ -164,12 +195,12 @@ export function CommentsSheet({
                   .filter((c) => !c.parentId)
                   .map((comment) => (
                     <View key={comment.id}>
-                      <CommentLine comment={comment} onOpenProfile={openProfile} onReply={onReply} />
+                      <CommentLine comment={comment} onOpenProfile={openProfile} onReply={onReply} canDelete={Boolean(onDelete) && (canModerate || comment.userId === myUserId)} onDelete={onDelete} />
                       {comments
                         .filter((r) => r.parentId === comment.id)
                         .map((reply) => (
                           <View key={reply.id} style={{ paddingLeft: 44, paddingTop: 10 }}>
-                            <CommentLine comment={reply} onOpenProfile={openProfile} onReply={onReply} replyParent={comment} />
+                            <CommentLine comment={reply} onOpenProfile={openProfile} onReply={onReply} replyParent={comment} canDelete={Boolean(onDelete) && (canModerate || reply.userId === myUserId)} onDelete={onDelete} />
                           </View>
                         ))}
                     </View>

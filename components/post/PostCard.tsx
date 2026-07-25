@@ -19,7 +19,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { CtxChip } from "@/components/ui/Chips";
 import { Pressable } from "@/components/ui/Pressable";
 import { usePostReactionSelfies } from "@/hooks/queries/usePostReactionSelfies";
-import { useAddComment, usePostComments } from "@/hooks/queries/usePostComments";
+import { useAddComment, useDeleteComment, usePostComments } from "@/hooks/queries/usePostComments";
 import { useMyReactions, useToggleLike } from "@/hooks/queries/usePostReactions";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { type FeedCtxIcon, type FeedMockPost } from "@/lib/redesignData";
@@ -96,8 +96,10 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   // Real comments for real posts; fixtures fall back to their seeded list.
   const commentsQuery = usePostComments(post.id, isRealPost && commentsOpen);
   const addComment = useAddComment(post.id);
+  const deleteComment = useDeleteComment(post.id);
   const realComments: CommentRow[] = (commentsQuery.data ?? []).map((c) => ({
     id: c.id,
+    userId: c.userId,
     name: c.name,
     handle: c.handle,
     avatarUrl: c.avatarUrl,
@@ -490,6 +492,13 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         onSubmit={postComment}
         replyTo={commentReplyTo}
         onReply={isRealPost ? setCommentReplyTo : undefined}
+        myUserId={myProfile.data?.id ?? null}
+        canModerate={isOwnPost}
+        onDelete={
+          isRealPost
+            ? (id) => deleteComment.mutate(id, { onError: () => showToast("Couldn't delete — try again") })
+            : undefined
+        }
         loading={commentsQuery.isLoading}
       />
 

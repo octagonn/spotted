@@ -24,7 +24,10 @@ export const mockGyms: Gym[] = [
     latitude: 33.9958,
     longitude: -118.3656,
     geofence_radius_meters: 85,
-    created_at: now
+    created_at: now,
+    category: "gym",
+    source: "seed",
+    external_id: null
   },
   {
     id: "gym-ironworks",
@@ -33,7 +36,10 @@ export const mockGyms: Gym[] = [
     latitude: 40.7289,
     longitude: -73.9914,
     geofence_radius_meters: 75,
-    created_at: now
+    created_at: now,
+    category: "gym",
+    source: "seed",
+    external_id: null
   }
 ];
 

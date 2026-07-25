@@ -10,6 +10,8 @@ type OverpassElement = {
     name?: string;
     "addr:street"?: string;
     "addr:housenumber"?: string;
+    leisure?: string;
+    sport?: string;
   };
 };
 
@@ -33,7 +35,15 @@ serve(async (request) => {
   try {
     await authenticatedUser(request);
     const { lat, lng, radius } = parseRequest(await request.json());
-    const query = `[out:json][timeout:25];(node["leisure"="fitness_centre"](around:${radius},${lat},${lng});way["leisure"="fitness_centre"](around:${radius},${lat},${lng});node["leisure"="sports_centre"](around:${radius},${lat},${lng});way["leisure"="sports_centre"](around:${radius},${lat},${lng}););out center tags;`;
+    // Gyms + yoga + pilates ONLY. sports_centre (parks, courts, rec centers) is
+    // deliberately excluded — Foursquare (seed-gyms-fsq) is the primary/accurate
+    // source; this OSM path is a fallback for areas Foursquare doesn't cover.
+    const around = `(around:${radius},${lat},${lng})`;
+    const query = `[out:json][timeout:25];(` +
+      `node["leisure"="fitness_centre"]${around};way["leisure"="fitness_centre"]${around};` +
+      `node["sport"="yoga"]${around};way["sport"="yoga"]${around};` +
+      `node["sport"="pilates"]${around};way["sport"="pilates"]${around};` +
+      `);out center tags;`;
     const response = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
       body: query
@@ -53,7 +63,9 @@ serve(async (request) => {
         }
         const street = element.tags?.["addr:street"] ?? "";
         const number = element.tags?.["addr:housenumber"] ?? "";
-        return { name, latitude, longitude, address: `${number} ${street}`.trim() || null };
+        const sport = element.tags?.sport;
+        const category = sport === "yoga" ? "yoga" : sport === "pilates" ? "pilates" : "gym";
+        return { name, latitude, longitude, address: `${number} ${street}`.trim() || null, category, source: "osm" };
       })
       .filter((row) => row !== null);
     const supabase = serviceClient();

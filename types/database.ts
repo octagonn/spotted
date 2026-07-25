@@ -646,30 +646,39 @@ export type Database = {
       gyms: {
         Row: {
           address: string | null
+          category: string | null
           created_at: string
+          external_id: string | null
           geofence_radius_meters: number
           id: string
           latitude: number
           longitude: number
           name: string
+          source: string | null
         }
         Insert: {
           address?: string | null
+          category?: string | null
           created_at?: string
+          external_id?: string | null
           geofence_radius_meters?: number
           id?: string
           latitude: number
           longitude: number
           name: string
+          source?: string | null
         }
         Update: {
           address?: string | null
+          category?: string | null
           created_at?: string
+          external_id?: string | null
           geofence_radius_meters?: number
           id?: string
           latitude?: number
           longitude?: number
           name?: string
+          source?: string | null
         }
         Relationships: []
       }

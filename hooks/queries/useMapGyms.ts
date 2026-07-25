@@ -8,7 +8,11 @@ export type MapGym = {
   address: string | null;
   latitude: number;
   longitude: number;
+  category: "gym" | "yoga" | "pilates" | null;
 };
+
+/** Only fitness venues belong on the map — no sports parks, courts, etc. */
+const MAP_CATEGORIES = ["gym", "yoga", "pilates"];
 
 /** Gyms already refined this session — one geocode per gym is plenty. */
 // NOTE: pin coordinates are sourced from the Orange County official address
@@ -24,7 +28,8 @@ export function useMapGyms() {
     queryFn: async (): Promise<MapGym[]> => {
       const { data, error } = await supabase
         .from("gyms")
-        .select("id, name, address, latitude, longitude")
+        .select("id, name, address, latitude, longitude, category")
+        .in("category", MAP_CATEGORIES)
         .limit(1000);
       if (error) throw error;
       return (data ?? []) as MapGym[];

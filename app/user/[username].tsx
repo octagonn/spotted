@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { ChevronDown, Flame, Grid3x3, Lock, MapPin, Send, Share2, Tag, UserPlus, type LucideIcon } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { LayoutAnimation, Modal, Linking, ScrollView, Share, Text, View } from "react-native";
+import { LayoutAnimation, Modal, Linking, ScrollView, Share, Text, View , useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
@@ -92,6 +92,10 @@ export default function UserProfileScreen() {
   const { username = "" } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: winW } = useWindowDimensions();
+  // Exact one-third so the grid is ALWAYS 3 columns on any device (percentages
+  // + a gap were rounding up and wrapping to 2).
+  const cellW = Math.floor(winW / 3);
   const profileQuery = useProfileByUsername(username);
   const profile = profileQuery.data;
   const ownUserId = useAuthStore((state) => state.userId);
@@ -362,11 +366,11 @@ export default function UserProfileScreen() {
             </View>
             {grid === "posts" ? (
               gridPosts.length ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
                   {gridPosts.map((post) => (
                     <Pressable
                       key={post.id}
-                      style={{ width: "33%", aspectRatio: 4 / 5 }}
+                      style={{ width: cellW, aspectRatio: 4 / 5, padding: 1 }}
                       onPress={() => profile && router.push(`/profile-posts/${post.id}?user=${profile.id}` as Href)}
                     >
                       <View style={{ flex: 1, backgroundColor: colors.graphite }}>
@@ -383,11 +387,11 @@ export default function UserProfileScreen() {
                 </View>
               )
             ) : tagged.data?.length ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
                 {tagged.data.map((post) => (
                   <Pressable
                     key={post.id}
-                    style={{ width: "33%", aspectRatio: 4 / 5 }}
+                    style={{ width: cellW, aspectRatio: 4 / 5, padding: 1 }}
                     onPress={() =>
                       router.push(
                         `/daily/${localDateKey(new Date(post.created_at))}?user=${post.user_id}&post=${post.id}` as Href

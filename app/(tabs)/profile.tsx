@@ -41,6 +41,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const gridCellW = Math.floor(width / 3); // exact third -> always 3 columns
   // Adapt to narrow phones (SE-class ≈ 320–375) without breaking wide ones.
   const compact = width < 360;
   const H = compact ? 16 : 18;
@@ -420,7 +421,7 @@ export default function ProfileScreen() {
               {gridPosts.map((post) => (
                 <Pressable
                   key={post.id}
-                  style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
+                  style={{ width: gridCellW, aspectRatio: 4 / 5, padding: 1 }}
                   onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
                 >
                   <GridCell post={{ media_url: post.media_url, media_type: post.mediaType, thumbnail_url: post.thumbnailUrl }} />

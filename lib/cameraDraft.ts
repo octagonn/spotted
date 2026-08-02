@@ -22,6 +22,8 @@ export type CameraDraft = {
   mode: "daily" | "story" | "lift";
   step: string;
   photoUri?: string | null;
+  /** Front-camera frame for a dual post. */
+  dualFrontUri?: string | null;
   extraPhotos?: string[];
   videoUri?: string | null;
   caption?: string;
@@ -95,14 +97,16 @@ async function sweepUnreferenced(keep: Set<string>): Promise<void> {
 export async function saveCameraDraft(userId: string | null, draft: Omit<CameraDraft, "savedAt">): Promise<void> {
   if (!userId) return;
   try {
-    const [photoUri, videoUri, ...extras] = await Promise.all([
+    const [photoUri, dualFrontUri, videoUri, ...extras] = await Promise.all([
       persistMedia(draft.photoUri),
+      persistMedia(draft.dualFrontUri),
       persistMedia(draft.videoUri),
       ...(draft.extraPhotos ?? []).map((u) => persistMedia(u))
     ]);
     const full: CameraDraft = {
       ...draft,
       photoUri,
+      dualFrontUri,
       videoUri,
       extraPhotos: extras.filter((u): u is string => Boolean(u)),
       savedAt: Date.now()
@@ -110,7 +114,7 @@ export async function saveCameraDraft(userId: string | null, draft: Omit<CameraD
     await AsyncStorage.setItem(KEY(userId), JSON.stringify(full));
     // Anything no longer referenced (old takes, superseded copies) goes away.
     const keep = new Set(
-      [full.photoUri, full.videoUri, ...(full.extraPhotos ?? [])].filter(
+      [full.photoUri, full.dualFrontUri, full.videoUri, ...(full.extraPhotos ?? [])].filter(
         (u): u is string => Boolean(u) && (u as string).startsWith(DRAFT_DIR)
       )
     );
@@ -154,6 +158,9 @@ export async function loadCameraDraft(userId: string | null): Promise<CameraDraf
     if (draft.extraPhotos?.length) {
       const checks = await Promise.all(draft.extraPhotos.map(fileExists));
       draft.extraPhotos = draft.extraPhotos.filter((_, i) => checks[i]);
+    }
+    if (draft.dualFrontUri && !(await fileExists(draft.dualFrontUri))) {
+      draft.dualFrontUri = null;
     }
     return draft;
   } catch {

@@ -74,12 +74,19 @@ export async function getEmailAuthMethod(email: string): Promise<EmailAuthMethod
   return data?.method === "password" ? "password" : "otp";
 }
 
-export async function sendEmailCode(email: string) {
+export async function sendEmailCode(email: string, legalVersion?: string) {
+  const metadata: Record<string, string | boolean> = {
+    [PASSWORD_SETUP_METADATA_KEY]: true
+  };
+  if (legalVersion) {
+    metadata.legal_version = legalVersion;
+    metadata.legal_accepted_at = new Date().toISOString();
+  }
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser: true,
-      data: { [PASSWORD_SETUP_METADATA_KEY]: true }
+      data: metadata
     }
   });
   if (error) {

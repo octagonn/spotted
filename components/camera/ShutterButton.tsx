@@ -48,6 +48,7 @@ export function ShutterButton({
   recording,
   locked,
   disabled = false,
+  allowRecording = true,
   progress = 0,
   onTap,
   onStartRecording,
@@ -58,6 +59,8 @@ export function ShutterButton({
   recording: boolean;
   locked: boolean;
   disabled?: boolean;
+  /** Disable the hold gesture for photo-only capture modes. */
+  allowRecording?: boolean;
   /** Recording progress 0–1 (elapsed / max duration) for the gold ring. */
   progress?: number;
   onTap: () => void;
@@ -82,7 +85,7 @@ export function ShutterButton({
     .onEnd(() => runOnJS(onTap)());
 
   const hold = Gesture.Pan()
-    .enabled(!disabled && !locked)
+    .enabled(!disabled && !locked && allowRecording)
     .activateAfterLongPress(240)
     .onStart(() => {
       lockedSV.value = 0;

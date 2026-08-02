@@ -1,7 +1,6 @@
-﻿import type { ConfigContext, ExpoConfig } from "expo/config";
+import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const black = `${String.fromCharCode(35)}000000`;
-const apnsEnvironment = process.env.EXPO_PUBLIC_APNS_ENV === "production" ? "production" : "development";
 
 export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   ...baseConfig,
@@ -32,11 +31,10 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       NSLocationAlwaysUsageDescription:
         "Spotted uses location to verify gym check-ins and keep your presence accurate.",
       NSLocationWhenInUseUsageDescription: "Spotted uses location to verify gym check-ins and find nearby gyms.",
-      NSPhotoLibraryUsageDescription: "Spotted uses your library when you choose a profile photo.",
-      UIBackgroundModes: ["remote-notification"]
-    },
-    entitlements: {
-      "aps-environment": apnsEnvironment
+      NSPhotoLibraryUsageDescription:
+        "Spotted accesses a photo only when you choose it for a post or your profile.",
+      NSPhotoLibraryAddUsageDescription:
+        "Spotted adds a captured or edited photo to your library only when you tap Save."
     }
   },
   android: {
@@ -60,6 +58,7 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-font",
+    "expo-asset",
     "expo-apple-authentication",
     [
       "expo-location",
@@ -74,7 +73,15 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
         contactsPermission: "Spotted uses your contacts to help you find friends who already use Spotted."
       }
     ],
-    "expo-notifications",
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/images/android-icon-monochrome.png",
+        color: black,
+        defaultChannel: "social"
+      }
+    ],
+    "@react-native-community/datetimepicker",
     "expo-task-manager",
     "expo-video",
     "expo-audio",
@@ -83,6 +90,15 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       "expo-image-picker",
       {
         photosPermission: "Spotted uses your photo library to post images you've already taken."
+      }
+    ],
+    [
+      "expo-media-library",
+      {
+        photosPermission: "Spotted accesses only photos you choose.",
+        savePhotosPermission: "Spotted saves photos only when you tap Save.",
+        granularPermissions: ["photo"],
+        isAccessMediaLocationEnabled: false
       }
     ],
     [
@@ -123,7 +139,6 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       projectId: process.env.EAS_PROJECT_ID ?? "c64d03b4-83c0-48c9-863b-f225fb8de92d"
     },
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? "",
-    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "",
-    apnsEnvironment: process.env.EXPO_PUBLIC_APNS_ENV ?? "development"
+    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""
   }
 });

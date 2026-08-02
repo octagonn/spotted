@@ -3,6 +3,7 @@ import { isAuthApiError, isAuthSessionMissingError } from "@supabase/supabase-js
 import { create } from "zustand";
 
 import { userNeedsPasswordSetup } from "@/lib/authRouting";
+import { unregisterCurrentPushToken } from "@/lib/notifications";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export type AuthStatus =
@@ -174,6 +175,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   signOut: async () => {
     if (isSupabaseConfigured) {
+      try {
+        await unregisterCurrentPushToken();
+      } catch {
+        // Signing out must still succeed when token cleanup is offline. The
+        // registration RPC atomically reassigns the token on the next login.
+      }
       await supabase.auth.signOut();
     }
     set({

@@ -103,6 +103,18 @@ export async function signedPostUrl(path: string) {
   const now = Date.now();
   const hit = cachedSigned(path, now);
   if (hit) return hit;
+  // R2-migrated media ("r2:<key>") signs through the r2-media edge function;
+  // legacy paths keep using Supabase Storage. (Import here would be circular —
+  // lib/r2 imports the supabase client — so resolve lazily.)
+  if (path.startsWith("r2:")) {
+    const { r2Key, r2SignDownloads } = await import("@/lib/r2");
+    const key = r2Key(path);
+    const urls = await r2SignDownloads([key]);
+    const url = urls.get(key);
+    if (!url) throw new Error("r2_sign_failed");
+    signedUrlCache.set(path, { url, at: now });
+    return url;
+  }
   const { data, error } = await supabase.storage.from("posts").createSignedUrl(path, SIGN_TTL_SECONDS);
   if (error) {
     throw error;
@@ -128,8 +140,25 @@ export async function signedPostUrls(paths: (string | null | undefined)[]): Prom
     const hit = cachedSigned(path, now);
     if (hit) map.set(path, hit);
   }
+  // Split R2-migrated paths ("r2:<key>") from legacy Supabase Storage paths.
+  const r2Paths = unique.filter((p) => !map.has(p) && p.startsWith("r2:"));
+  if (r2Paths.length) {
+    try {
+      const { r2Key, r2SignDownloads } = await import("@/lib/r2");
+      const urls = await r2SignDownloads(r2Paths.map(r2Key));
+      for (const path of r2Paths) {
+        const url = urls.get(r2Key(path));
+        if (url) {
+          map.set(path, url);
+          signedUrlCache.set(path, { url, at: now });
+        }
+      }
+    } catch {
+      // leftovers stay unsigned; callers show placeholders
+    }
+  }
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const missing = unique.filter((p) => !map.has(p));
+    const missing = unique.filter((p) => !map.has(p) && !p.startsWith("r2:"));
     if (!missing.length) break;
     try {
       const { data, error } = await supabase.storage.from("posts").createSignedUrls(missing, SIGN_TTL_SECONDS);

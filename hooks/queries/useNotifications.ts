@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Notifications from "expo-notifications";
 
 import { useIncomingRequests } from "@/hooks/queries/useFriends";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -45,7 +46,13 @@ export function useNotifications() {
         actor: { display_name: string; username: string; avatar_url: string | null } | null;
       }[];
       return rows
-        .filter((row) => row.type !== "friend_request" && row.type !== "post_view")
+        .filter(
+          (row) =>
+            row.type !== "friend_request" &&
+            row.type !== "post_view" &&
+            row.type !== "daily_nudge" &&
+            row.type !== "arrival_buzz"
+        )
         .map((row) => ({
           id: row.id,
           type: row.type,
@@ -82,6 +89,9 @@ export function useMarkNotificationsRead() {
         .eq("recipient_id", userId)
         .eq("read", false);
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["notifications"] })
+    onSuccess: () => {
+      void Notifications.setBadgeCountAsync(0).catch(() => false);
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    }
   });
 }

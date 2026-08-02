@@ -9,8 +9,8 @@ import { tokens } from "@/theme/tokens";
 /**
  * Custom pre-permission screen (spec). Shown AFTER the first post — never at
  * cold launch. Only "Turn on" calls the OS prompt; "Not now" defers it (the
- * caller re-primes after the 3rd post). iOS only lets us ask the system once,
- * so we spend that ask on a warm, convinced user.
+ * caller re-primes after the 3rd post). The system prompt is saved for a moment
+ * when the value of alerts is already clear.
  */
 export function PushPrimingSheet({
   visible,
@@ -57,7 +57,7 @@ export function PushPrimingSheet({
             Know when your friends hit the gym
           </Text>
           <Text style={{ marginTop: 12, fontSize: 14, lineHeight: 21, color: colors.mist, textAlign: "center" }}>
-            We&apos;ll ping you when your crew checks in, and nudge you if you haven&apos;t gone yet. At most 2 a day — never spam.
+            Get friend check-ins, messages, reactions, and one daily reminder. You can tune every category and quiet hours anytime.
           </Text>
 
           <Pressable onPress={onEnable} accessibilityLabel="Turn on notifications" style={{ alignSelf: "stretch", marginTop: 24 }}>

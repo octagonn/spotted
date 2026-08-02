@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import {
   ChevronLeft,
+  Download,
   Dumbbell,
   Home,
   Image as ImageIcon,
@@ -76,13 +77,16 @@ import {
 } from "@/hooks/queries/useGymSearch";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { captureRef } from "react-native-view-shot";
 
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { useSuggestedTracks, useTrackSearch, type MusicTrack } from "@/lib/music";
 import { useMyCommunities, type CommunitySummary } from "@/hooks/queries/useCommunities";
 import { usePostStory } from "@/hooks/queries/useStories";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { logger } from "@/lib/logger";
+import { savePhotoToCameraRoll } from "@/lib/mediaLibrary";
 import { publishDailyPost, publishLiftVideo } from "@/lib/posts";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
@@ -93,6 +97,7 @@ import { tokens } from "@/theme/tokens";
 type Mode = "daily" | "lift" | "story";
 type DailyStep = "capture" | "review" | "compose";
 type LiftStep = "record" | "review" | "liftmeta" | "compose";
+type DualPhase = "off" | "selfie" | "main";
 
 /** Where the post happened: a real mapped gym row, or an unmapped location. */
 type SelectedGym =
@@ -676,6 +681,7 @@ export default function CameraScreen() {
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const permissionAsked = useRef(false);
   const cameraRef = useRef<CameraView>(null);
+  const reviewCaptureRef = useRef<View>(null);
   // Share-screen scroller — the caption scrolls above the keyboard on focus.
   const shareScrollRef = useRef<ScrollView>(null);
   // Set by onCameraReady; gates recordAsync so we never record mid-reconfigure.
@@ -692,10 +698,13 @@ export default function CameraScreen() {
   const [liftStep, setLiftStep] = useState<LiftStep>("record");
   const [videoUri, setVideoUri] = useState<string>();
   const videoTrimRef = useRef<VideoTrim | null>(null);
-  // Dual camera (BeReal-style): the front frame captured right after the back
-  // one, rendered as a corner inset on the review + in the feed.
+  // Expo Camera supports one active native preview at a time. Dual mode frames
+  // each lens deliberately: live selfie inset first, then the rear shot with
+  // that selfie pinned in the corner.
   const [dualFrontUri, setDualFrontUri] = useState<string>();
   const [dualBusy, setDualBusy] = useState(false);
+  const [dualPhase, setDualPhase] = useState<DualPhase>("off");
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [editing, setEditing] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   // Camera zoom prop (0–1 within the active lens). Ultra-wide holds 0 (pure
@@ -803,6 +812,7 @@ export default function CameraScreen() {
       setDailyStep(["capture", "review", "compose"].includes(step) ? step : "review");
     }
     if (draft.photoUri) setPhotoUri(draft.photoUri);
+    if (draft.dualFrontUri) setDualFrontUri(draft.dualFrontUri);
     if (draft.extraPhotos) setExtraPhotos(draft.extraPhotos);
     if (draft.videoUri) setVideoUri(draft.videoUri);
     if (draft.caption) setCaption(draft.caption);
@@ -836,6 +846,7 @@ export default function CameraScreen() {
       mode,
       step,
       photoUri,
+      dualFrontUri,
       extraPhotos,
       videoUri,
       caption,
@@ -858,7 +869,7 @@ export default function CameraScreen() {
       storyTags,
       videoTrim: videoTrimRef.current
     };
-  }, [mode, dailyStep, liftStep, photoUri, extraPhotos, videoUri, caption, track, storyTrack, liftExercise, liftValue, tags, communities, gym, photoTags, storyTags]);
+  }, [mode, dailyStep, liftStep, photoUri, dualFrontUri, extraPhotos, videoUri, caption, track, storyTrack, liftExercise, liftValue, tags, communities, gym, photoTags, storyTags]);
 
   // Autosave the in-progress post (media + edits) whenever anything changes,
   // once media is captured and we're past the capture step (#23) — crash and
@@ -1027,7 +1038,7 @@ export default function CameraScreen() {
   const flipCamera = () => {
     // expo-camera can't switch the capture device mid-recording on iOS — doing
     // so ends the clip. Block the flip while recording instead of losing the take.
-    if (recording) return;
+    if (recording || dualPhase !== "off") return;
     if (flipLockRef.current) return;
     flipLockRef.current = true;
     setVirtualZoom(0);
@@ -1086,6 +1097,7 @@ export default function CameraScreen() {
       showToast("Posting…");
       postStory.mutate(input, {
         onSuccess: () => {
+          trackAnalyticsEvent("story_published", { dual: Boolean(dualFrontUri) });
           showToast("Added to your story");
           clearDraft();
         },
@@ -1120,6 +1132,30 @@ export default function CameraScreen() {
       setDailyStep("review");
     } catch {
       showToast("Couldn't open your photo library");
+    }
+  };
+
+  /** Save the daily review exactly as shown. Dual shots are flattened with the
+   * selfie inset; regular shots retain the original full-resolution file. */
+  const saveDailyPhoto = async () => {
+    if (!photoUri || savingToLibrary) return;
+    setSavingToLibrary(true);
+    try {
+      let uri = photoUri;
+      if (dualFrontUri && reviewCaptureRef.current) {
+        uri = await captureRef(reviewCaptureRef, { format: "jpg", quality: 0.95 });
+      }
+      const result = await savePhotoToCameraRoll(uri);
+      if (result === "saved") {
+        trackAnalyticsEvent("photo_saved", { mode: "daily", dual: Boolean(dualFrontUri) });
+        showToast("Saved to camera roll");
+      }
+      else if (result === "denied") showToast("Allow photo access in Settings to save");
+      else showToast("Saving photos isn't available on this device");
+    } catch {
+      showToast("Couldn't save photo");
+    } finally {
+      setSavingToLibrary(false);
     }
   };
 
@@ -1164,7 +1200,10 @@ export default function CameraScreen() {
       uri = undefined;
     }
     setPhotoUri(uri);
+    setDualFrontUri(undefined);
+    setDualPhase("off");
     setDailyStep("review");
+    if (uri) trackAnalyticsEvent("photo_captured", { mode, dual: false });
     // Stories land directly in edit mode (2a) — no separate "Edit" step. When
     // the editor is done, the review screen (music/tags/share) shows.
     if (mode === "story" && uri) setEditing(true);
@@ -1191,44 +1230,65 @@ export default function CameraScreen() {
     }
   }, []);
 
-  const captureDual = useCallback(async () => {
+  const toggleDualMode = useCallback(() => {
     if (dualBusy) return;
+    if (dualPhase !== "off") {
+      setDualPhase("off");
+      setDualFrontUri(undefined);
+      setFacing("back");
+      setVirtualZoom(0);
+      return;
+    }
     if (!permission?.granted) {
       if (permission?.canAskAgain) void requestPermission();
       else showToast("Enable camera access in Settings to post");
       return;
     }
+    setDualFrontUri(undefined);
+    setVirtualZoom(0);
+    videoReadyRef.current = false;
+    setFacing("front");
+    setDualPhase("selfie");
+    trackAnalyticsEvent("dual_mode_started", { mode });
+  }, [dualBusy, dualPhase, mode, permission?.canAskAgain, permission?.granted, requestPermission]);
+
+  const captureDualStep = useCallback(async () => {
+    if (dualBusy || dualPhase === "off") return;
     setDualBusy(true);
     triggerFlash();
     try {
-      const startFront = facing === "front";
-      // First frame = the lens currently showing (mirror only the front lens).
-      const first = await shootOnce(startFront);
-      // Flip and wait for the session to settle before the second shot.
-      videoReadyRef.current = false;
-      setFacing(startFront ? "back" : "front");
-      const flipStart = Date.now();
-      while (!videoReadyRef.current && Date.now() - flipStart < 1600) {
-        await new Promise((r) => setTimeout(r, 30));
+      if (dualPhase === "selfie") {
+        const front = await shootOnce(true);
+        if (!front) {
+          showToast("Couldn't capture the selfie — try again");
+          return;
+        }
+        setDualFrontUri(front);
+        videoReadyRef.current = false;
+        setFacing("back");
+        setVirtualZoom(0);
+        setDualPhase("main");
+        // Keep the shutter disabled while the rear session reconfigures.
+        const flipStart = Date.now();
+        while (!videoReadyRef.current && Date.now() - flipStart < 1600) {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+        }
+        return;
       }
-      await new Promise((r) => setTimeout(r, 120));
-      const second = await shootOnce(!startFront);
-      // Restore the starting lens for the next shot.
-      setFacing(startFront ? "front" : "back");
-      // Main = the BACK frame; inset = the FRONT frame, regardless of order.
-      const back = startFront ? second : first;
-      const front = startFront ? first : second;
+      const back = await shootOnce(false);
       if (!back) {
         showToast("Couldn't take the dual shot — try again");
         return;
       }
       setPhotoUri(back);
-      setDualFrontUri(front);
+      setDualPhase("off");
       setDailyStep("review");
+      trackAnalyticsEvent("photo_captured", { mode, dual: true });
+      if (mode === "story") setEditing(true);
     } finally {
       setDualBusy(false);
     }
-  }, [dualBusy, facing, permission?.canAskAgain, permission?.granted, requestPermission, shootOnce]);
+  }, [dualBusy, dualPhase, mode, shootOnce]);
 
   // Snapchat-style capture: tap = photo (capturePhoto), hold = video. Holding
   // records; sliding onto the lock keeps it recording hands-free. A recorded
@@ -1457,6 +1517,7 @@ export default function CameraScreen() {
         }
       }
       markPostedToday();
+      trackAnalyticsEvent("daily_post_published", { dual: Boolean(dualFrontUri) });
       await queryClient.invalidateQueries({ queryKey: ["feed"] });
       clearDraft(); // #23: posted successfully — drop the draft
       showToast("Posted. Feed unlocked.");
@@ -1478,6 +1539,7 @@ export default function CameraScreen() {
       <EditorBoundary onClose={() => setEditing(false)}>
         <PhotoEditor
           uri={photoUri}
+          insetUri={mode === "story" ? dualFrontUri : null}
           onDone={(edited, overlayText) => {
             setPhotoUri(edited);
             setStoryOverlayText(overlayText);
@@ -1508,12 +1570,22 @@ export default function CameraScreen() {
   const isCapture = mode === "lift" ? liftStep === "record" : dailyStep === "capture";
 
   if (isCapture) {
-    const stepLabel = mode === "lift" ? "VIDEO" : mode === "story" ? "STORY" : "TODAY'S PHOTO";
+    const dualMode = dualPhase !== "off";
+    const stepLabel =
+      dualPhase === "selfie"
+        ? "DUAL · SELFIE"
+        : dualPhase === "main"
+          ? "DUAL · MAIN"
+          : mode === "lift"
+            ? "VIDEO"
+            : mode === "story"
+              ? "STORY"
+              : "TODAY'S PHOTO";
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
         {permission?.granted && isFocused ? (
           <GestureDetector gesture={pinchZoom}>
-            <View style={{ position: "absolute", inset: 0 }}>
+            <View style={{ position: "absolute", inset: 0, backgroundColor: colors.graphite }}>
               <CameraView
                 // Remount on mode change (onCameraReady re-fires for the new
                 // video session) AND on every screen refocus (fresh native
@@ -1540,8 +1612,54 @@ export default function CameraScreen() {
                     .then(setAvailableLenses)
                     .catch(() => setAvailableLenses([]));
                 }}
-                style={{ position: "absolute", inset: 0 }}
+                style={
+                  dualPhase === "selfie"
+                    ? {
+                        position: "absolute",
+                        top: insets.top + 76,
+                        left: 16,
+                        width: "32%",
+                        aspectRatio: 3 / 4,
+                        borderRadius: 16,
+                        overflow: "hidden",
+                        borderWidth: 2,
+                        borderColor: colors.white
+                      }
+                    : { position: "absolute", inset: 0 }
+                }
               />
+              {dualPhase === "main" && dualFrontUri ? (
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    top: insets.top + 76,
+                    left: 16,
+                    width: "32%",
+                    aspectRatio: 3 / 4,
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    borderWidth: 2,
+                    borderColor: colors.white,
+                    backgroundColor: colors.black
+                  }}
+                >
+                  <ExpoImage source={{ uri: dualFrontUri }} contentFit="cover" style={{ flex: 1 }} />
+                </View>
+              ) : null}
+              {dualPhase === "selfie" ? (
+                <View
+                  pointerEvents="none"
+                  style={{ position: "absolute", top: "43%", left: 32, right: 32, alignItems: "center", gap: 8 }}
+                >
+                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 18, color: colors.white, textAlign: "center" }}>
+                    Frame your selfie
+                  </Text>
+                  <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.fog, textAlign: "center" }}>
+                    Tap the shutter to lock the inset, then frame the main photo.
+                  </Text>
+                </View>
+              ) : null}
               {/* Double-tap to flip — behind the controls so buttons still work. */}
               <Pressable
                 onPress={handleCameraTap}
@@ -1586,23 +1704,24 @@ export default function CameraScreen() {
           </CircleButton>
           <StepPill>{stepLabel}</StepPill>
           <View style={{ flexDirection: "row", gap: 10 }}>
-            {/* Dual (BeReal-style front+back) — daily posts only; hidden for
-                stories and while recording. */}
-            {!recording && mode !== "story" ? (
-              <CircleButton label="Dual camera shot" onPress={() => void captureDual()}>
+            {/* Dual (BeReal-style front+back) for daily and story photos. */}
+            {!recording && mode !== "lift" ? (
+              <CircleButton label={dualMode ? "Exit dual camera" : "Enter dual camera"} onPress={toggleDualMode}>
                 {dualBusy ? (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
-                  <SquareStack color={colors.white} size={18} strokeWidth={2} />
+                  <SquareStack color={dualMode ? tokens.accent.gold : colors.white} size={18} strokeWidth={2} />
                 )}
               </CircleButton>
             ) : null}
             <CircleButton label={flashOn ? "Flash on" : "Flash off"} onPress={() => setFlashOn((v) => !v)}>
               {flashOn ? <Zap color={tokens.accent.gold} size={19} strokeWidth={2} fill={tokens.accent.gold} /> : <ZapOff color={colors.white} size={19} strokeWidth={2} />}
             </CircleButton>
-            <CircleButton label="Flip camera" onPress={flipCamera}>
-              <RefreshCw color={colors.white} size={19} strokeWidth={2} />
-            </CircleButton>
+            {!dualMode ? (
+              <CircleButton label="Flip camera" onPress={flipCamera}>
+                <RefreshCw color={colors.white} size={19} strokeWidth={2} />
+              </CircleButton>
+            ) : null}
           </View>
         </View>
 
@@ -1698,8 +1817,10 @@ export default function CameraScreen() {
             <ShutterButton
               recording={recording}
               locked={recordLocked}
+              disabled={dualBusy || finalizing}
+              allowRecording={!dualMode}
               progress={recordSeconds / 60}
-              onTap={() => void capturePhoto()}
+              onTap={() => void (dualMode ? captureDualStep() : capturePhoto())}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onLock={() => {
@@ -1715,6 +1836,14 @@ export default function CameraScreen() {
           {recording ? (
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 1, color: "rgba(255,255,255,0.75)" }}>
               {recordLocked ? "TAP TO STOP" : "SLIDE TO LOCK"}
+            </Text>
+          ) : dualPhase === "selfie" ? (
+            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.7)" }}>
+              TAP TO LOCK SELFIE
+            </Text>
+          ) : dualPhase === "main" ? (
+            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.7)" }}>
+              TAP TO TAKE DUAL PHOTO
             </Text>
           ) : (
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.55)" }}>
@@ -1752,7 +1881,11 @@ export default function CameraScreen() {
         ) : videoUri ? (
           <LiftVideoThumb uri={videoUri} />
         ) : (
-          <>
+          <View
+            ref={reviewCaptureRef}
+            collapsable={false}
+            style={{ position: "absolute", inset: 0, overflow: "hidden", backgroundColor: colors.black }}
+          >
             <ScenePhoto
               uri={photoUri}
               scene="s2"
@@ -1765,7 +1898,7 @@ export default function CameraScreen() {
                 <ExpoImage source={{ uri: dualFrontUri }} contentFit="cover" style={{ flex: 1 }} />
               </View>
             ) : null}
-          </>
+          </View>
         )}
 
         <LinearGradient
@@ -1787,9 +1920,14 @@ export default function CameraScreen() {
           <CircleButton
             label="Retake"
             onPress={() => {
-              // Clear the recorded clip / dual frame so capture is live again.
+              // A dual retake keeps the framed selfie and returns to the rear
+              // preview; a video retake simply clears the clip.
               if (videoUri) setVideoUri(undefined);
-              if (dualFrontUri) setDualFrontUri(undefined);
+              if (dualFrontUri) {
+                setPhotoUri(undefined);
+                setFacing("back");
+                setDualPhase("main");
+              }
               setDailyStep("capture");
             }}
           >
@@ -1803,7 +1941,7 @@ export default function CameraScreen() {
                 <Pencil size={18} color={colors.white} strokeWidth={2.2} />
               </View>
             </Pressable>
-          ) : !videoUri && extraPhotos.length + 1 < 4 ? (
+          ) : !videoUri && !dualFrontUri && extraPhotos.length + 1 < 4 ? (
             /* Multi-photo: bank this shot and go take another (carousel post).
                Hidden for video daily posts — a clip stands alone. */
             <Pressable
@@ -1900,7 +2038,25 @@ export default function CameraScreen() {
               </Button>
             </>
           ) : (
-            <Button onPress={() => setDailyStep("compose")}>Continue {"\u203a"}</Button>
+            <View style={{ flexDirection: "row", alignItems: "stretch", gap: 10 }}>
+              {photoUri && !videoUri ? (
+                <Button
+                  variant="ghost"
+                  onPress={() => void saveDailyPhoto()}
+                  loading={savingToLibrary}
+                  disabled={savingToLibrary}
+                  icon={<Download size={18} color={colors.bone} strokeWidth={2.2} />}
+                  style={{ minWidth: 104 }}
+                >
+                  Save
+                </Button>
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <Button onPress={() => setDailyStep("compose")} style={{ flex: 1 }}>
+                  Continue {"\u203a"}
+                </Button>
+              </View>
+            </View>
           )}
         </View>
       </View>

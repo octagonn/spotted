@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
+import { LEGAL_EFFECTIVE_DATE } from "@/lib/legal";
 import { colors } from "@/theme/colors";
 
 type LegalTab = "terms" | "privacy";
@@ -15,8 +16,6 @@ type LegalModalProps = {
   onClose: () => void;
   initialTab?: LegalTab;
 };
-
-const EFFECTIVE_DATE = "April 29, 2026";
 
 function Heading({ children }: { children: ReactNode }) {
   return (
@@ -62,7 +61,7 @@ export function Terms() {
         TERMS OF SERVICE
       </Text>
       <Text variant="micro" className="mt-2 text-mist">
-        EFFECTIVE {EFFECTIVE_DATE.toUpperCase()}
+        EFFECTIVE {LEGAL_EFFECTIVE_DATE.toUpperCase()}
       </Text>
 
       <P>
@@ -89,6 +88,11 @@ export function Terms() {
         been accessed without your authorization. We reserve the right to suspend or terminate accounts that
         violate these Terms.
       </P>
+      <P>
+        Before account creation, you must check the box confirming that you agree to these Terms and the
+        Privacy Policy. Your electronic acceptance has the same effect as a written
+        signature. We record the versions accepted, the sign-in method, and the acceptance time.
+      </P>
 
       <Heading>3. Your Content</Heading>
       <P>
@@ -100,9 +104,9 @@ export function Terms() {
         promoting the Service.
       </P>
       <P>
-        Posts are designed to expire automatically after twenty-four (24) hours unless you explicitly save
-        them. Even after expiration we may retain backup copies for a reasonable period and as required by
-        law. You may delete a post at any time before expiration through the App.
+        Daily posts and stories are designed to leave the current feed after twenty-four (24) hours.
+        Archived posts may remain visible from your profile to authorized viewers until you delete them.
+        Even after deletion we may retain backup copies for a limited period or as required by law.
       </P>
 
       <Heading>4. Acceptable Use</Heading>
@@ -135,13 +139,23 @@ export function Terms() {
         Service in accordance with the visibility settings you choose in the App.
       </P>
 
-      <Heading>7. Privacy</Heading>
+      <Heading>7. Notifications</Heading>
+      <P>
+        Push notifications are optional and are not required to use the Service. If enabled, you can choose
+        categories, friend check-in scope, daily reminder time, and quiet hours in the App, and you can
+        disable permission in your device settings. Delivery timing is not guaranteed. Notification previews
+        may appear on a locked device, so use your device's preview controls if you do not want message or
+        activity details displayed there. We will obtain separate consent before sending promotional push
+        notifications.
+      </P>
+
+      <Heading>8. Privacy</Heading>
       <P>
         Our Privacy Policy, accessible from the same screen as these Terms, describes how we collect, use, and
         share information. By using the Service you also agree to that policy.
       </P>
 
-      <Heading>8. Intellectual Property</Heading>
+      <Heading>9. Intellectual Property</Heading>
       <P>
         Other than User Content, all materials available through the Service — including the Spotted name, the
         S mark, the user interface, the underlying software, and any documentation — are owned by Spotted or
@@ -150,7 +164,7 @@ export function Terms() {
         accordance with these Terms.
       </P>
 
-      <Heading>9. Termination</Heading>
+      <Heading>10. Termination</Heading>
       <P>
         You may stop using the Service at any time and may delete your account through the App or by
         contacting us. We may suspend or terminate your access at any time, with or without notice, if we
@@ -159,7 +173,7 @@ export function Terms() {
         indemnification, and limits of liability) shall survive.
       </P>
 
-      <Heading>10. Disclaimer of Warranties</Heading>
+      <Heading>11. Disclaimer of Warranties</Heading>
       <P>
         THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR
         IMPLIED, INCLUDING WITHOUT LIMITATION ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
@@ -167,7 +181,7 @@ export function Terms() {
         WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.
       </P>
 
-      <Heading>11. Limitation of Liability</Heading>
+      <Heading>12. Limitation of Liability</Heading>
       <P>
         TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL SPOTTED, ITS AFFILIATES, OFFICERS,
         EMPLOYEES, AGENTS, OR LICENSORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR
@@ -179,7 +193,7 @@ export function Terms() {
         PRECEDING THE CLAIM, OR (B) ONE HUNDRED U.S. DOLLARS (USD 100).
       </P>
 
-      <Heading>12. Indemnification</Heading>
+      <Heading>13. Indemnification</Heading>
       <P>
         You agree to indemnify, defend, and hold harmless Spotted and its affiliates, officers, directors,
         employees, and agents from any claims, damages, losses, liabilities, and expenses (including
@@ -188,7 +202,7 @@ export function Terms() {
         rights of any third party.
       </P>
 
-      <Heading>13. Governing Law & Dispute Resolution</Heading>
+      <Heading>14. Governing Law & Dispute Resolution</Heading>
       <P>
         These Terms are governed by the laws of the State of California, without regard to conflict-of-laws
         principles. Any dispute arising out of or relating to these Terms or the Service that cannot be
@@ -200,7 +214,7 @@ export function Terms() {
         intellectual-property rights.
       </P>
 
-      <Heading>14. Changes</Heading>
+      <Heading>15. Changes</Heading>
       <P>
         We may modify these Terms from time to time. If we make material changes, we will provide notice
         within the App or by email. Continued use of the Service after a change becomes effective constitutes
@@ -208,7 +222,7 @@ export function Terms() {
         using the Service and delete your account.
       </P>
 
-      <Heading>15. Apple-Specific Terms</Heading>
+      <Heading>16. Apple-Specific Terms</Heading>
       <P>
         These Terms are between you and Spotted, not Apple. Apple has no obligation to provide maintenance or
         support for the App. In the event of any failure of the App to conform to any applicable warranty,
@@ -216,7 +230,7 @@ export function Terms() {
         third-party beneficiary of these Terms and has the right to enforce them against you.
       </P>
 
-      <Heading>16. Contact</Heading>
+      <Heading>17. Contact</Heading>
       <P>
         Questions about these Terms? Email <Text className="text-white">support@spotted.app</Text>.
       </P>
@@ -231,7 +245,7 @@ export function Privacy() {
         PRIVACY POLICY
       </Text>
       <Text variant="micro" className="mt-2 text-mist">
-        EFFECTIVE {EFFECTIVE_DATE.toUpperCase()}
+        EFFECTIVE {LEGAL_EFFECTIVE_DATE.toUpperCase()}
       </Text>
 
       <P>
@@ -248,14 +262,19 @@ export function Privacy() {
       <Bullet>Profile info: username, display name, optional avatar photo, optional bio, home gym, and weekly schedule.</Bullet>
       <Bullet>User Content: photos, captions, reactions, replies, and direct messages you create through the App.</Bullet>
       <Bullet>Friend graph: the friends you add or remove and the requests you send or receive.</Bullet>
+      <Bullet>Legal acceptance: the Terms and Privacy Policy versions you accept, the sign-in method, and the acceptance time.</Bullet>
       <Bullet>Communications: messages you send to support and any other voluntary feedback.</Bullet>
 
       <SubHeading>COLLECTED AUTOMATICALLY</SubHeading>
-      <Bullet>Device & app info: app version, OS version, device model, language, time zone, and crash diagnostics.</Bullet>
-      <Bullet>Usage data: features used, screens viewed, taps, durations, and events such as posting, reacting, or replying.</Bullet>
+      <Bullet>Device, network, and app logs needed to operate and secure the Service, such as app version, OS version, IP address, request time, and error details.</Bullet>
       <Bullet>Location: foreground (while-using) location, used only to verify check-ins at participating gyms. We do not collect background location.</Bullet>
-      <Bullet>Push tokens: an Apple Push Notification service ("APNs") device token if you enable notifications.</Bullet>
+      <Bullet>Notifications: an Expo Push Token linked to your account and app installation, device platform, permission and category settings, delivery ticket or receipt status, errors, and the time you open a notification.</Bullet>
       <Bullet>Local storage: small amounts of data (sessions, preferences, cached lists) stored on-device via AsyncStorage and MMKV.</Bullet>
+
+      <SubHeading>OPTIONAL PRODUCT ANALYTICS</SubHeading>
+      <Bullet>If you explicitly opt in, we collect account-linked app opens, screen categories viewed, selected feature actions, and device platform.</Bullet>
+      <Bullet>Optional analytics does not contain photos, messages, contacts, precise location, advertising identifiers, usernames, or free-form text.</Bullet>
+      <Bullet>Product analytics is off by default and can be changed at any time under Settings → Privacy.</Bullet>
 
       <SubHeading>FROM THIRD PARTIES</SubHeading>
       <Bullet>Sign-in providers: if you sign in with Apple, Apple provides the identifiers and tokens needed to authenticate you.</Bullet>
@@ -265,9 +284,10 @@ export function Privacy() {
       <Bullet>To provide, operate, and maintain the Service.</Bullet>
       <Bullet>To verify gym check-ins and protect against location spoofing.</Bullet>
       <Bullet>To deliver push notifications you have opted into.</Bullet>
+      <Bullet>To record and demonstrate your acceptance of our current legal terms.</Bullet>
       <Bullet>To suggest friends and gyms and personalize your feed.</Bullet>
       <Bullet>To enforce these Terms, prevent abuse, and protect the safety of users and the Service.</Bullet>
-      <Bullet>To analyze usage and improve features, performance, and reliability.</Bullet>
+      <Bullet>With your consent, to analyze product usage and improve features, performance, and reliability.</Bullet>
       <Bullet>To respond to your support requests and communicate with you about the Service.</Bullet>
       <Bullet>To comply with legal obligations and to enforce or defend our legal rights.</Bullet>
 
@@ -280,12 +300,16 @@ export function Privacy() {
       </P>
 
       <Heading>4. How We Share Information</Heading>
-      <P>We do not sell your Personal Information. We share information only as described below:</P>
+      <P>
+        We do not sell Personal Information or share Personal Information for cross-context behavioral
+        advertising. We do not sell or share optional product analytics. We disclose information only as
+        described below:
+      </P>
       <Bullet>
         With service providers who process data on our behalf: Supabase (database, authentication, storage,
-        edge functions), Expo / EAS (build pipeline and over-the-air updates), Apple (App Store, Sign in with
-        Apple, APNs), our SMTP provider (transactional email delivery), and analytics or crash-reporting
-        tools when enabled. These providers are bound by contracts that limit their use of the data.
+        edge functions), Expo / EAS (builds, over-the-air updates, and Expo Push Service), Apple (App Store,
+        Sign in with Apple, and APNs), Google (FCM on Android), and our SMTP provider (transactional email
+        delivery). These providers process data under their own terms and privacy commitments.
       </Bullet>
       <Bullet>With other users, only the information you choose to share — your profile, posts, and check-ins, in line with your visibility settings.</Bullet>
       <Bullet>For legal reasons: when we believe disclosure is required to comply with law, lawful requests, or legal process; to enforce our Terms; or to protect rights, property, or safety.</Bullet>
@@ -296,8 +320,9 @@ export function Privacy() {
       <P>
         Photos you take through the App are uploaded to a private storage bucket controlled by your account.
         They are accessible only via short-lived signed URLs to friends you have authorized to view a
-        specific post. We do not access your camera roll except when you explicitly select a photo (for
-        example, your profile picture).
+        specific post. We access a photo from your camera roll only when you explicitly select it. When you
+        tap Save after taking or editing a photo, we request permission to add that specific photo to your
+        library; saving does not give Spotted permission to upload other library photos.
       </P>
 
       <Heading>6. Location</Heading>
@@ -310,26 +335,37 @@ export function Privacy() {
 
       <Heading>7. Notifications</Heading>
       <P>
-        If you allow notifications, we use APNs to send you alerts about views, reactions, replies, friend
-        requests, streak risk, and friends arriving at gyms. You may turn off notifications at any time in
-        the App or in iOS Settings.
+        If you allow notifications, Supabase sends an Expo Push Token and notification content to the Expo
+        Push Service, which routes it through Apple APNs or Google FCM to your device. Notifications can cover
+        messages, friend requests and activity, post views and reactions, tags, communities, achievements,
+        check-ins, streaks, and reminders. You can disable all push, individual categories, friend check-in
+        scope, quiet hours, or notification permission at any time in the App or device settings. The
+        in-app activity inbox may still show social activity when push is disabled. Invalid tokens are
+        removed, and signing out unregisters the current installation on a best-effort basis.
       </P>
 
       <Heading>8. Retention</Heading>
       <P>
-        Posts auto-expire after 24 hours unless you save them. Direct messages remain until deleted.
-        Account-level data (profile, friend graph, settings) is retained until you delete your account or
-        request deletion. Backups and audit logs may persist for a reasonable period after deletion to meet
-        legal, security, and operational obligations. You may request earlier deletion of specific items by
-        contacting us.
+        Daily posts and stories leave the current feed after 24 hours; archived posts remain until you delete
+        them. Direct messages remain in a conversation according to our messaging controls. In-app
+        notifications and linked push-delivery rows are deleted after 7 days; notification deduplication
+        logs are deleted after 90 days. Push tokens remain until sign-out, reassignment, invalidation, or
+        account deletion. Optional raw product-analytics events are deleted after 90 days, and turning
+        product analytics off deletes your retained raw events. Legal acceptance and other account-level
+        data remain with your account. An account deletion request hides the account immediately and
+        schedules permanent deletion after 30 days; signing back in during that period restores it. Some
+        messages already delivered to another user's thread may remain without being linked to your deleted
+        account. Backups and security logs may persist for a limited period after deletion when needed for
+        security, legal, or operational obligations.
       </P>
 
       <Heading>9. Your Choices & Rights</Heading>
       <Bullet>Access and correction: review or update your profile information at any time in the App.</Bullet>
-      <Bullet>Deletion: delete individual posts in the App, or request full account deletion via the contact below.</Bullet>
-      <Bullet>Permissions: revoke camera, microphone, location, notifications, and contacts permissions in iOS Settings at any time.</Bullet>
+      <Bullet>Deletion: delete individual posts in the App, or start full account deletion under Settings → Danger Zone.</Bullet>
+      <Bullet>Permissions: revoke camera, microphone, photo library, location, notifications, and contacts permissions in your device settings at any time.</Bullet>
+      <Bullet>Product analytics: optional and off by default. Enable or withdraw consent under Settings → Privacy.</Bullet>
       <Bullet>Marketing: we do not run marketing-email campaigns by default; transactional emails (sign-in codes, account alerts) cannot be turned off without disabling sign-in.</Bullet>
-      <Bullet>California (CCPA/CPRA): you have rights to know, delete, correct, limit use of sensitive info, and not be discriminated against for exercising rights. Email us to make a verifiable request.</Bullet>
+      <Bullet>California (CCPA/CPRA): you have rights to know, delete, correct, limit use of sensitive info, opt out of sale or sharing, and not be discriminated against for exercising rights. We currently do not sell or share Personal Information. Email us to make a verifiable request.</Bullet>
       <Bullet>EEA / UK (GDPR): you have rights to access, rectify, erase, restrict, port, or object to processing of your information, and to lodge a complaint with your local supervisory authority.</Bullet>
 
       <Heading>10. Children's Privacy</Heading>

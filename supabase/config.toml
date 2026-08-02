@@ -411,6 +411,10 @@ verify_jwt = false
 [functions.avatar-process]
 verify_jwt = false
 
+[functions.send-push]
+# Authenticated by an HMAC whose secret is generated and retained in Vault.
+verify_jwt = false
+
 # [experimental.pgdelta]
 # When enabled, pg-delta becomes the active engine for supported schema flows.
 # enabled = false

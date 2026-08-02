@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Check, Circle, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -28,6 +28,7 @@ import {
   verifyEmailCode
 } from "@/lib/auth";
 import { userNeedsPasswordSetup } from "@/lib/authRouting";
+import { LEGAL_VERSION, recordLegalAcceptance } from "@/lib/legal";
 import { getPasswordRequirements, passwordMeetsRequirements } from "@/lib/password";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
@@ -50,6 +51,7 @@ function Requirement({ met, label }: { met: boolean; label: string }) {
 }
 
 export default function EmailAuthScreen() {
+  const { legal } = useLocalSearchParams<{ legal?: string }>();
   const session = useAuthStore((state) => state.session);
   const needsPasswordSetup = userNeedsPasswordSetup(session?.user);
   const [email, setEmail] = useState("");
@@ -74,7 +76,7 @@ export default function EmailAuthScreen() {
   const passwordRequirements = getPasswordRequirements(password);
   const newPasswordValid =
     passwordMeetsRequirements(password) && confirmPassword.length > 0 && password === confirmPassword;
-  const codeValid = /^\d{6,10}$/.test(code);
+  const codeValid = /^\d{8}$/.test(code);
 
   useEffect(() => {
     if (resendRemaining <= 0) return;
@@ -133,7 +135,11 @@ export default function EmailAuthScreen() {
         setTimeout(() => passwordInputRef.current?.focus(), 320);
         return;
       }
-      await sendEmailCode(cleanEmail);
+      if (legal !== LEGAL_VERSION) {
+        setError("Go back and agree to the Terms of Use and Privacy Policy before creating an account.");
+        return;
+      }
+      await sendEmailCode(cleanEmail, LEGAL_VERSION);
       setResendRemaining(RESEND_COOLDOWN_SECONDS);
       setStage("verify");
     } catch (cause) {
@@ -167,6 +173,7 @@ export default function EmailAuthScreen() {
       if (!result.session) {
         throw new Error("The code was accepted, but no session was created. Please request a new code.");
       }
+      await recordLegalAcceptance("email");
       await requireEmailPasswordSetup();
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
@@ -210,7 +217,7 @@ export default function EmailAuthScreen() {
     setResendRemaining(RESEND_COOLDOWN_SECONDS);
     setResending(true);
     try {
-      await sendEmailCode(cleanEmail);
+      await sendEmailCode(cleanEmail, LEGAL_VERSION);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn't resend code.");
     } finally {
@@ -310,16 +317,16 @@ export default function EmailAuthScreen() {
               <TextInput
                 value={code}
                 onChangeText={(value) => {
-                  setCode(value.replace(/\D/g, "").slice(0, 10));
+                  setCode(value.replace(/\D/g, "").slice(0, 8));
                   setError(null);
                 }}
-                placeholder="••••••"
+                placeholder="••••••••"
                 placeholderTextColor={colors.fog}
                 inputMode="numeric"
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
                 autoComplete="one-time-code"
-                maxLength={10}
+                maxLength={8}
                 autoFocus
                 className="font-display text-center text-[36px] tracking-[8px] text-white"
               />

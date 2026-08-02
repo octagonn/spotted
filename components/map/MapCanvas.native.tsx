@@ -157,15 +157,15 @@ function buildMapHtml(gyms: MapGym[], coords: { latitude: number; longitude: num
       clusterRadius: 46
     });
 
-    // Cluster bubbles — dark fill, white ring, sized gently by count.
+    // Cluster bubbles — white fill with a dark keyline for the dark basemap.
     map.addLayer({
       id: "clusters",
       type: "circle",
       source: "gyms",
       filter: ["has", "point_count"],
       paint: {
-        "circle-color": "#141416",
-        "circle-stroke-color": "#FFFFFF",
+        "circle-color": "#FFFFFF",
+        "circle-stroke-color": "#141416",
         "circle-stroke-width": 2,
         "circle-radius": ["step", ["get", "point_count"], 15, 8, 18, 25, 22]
       }
@@ -180,18 +180,18 @@ function buildMapHtml(gyms: MapGym[], coords: { latitude: number; longitude: num
         "text-font": ["Montserrat Medium"],
         "text-size": 13
       },
-      paint: { "text-color": "#FFFFFF" }
+      paint: { "text-color": "#141416" }
     });
 
-    // Individual gyms — small dark dot with white ring.
+    // Individual gyms — small white dot with a dark keyline.
     map.addLayer({
       id: "gym",
       type: "circle",
       source: "gyms",
       filter: ["!", ["has", "point_count"]],
       paint: {
-        "circle-color": "#141416",
-        "circle-stroke-color": "#FFFFFF",
+        "circle-color": "#FFFFFF",
+        "circle-stroke-color": "#141416",
         "circle-stroke-width": 2,
         "circle-radius": 9
       }

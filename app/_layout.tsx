@@ -25,15 +25,14 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
 import { GrainOverlay } from "@/components/GrainOverlay";
-import { NotificationBanner } from "@/components/NotificationBanner";
+import { AnalyticsConsentHost } from "@/components/AnalyticsConsentHost";
 import { PushPrimingHost } from "@/components/PushPrimingHost";
 import { FlashOverlay } from "@/components/ui/Flash";
 import { SheetProvider } from "@/components/ui/Sheet";
 import { ToastHost } from "@/components/ui/Toast";
-import { useInAppBanners } from "@/hooks/useInAppBanners";
 import { usePresenceSync } from "@/hooks/useGeofence";
 import { useRealtime } from "@/hooks/useRealtime";
-import { usePushTokenSync } from "@/lib/notifications";
+import { useNotificationObserver, usePushTokenSync } from "@/lib/notifications";
 import { useRestoreOnLogin } from "@/hooks/useRestoreOnLogin";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
@@ -89,17 +88,18 @@ function useResetOnAccountChange() {
 function AppServices() {
   const status = useAuthStore((state) => state.status);
   const userId = useAuthStore((state) => state.userId);
+  const pathname = usePathname();
   const activeUserId = isSupabaseConfigured && status === "ready" ? userId : null;
 
   useResetOnAccountChange();
   useRealtime(activeUserId);
-  useInAppBanners(activeUserId);
   usePushTokenSync(activeUserId);
+  useNotificationObserver(activeUserId);
   useRestoreOnLogin(activeUserId);
   usePresenceSync();
   // Instant own-profile loads: snapshot profile queries to disk, seed at start.
   useProfileCache();
-  return null;
+  return <AnalyticsConsentHost userId={activeUserId} pathname={pathname} />;
 }
 
 /** Routes without an authenticated session; the signed-out guard leaves these alone. */
@@ -235,7 +235,6 @@ export default function RootLayout() {
                 />
               </Stack>
               <ToastHost />
-              <NotificationBanner />
               <PushPrimingHost />
               <GrainOverlay />
               <FlashOverlay />

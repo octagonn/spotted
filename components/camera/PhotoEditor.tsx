@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { Check, Crop, Pen, RotateCw, Smile, Trash2, Type, Undo2, X } from "lucide-react-native";
+import { Check, Crop, Download, Pen, RotateCw, Smile, Trash2, Type, Undo2, X } from "lucide-react-native";
 import { useRef, useState } from "react";
 import {
   Platform,
@@ -23,6 +23,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path as SvgPath } from "react-native-svg";
 import { captureRef } from "react-native-view-shot";
 
+import { savePhotoToCameraRoll } from "@/lib/mediaLibrary";
+import { trackAnalyticsEvent } from "@/lib/analytics";
+import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 
 type Tool = "none" | "draw" | "text" | "sticker" | "crop";
@@ -154,10 +157,13 @@ function DraggableOverlay({
  */
 export function PhotoEditor({
   uri,
+  insetUri,
   onDone,
   onCancel
 }: {
   uri: string;
+  /** Optional dual-camera selfie, baked into the edited story image. */
+  insetUri?: string | null;
   onDone: (editedUri: string, overlayText: string) => void;
   onCancel: () => void;
 }) {
@@ -182,6 +188,7 @@ export function PhotoEditor({
   /** Non-null while re-editing an existing text element. */
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
   /** True while an element is being dragged — the trash can shows meanwhile. */
   const [dragging, setDragging] = useState(false);
   const trashHot = useSharedValue(0);
@@ -331,9 +338,8 @@ export function PhotoEditor({
     else if (texts.length) setTexts((prev) => prev.slice(0, -1));
   };
 
-  const done = async () => {
+  const renderEditedPhoto = async (): Promise<string> => {
     setSelected(null);
-    setSaving(true);
     let out = workingUri;
     try {
       // Race against a timeout so a platform without capture support can never hang Done.
@@ -345,6 +351,31 @@ export function PhotoEditor({
     } catch {
       // No native capture available — post the original photo rather than fail.
     }
+    return out;
+  };
+
+  const saveToLibrary = async () => {
+    if (savingToLibrary) return;
+    setSavingToLibrary(true);
+    try {
+      const out = await renderEditedPhoto();
+      const result = await savePhotoToCameraRoll(out);
+      if (result === "saved") {
+        trackAnalyticsEvent("photo_saved", { mode: "story", dual: Boolean(insetUri) });
+        showToast("Saved to camera roll");
+      }
+      else if (result === "denied") showToast("Allow photo access in Settings to save");
+      else showToast("Saving photos isn't available on this device");
+    } catch {
+      showToast("Couldn't save photo");
+    } finally {
+      setSavingToLibrary(false);
+    }
+  };
+
+  const done = async () => {
+    setSaving(true);
+    const out = await renderEditedPhoto();
     setSaving(false);
     // Hand the raw overlay text back so it can be scanned for slurs server-side
     // (it's baked into the image otherwise, unreadable to text moderation).
@@ -365,6 +396,26 @@ export function PhotoEditor({
             <SvgPath key={s.id} d={s.d} stroke={s.color} strokeWidth={s.width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
           ))}
         </Svg>
+
+        {insetUri ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: insets.top + 66,
+              left: 16,
+              width: "30%",
+              aspectRatio: 3 / 4,
+              borderRadius: 14,
+              overflow: "hidden",
+              borderWidth: 2,
+              borderColor: colors.black,
+              backgroundColor: colors.black
+            }}
+          >
+            <Image source={{ uri: insetUri }} contentFit="cover" style={{ flex: 1 }} />
+          </View>
+        ) : null}
 
         {texts.map((t) => (
           <DraggableOverlay
@@ -449,6 +500,19 @@ export function PhotoEditor({
           <Undo2 size={20} color={colors.white} strokeWidth={2.2} />
         </RoundBtn>
       </View>
+
+      {/* Save the current flattened edit without leaving the story editor. */}
+      {tool === "none" && !dragging && !composing ? (
+        <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 14 }}>
+          <RoundBtn onPress={() => void saveToLibrary()} accessibilityLabel="Save photo to camera roll">
+            {savingToLibrary ? (
+              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 11, color: colors.white }}>•••</Text>
+            ) : (
+              <Download size={20} color={colors.white} strokeWidth={2.2} />
+            )}
+          </RoundBtn>
+        </View>
+      ) : null}
 
       {/* Pen color + width (draw or text tool) */}
       {tool === "draw" || tool === "text" ? (

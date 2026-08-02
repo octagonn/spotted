@@ -16,6 +16,7 @@ export type FriendCheckinScope = "my_gym" | "all_friends" | "off";
 export type PushPermissionStatus = "not_asked" | "granted" | "denied";
 
 export type NotificationPrefs = {
+  pushEnabled: boolean;
   gymRemindersEnabled: boolean;
   dailyNudgeTime: string; // "HH:MM"
   tauntsEnabled: boolean;
@@ -23,6 +24,13 @@ export type NotificationPrefs = {
   messagesEnabled: boolean;
   friendRequestsEnabled: boolean;
   reactionsEnabled: boolean;
+  postViewsEnabled: boolean;
+  followsEnabled: boolean;
+  tagsEnabled: boolean;
+  communitiesEnabled: boolean;
+  friendActivityEnabled: boolean;
+  achievementsEnabled: boolean;
+  quietHoursEnabled: boolean;
   quietHoursStart: string;
   quietHoursEnd: string;
   pushPermissionStatus: PushPermissionStatus;
@@ -32,6 +40,7 @@ export type NotificationPrefs = {
 
 
 type Row = {
+  push_enabled: boolean;
   gym_reminders_enabled: boolean;
   daily_nudge_time: string;
   taunts_enabled: boolean;
@@ -39,6 +48,13 @@ type Row = {
   messages_enabled: boolean;
   friend_requests_enabled: boolean;
   reactions_enabled: boolean;
+  post_views_enabled: boolean;
+  follows_enabled: boolean;
+  tags_enabled: boolean;
+  communities_enabled: boolean;
+  friend_activity_enabled: boolean;
+  achievements_enabled: boolean;
+  quiet_hours_enabled: boolean;
   quiet_hours_start: string;
   quiet_hours_end: string;
   push_permission_status: PushPermissionStatus;
@@ -48,6 +64,7 @@ type Row = {
 
 function rowToPrefs(row: Row): NotificationPrefs {
   return {
+    pushEnabled: row.push_enabled ?? true,
     gymRemindersEnabled: row.gym_reminders_enabled,
     dailyNudgeTime: (row.daily_nudge_time ?? "16:30").slice(0, 5),
     tauntsEnabled: row.taunts_enabled,
@@ -55,6 +72,13 @@ function rowToPrefs(row: Row): NotificationPrefs {
     messagesEnabled: row.messages_enabled,
     friendRequestsEnabled: row.friend_requests_enabled,
     reactionsEnabled: row.reactions_enabled,
+    postViewsEnabled: row.post_views_enabled ?? false,
+    followsEnabled: row.follows_enabled ?? true,
+    tagsEnabled: row.tags_enabled ?? true,
+    communitiesEnabled: row.communities_enabled ?? true,
+    friendActivityEnabled: row.friend_activity_enabled ?? true,
+    achievementsEnabled: row.achievements_enabled ?? true,
+    quietHoursEnabled: row.quiet_hours_enabled ?? true,
     quietHoursStart: (row.quiet_hours_start ?? "21:00").slice(0, 5),
     quietHoursEnd: (row.quiet_hours_end ?? "06:00").slice(0, 5),
     pushPermissionStatus: row.push_permission_status,
@@ -64,6 +88,7 @@ function rowToPrefs(row: Row): NotificationPrefs {
 }
 
 const COLUMN: Record<string, string> = {
+  pushEnabled: "push_enabled",
   gymRemindersEnabled: "gym_reminders_enabled",
   dailyNudgeTime: "daily_nudge_time",
   tauntsEnabled: "taunts_enabled",
@@ -71,6 +96,13 @@ const COLUMN: Record<string, string> = {
   messagesEnabled: "messages_enabled",
   friendRequestsEnabled: "friend_requests_enabled",
   reactionsEnabled: "reactions_enabled",
+  postViewsEnabled: "post_views_enabled",
+  followsEnabled: "follows_enabled",
+  tagsEnabled: "tags_enabled",
+  communitiesEnabled: "communities_enabled",
+  friendActivityEnabled: "friend_activity_enabled",
+  achievementsEnabled: "achievements_enabled",
+  quietHoursEnabled: "quiet_hours_enabled",
   quietHoursStart: "quiet_hours_start",
   quietHoursEnd: "quiet_hours_end",
   pushPermissionStatus: "push_permission_status",

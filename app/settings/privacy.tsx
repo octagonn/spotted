@@ -7,13 +7,20 @@ import { BackButton } from "@/components/ui/BackButton";
 import { Chip } from "@/components/ui/Chip";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
+import { setAnalyticsSession } from "@/lib/analytics";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import type { Database } from "@/types/database";
 
 type ScheduleVisibility = Database["public"]["Enums"]["schedule_visibility"];
 
 type LocationAudience = "friends" | "close_friends" | "nobody";
+type AnalyticsSettings = {
+  product_analytics_enabled: boolean;
+  sale_sharing_opt_out: boolean;
+  prompted_at: string | null;
+};
 type PrivacySettings = {
   is_private: boolean;
   location_audience: LocationAudience;
@@ -61,6 +68,7 @@ export default function PrivacySettingsScreen() {
   const userId = useAuthStore((state) => state.userId);
   const queryClient = useQueryClient();
   const queryKey = ["privacy-settings", userId];
+  const analyticsQueryKey = ["analytics-preference", userId];
 
   const settingsQuery = useQuery({
     queryKey,
@@ -112,7 +120,79 @@ export default function PrivacySettingsScreen() {
     }
   });
 
+  const analyticsQuery = useQuery({
+    queryKey: analyticsQueryKey,
+    enabled: Boolean(userId),
+    queryFn: async (): Promise<AnalyticsSettings> => {
+      if (!isSupabaseConfigured) {
+        return {
+          product_analytics_enabled: false,
+          sale_sharing_opt_out: true,
+          prompted_at: null
+        };
+      }
+      const { data, error } = await supabase
+        .from("analytics_preferences")
+        .select("product_analytics_enabled, sale_sharing_opt_out, prompted_at")
+        .eq("user_id", userId as string)
+        .maybeSingle();
+      if (error) throw error;
+      return (
+        data ?? {
+          product_analytics_enabled: false,
+          sale_sharing_opt_out: true,
+          prompted_at: null
+        }
+      );
+    }
+  });
+
+  const updateAnalytics = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      if (!isSupabaseConfigured || !userId) return;
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("analytics_preferences").upsert(
+        {
+          user_id: userId,
+          product_analytics_enabled: enabled,
+          sale_sharing_opt_out: true,
+          consent_version: "2026-07-25",
+          prompted_at: analyticsQuery.data?.prompted_at ?? now,
+          consented_at: enabled ? now : null
+        },
+        { onConflict: "user_id" }
+      );
+      if (error) throw error;
+    },
+    onMutate: async (enabled) => {
+      await queryClient.cancelQueries({ queryKey: analyticsQueryKey });
+      const previous = queryClient.getQueryData<AnalyticsSettings>(analyticsQueryKey);
+      queryClient.setQueryData<AnalyticsSettings>(analyticsQueryKey, {
+        product_analytics_enabled: enabled,
+        sale_sharing_opt_out: true,
+        prompted_at: previous?.prompted_at ?? new Date().toISOString()
+      });
+      if (userId) setAnalyticsSession(userId, enabled);
+      return { previous };
+    },
+    onError: (_error, _enabled, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(analyticsQueryKey, context.previous);
+        if (userId) {
+          setAnalyticsSession(userId, context.previous.product_analytics_enabled);
+        }
+      }
+      showToast("Couldn't update analytics preference");
+    },
+    onSettled: () => {
+      if (isSupabaseConfigured) {
+        void queryClient.invalidateQueries({ queryKey: analyticsQueryKey });
+      }
+    }
+  });
+
   const settings = settingsQuery.data ?? defaultSettings;
+  const analyticsEnabled = analyticsQuery.data?.product_analytics_enabled ?? false;
 
   function toggle(key: "is_private" | "quiet_checkin_default" | "ghost_mode" | "discoverable" | "arrival_notifs_enabled" | "show_activity" | "dm_preview_enabled") {
     updateSettings.mutate({ [key]: !settings[key] });
@@ -241,6 +321,28 @@ export default function PrivacySettingsScreen() {
             value={settings.arrival_notifs_enabled}
             onToggle={() => toggle("arrival_notifs_enabled")}
           />
+        </View>
+
+        <View className="flex-row items-center border border-hairline-strong bg-ink p-4">
+          <View className="flex-1 pr-4">
+            <Text variant="body-strong">Product analytics</Text>
+            <Text variant="caption" className="mt-2">
+              Share app opens, screens viewed, feature actions, and device platform to
+              help improve Spotted. Never includes photos, messages, contacts, precise
+              location, or advertising IDs. Turning this off deletes your raw analytics.
+            </Text>
+          </View>
+          <Toggle
+            value={analyticsEnabled}
+            onToggle={() => updateAnalytics.mutate(!analyticsEnabled)}
+          />
+        </View>
+
+        <View className="border border-hairline-strong bg-ink p-4">
+          <Text variant="body-strong">Sale or sharing of analytics data</Text>
+          <Text variant="caption" className="mt-2">
+            Off. Spotted does not sell or share your product analytics data.
+          </Text>
         </View>
       </View>
     </Screen>

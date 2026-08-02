@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_preferences: {
+        Row: {
+          user_id: string
+          product_analytics_enabled: boolean
+          sale_sharing_opt_out: boolean
+          consent_version: string
+          prompted_at: string | null
+          consented_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          product_analytics_enabled?: boolean
+          sale_sharing_opt_out?: boolean
+          consent_version?: string
+          prompted_at?: string | null
+          consented_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          product_analytics_enabled?: boolean
+          sale_sharing_opt_out?: boolean
+          consent_version?: string
+          prompted_at?: string | null
+          consented_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      analytics_events: {
+        Row: {
+          id: number
+          user_id: string
+          event_name: string
+          properties: Json
+          occurred_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          event_name: string
+          properties?: Json
+          occurred_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          event_name?: string
+          properties?: Json
+          occurred_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      legal_acceptances: {
+        Row: {
+          accepted_at: string
+          id: string
+          privacy_version: string
+          source: "email" | "apple"
+          terms_version: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          id?: string
+          privacy_version: string
+          source: "email" | "apple"
+          terms_version: string
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          id?: string
+          privacy_version?: string
+          source?: "email" | "apple"
+          terms_version?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           user_id: string
@@ -21,6 +105,7 @@ export type Database = {
           push_permission_status: "not_asked" | "granted" | "denied"
           push_prompt_shown_at: string | null
           timezone: string
+          push_enabled: boolean
           gym_reminders_enabled: boolean
           daily_nudge_time: string
           taunts_enabled: boolean
@@ -28,6 +113,13 @@ export type Database = {
           messages_enabled: boolean
           friend_requests_enabled: boolean
           reactions_enabled: boolean
+          post_views_enabled: boolean
+          follows_enabled: boolean
+          tags_enabled: boolean
+          communities_enabled: boolean
+          friend_activity_enabled: boolean
+          achievements_enabled: boolean
+          quiet_hours_enabled: boolean
           quiet_hours_start: string
           quiet_hours_end: string
           updated_at: string
@@ -38,6 +130,7 @@ export type Database = {
           push_permission_status?: "not_asked" | "granted" | "denied"
           push_prompt_shown_at?: string | null
           timezone?: string
+          push_enabled?: boolean
           gym_reminders_enabled?: boolean
           daily_nudge_time?: string
           taunts_enabled?: boolean
@@ -45,6 +138,13 @@ export type Database = {
           messages_enabled?: boolean
           friend_requests_enabled?: boolean
           reactions_enabled?: boolean
+          post_views_enabled?: boolean
+          follows_enabled?: boolean
+          tags_enabled?: boolean
+          communities_enabled?: boolean
+          friend_activity_enabled?: boolean
+          achievements_enabled?: boolean
+          quiet_hours_enabled?: boolean
           quiet_hours_start?: string
           quiet_hours_end?: string
           updated_at?: string
@@ -55,6 +155,7 @@ export type Database = {
           push_permission_status?: "not_asked" | "granted" | "denied"
           push_prompt_shown_at?: string | null
           timezone?: string
+          push_enabled?: boolean
           gym_reminders_enabled?: boolean
           daily_nudge_time?: string
           taunts_enabled?: boolean
@@ -62,6 +163,13 @@ export type Database = {
           messages_enabled?: boolean
           friend_requests_enabled?: boolean
           reactions_enabled?: boolean
+          post_views_enabled?: boolean
+          follows_enabled?: boolean
+          tags_enabled?: boolean
+          communities_enabled?: boolean
+          friend_activity_enabled?: boolean
+          achievements_enabled?: boolean
+          quiet_hours_enabled?: boolean
           quiet_hours_start?: string
           quiet_hours_end?: string
           updated_at?: string
@@ -547,20 +655,26 @@ export type Database = {
       }
       device_tokens: {
         Row: {
+          created_at: string
           device_token: string
           platform: string
+          provider: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          created_at?: string
           device_token: string
           platform: string
+          provider?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          created_at?: string
           device_token?: string
           platform?: string
+          provider?: string
           updated_at?: string
           user_id?: string
         }
@@ -803,7 +917,13 @@ export type Database = {
           actor_id: string | null
           created_at: string
           id: string
+          opened_at: string | null
           payload: Json
+          push_attempts: number
+          push_last_error: string | null
+          push_next_attempt_at: string | null
+          push_processed_at: string | null
+          push_status: string
           read: boolean
           recipient_id: string
           type: Database["public"]["Enums"]["notification_type"]
@@ -812,7 +932,13 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           id?: string
+          opened_at?: string | null
           payload?: Json
+          push_attempts?: number
+          push_last_error?: string | null
+          push_next_attempt_at?: string | null
+          push_processed_at?: string | null
+          push_status?: string
           read?: boolean
           recipient_id: string
           type: Database["public"]["Enums"]["notification_type"]
@@ -821,7 +947,13 @@ export type Database = {
           actor_id?: string | null
           created_at?: string
           id?: string
+          opened_at?: string | null
           payload?: Json
+          push_attempts?: number
+          push_last_error?: string | null
+          push_next_attempt_at?: string | null
+          push_processed_at?: string | null
+          push_status?: string
           read?: boolean
           recipient_id?: string
           type?: Database["public"]["Enums"]["notification_type"]
@@ -837,6 +969,66 @@ export type Database = {
           {
             foreignKeyName: "notifications_recipient_id_fkey"
             columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_deliveries: {
+        Row: {
+          attempts: number
+          created_at: string
+          device_token: string
+          id: string
+          last_error: string | null
+          notification_id: string
+          receipt_checked_at: string | null
+          sent_at: string | null
+          status: string
+          ticket_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          device_token: string
+          id?: string
+          last_error?: string | null
+          notification_id: string
+          receipt_checked_at?: string | null
+          sent_at?: string | null
+          status?: string
+          ticket_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          device_token?: string
+          id?: string
+          last_error?: string | null
+          notification_id?: string
+          receipt_checked_at?: string | null
+          sent_at?: string | null
+          status?: string
+          ticket_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_deliveries_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_deliveries_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1653,6 +1845,26 @@ export type Database = {
     }
     Functions: {
       are_friends: { Args: { a: string; b: string }; Returns: boolean }
+      register_push_token: {
+        Args: { p_token: string; p_platform: string }
+        Returns: undefined
+      }
+      unregister_push_token: {
+        Args: { p_token: string }
+        Returns: undefined
+      }
+      mark_notification_opened: {
+        Args: { p_notification_id: string }
+        Returns: boolean
+      }
+      record_legal_acceptance: {
+        Args: {
+          p_privacy_version: string
+          p_source: string
+          p_terms_version: string
+        }
+        Returns: undefined
+      }
       respond_message_request: { Args: { p_conversation_id: string; p_accept: boolean }; Returns: undefined }
       community_invite_code: { Args: { cid: string }; Returns: string | null }
       regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
@@ -1797,6 +2009,13 @@ export type Database = {
         | "wave"
         | "community_nudge"
         | "tagged"
+        | "taunt_answered"
+        | "trophy_unlocked"
+        | "claim_approved"
+        | "claim_rejected"
+        | "second_workout"
+        | "daily_nudge"
+        | "arrival_buzz"
       schedule_visibility: "public" | "friends" | "private"
       subscription_tier: "free" | "plus"
     }
@@ -1942,6 +2161,13 @@ export const Constants = {
         "wave",
         "community_nudge",
         "tagged",
+        "taunt_answered",
+        "trophy_unlocked",
+        "claim_approved",
+        "claim_rejected",
+        "second_workout",
+        "daily_nudge",
+        "arrival_buzz",
       ],
       schedule_visibility: ["public", "friends", "private"],
       subscription_tier: ["free", "plus"],

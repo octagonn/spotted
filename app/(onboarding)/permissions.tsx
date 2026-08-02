@@ -1,9 +1,8 @@
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { Bell, MapPin } from "lucide-react-native";
 import { useState } from "react";
-import { Platform, View } from "react-native";
+import { View } from "react-native";
 
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
@@ -37,17 +36,18 @@ export default function PermissionsScreen() {
   async function handleNotifications() {
     setBusy(true);
     try {
-      const result = await Notifications.requestPermissionsAsync();
-      const granted = result.status === "granted";
-      setNotifStatus(granted ? "granted" : "denied");
-      if (granted && isSupabaseConfigured && userId && Platform.OS !== "web") {
+      if (isSupabaseConfigured && userId) {
         try {
-          await registerDeviceToken(userId);
+          const token = await registerDeviceToken(userId, { requestPermission: true });
+          setNotifStatus(token ? "granted" : "denied");
         } catch (error) {
+          setNotifStatus("denied");
           logger.warn("device_token_registration_failed", {
             message: error instanceof Error ? error.message : String(error)
           });
         }
+      } else {
+        setNotifStatus("denied");
       }
     } finally {
       setBusy(false);

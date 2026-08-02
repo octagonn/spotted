@@ -10,10 +10,10 @@ import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { Avatar } from "@/components/ui/Avatar";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { useMyCommunityInvite, useRespondCommunityInvite } from "@/hooks/queries/useCommunities";
 import { useIncomingRequests, useRespondToRequest } from "@/hooks/queries/useFriends";
 import { supabase } from "@/lib/supabase";
+import { routeForNotification } from "@/lib/notificationRouting";
 import { randomTauntLine } from "@/lib/tauntLines";
 import { localDateKey, showToast } from "@/stores/ui";
 import {
@@ -160,7 +160,6 @@ function groupNotifications(activity: AppNotification[]) {
 export default function InboxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const sheet = useSheet();
   const directTaunt = useDirectTaunt();
   const requests = useIncomingRequests();
   const respond = useRespondToRequest();
@@ -279,21 +278,14 @@ export default function InboxScreen() {
                 <Pressable
                   key={n.id}
                   onPress={() => {
-                    if (n.type === "dm" && n.actorId) router.push(`/chat/${n.actorId}`);
-                    else if (n.type === "community_invite" && n.payload?.community_id) {
-                      router.push(`/community/${String(n.payload.community_id)}`);
-                    } else if (n.type === "community_nudge" && n.payload?.communityId) {
-                      router.push(`/community/${String(n.payload.communityId)}`);
-                    } else if ((n.type === "taunt_answered" || n.type === "second_workout") && n.payload?.post_id) {
-                      router.push(`/post/${String(n.payload.post_id)}`);
-                    } else if (n.type === "claim_approved" || n.type === "claim_rejected") {
-                      router.push("/profile-section/trophies");
-                    } else if (n.type === "tagged" && n.payload?.post_id) {
-                      router.push(`/post/${String(n.payload.post_id)}`);
-                    } else if (n.type === "tagged" && n.actorUsername) {
-                      // Story tags open the tagger's story.
-                      router.push(`/story?user=${n.actorUsername}`);
-                    } else if (n.actorUsername) router.push(`/user/${n.actorUsername}`);
+                    router.push(
+                      routeForNotification({
+                        type: n.type,
+                        actorId: n.actorId,
+                        actorUsername: n.actorUsername,
+                        payload: n.payload
+                      }) as never
+                    );
                   }}
                 >
                   <View

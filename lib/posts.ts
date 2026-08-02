@@ -2,6 +2,7 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as VideoThumbnails from "expo-video-thumbnails";
 
 import { logger } from "@/lib/logger";
+import { removePostObjects, uploadPostObject } from "@/lib/r2";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -73,13 +74,7 @@ async function generateAndUploadThumbnail(videoUri: string, userId: string, stam
     const response = await fetch(compressed);
     const body = await response.arrayBuffer();
     if (body.byteLength === 0) return null;
-    const path = `${userId}/thumb-${stamp}.jpg`;
-    const upload = await supabase.storage.from("posts").upload(path, body, {
-      contentType: "image/jpeg",
-      upsert: false
-    });
-    if (upload.error) return null;
-    return path;
+    return await uploadPostObject(`${userId}/thumb-${stamp}.jpg`, body, "image/jpeg");
   } catch (error) {
     logger.warn("video_thumbnail_failed", {
       message: error instanceof Error ? error.message : String(error)
@@ -102,10 +97,7 @@ async function makePhotoThumbnail(photoUri: string, userId: string, stamp: numbe
     const response = await fetch(saved.uri);
     const body = await response.arrayBuffer();
     if (body.byteLength === 0) return null;
-    const path = `${userId}/pthumb-${stamp}.jpg`;
-    const upload = await supabase.storage.from("posts").upload(path, body, { contentType: "image/jpeg", upsert: false });
-    if (upload.error) return null;
-    return path;
+    return await uploadPostObject(`${userId}/pthumb-${stamp}.jpg`, body, "image/jpeg");
   } catch {
     return null;
   }
@@ -141,14 +133,11 @@ export async function publishLiftVideo(input: PublishLiftVideoInput): Promise<st
   }
   const stamp = Date.now();
   const ext = input.videoUri.toLowerCase().endsWith(".mp4") ? "mp4" : "mov";
-  const path = `${input.userId}/lift-${stamp}.${ext}`;
-  const upload = await supabase.storage.from("posts").upload(path, body, {
-    contentType: ext === "mp4" ? "video/mp4" : "video/quicktime",
-    upsert: false
-  });
-  if (upload.error) {
-    throw upload.error;
-  }
+  const path = await uploadPostObject(
+    `${input.userId}/lift-${stamp}.${ext}`,
+    body,
+    ext === "mp4" ? "video/mp4" : "video/quicktime"
+  );
   // Poster frame — best-effort; a failure just means a placeholder cell.
   const thumbnailPath = await generateAndUploadThumbnail(input.videoUri, input.userId, stamp);
   const insert = await supabase
@@ -173,7 +162,7 @@ export async function publishLiftVideo(input: PublishLiftVideoInput): Promise<st
     .select("id")
     .single();
   if (insert.error) {
-    await supabase.storage.from("posts").remove([path]).catch(() => {});
+    await removePostObjects([path]).catch(() => {});
     throw insert.error;
   }
   return insert.data.id;
@@ -217,12 +206,11 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     }
     const stamp = Date.now();
     const ext = input.videoUri.toLowerCase().endsWith(".mp4") ? "mp4" : "mov";
-    const path = `${input.userId}/daily-${stamp}.${ext}`;
-    const upload = await supabase.storage.from("posts").upload(path, body, {
-      contentType: ext === "mp4" ? "video/mp4" : "video/quicktime",
-      upsert: false
-    });
-    if (upload.error) throw upload.error;
+    const path = await uploadPostObject(
+      `${input.userId}/daily-${stamp}.${ext}`,
+      body,
+      ext === "mp4" ? "video/mp4" : "video/quicktime"
+    );
     const thumbnailPath = await generateAndUploadThumbnail(input.videoUri, input.userId, stamp);
     const insert = await supabase
       .from("posts")
@@ -258,16 +246,13 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     if (!body || body.byteLength === 0) {
       throw new Error("A captured photo could not be read.");
     }
-    const path = `${input.userId}/${stamp}-${index}.jpg`;
-    const upload = await supabase.storage.from("posts").upload(path, body, {
-      contentType: "image/jpeg",
-      upsert: false
-    });
-    if (upload.error) {
-      await supabase.storage.from("posts").remove(paths).catch(() => {});
-      throw upload.error;
+    try {
+      const path = await uploadPostObject(`${input.userId}/${stamp}-${index}.jpg`, body, "image/jpeg");
+      paths.push(path);
+    } catch (error) {
+      await removePostObjects(paths).catch(() => {});
+      throw error;
     }
-    paths.push(path);
   }
 
   // Dual-camera front frame → inset_url (BeReal corner PIP).
@@ -277,12 +262,7 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     const response = await fetch(uploadUri);
     const body = await response.arrayBuffer();
     if (body && body.byteLength > 0) {
-      const path = `${input.userId}/${stamp}-inset.jpg`;
-      const upload = await supabase.storage.from("posts").upload(path, body, {
-        contentType: "image/jpeg",
-        upsert: false
-      });
-      if (!upload.error) insetPath = path;
+      insetPath = await uploadPostObject(`${input.userId}/${stamp}-inset.jpg`, body, "image/jpeg").catch(() => null);
     }
   }
 
@@ -313,7 +293,7 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     .single();
   if (insert.error) {
     // Don't leave orphaned objects behind if the row insert failed.
-    await supabase.storage.from("posts").remove(paths).catch(() => {});
+    await removePostObjects(paths).catch(() => {});
     throw insert.error;
   }
   return insert.data.id;

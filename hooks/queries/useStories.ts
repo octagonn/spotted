@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { compressStoryPhoto } from "@/lib/posts";
+import { removePostObjects, uploadPostObject } from "@/lib/r2";
 import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 
@@ -158,12 +159,7 @@ export function usePostStory() {
       const response = await fetch(uploadUri);
       const body = await response.arrayBuffer();
       if (body.byteLength === 0) throw new Error("The photo could not be read.");
-      const path = `${userId}/story-${Date.now()}.jpg`;
-      const upload = await supabase.storage.from("posts").upload(path, body, {
-        contentType: "image/jpeg",
-        upsert: false
-      });
-      if (upload.error) throw upload.error;
+      const path = await uploadPostObject(`${userId}/story-${Date.now()}.jpg`, body, "image/jpeg");
       const insert = await supabase.from("stories").insert({
         user_id: userId,
         media_url: path,
@@ -175,7 +171,7 @@ export function usePostStory() {
         overlay_text: overlayText && overlayText.trim() ? overlayText.trim().slice(0, 500) : null
       }).select("id").single();
       if (insert.error) {
-        await supabase.storage.from("posts").remove([path]).catch(() => {});
+        await removePostObjects([path]).catch(() => {});
         throw insert.error;
       }
       if (tagUserIds && tagUserIds.length > 0) {

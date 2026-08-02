@@ -1,25 +1,23 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { AwsClient } from "npm:aws4fetch@1.0.20";
 import { corsHeaders, jsonResponse } from "../_shared/http.ts";
-import { authenticatedUser } from "../_shared/supabase.ts";
+import { authenticatedUser, isServiceRequest } from "../_shared/supabase.ts";
+import { deleteObject, presign, purgePrefix, r2FromEnv } from "../_shared/r2.ts";
 
 /**
  * Cloudflare R2 presigned-URL broker. The app never holds R2 credentials —
  * it asks this function for short-lived signed URLs and talks to R2 directly.
  *
- * Actions (POST, authenticated):
+ * Actions (POST):
  *   { action: "upload",   key, contentType }  → { url }   presigned PUT, 10 min
  *   { action: "download", keys: string[] }    → { urls: { [key]: url } } 6 h
  *   { action: "delete",   keys: string[] }    → { deleted: number }
+ *   { action: "purge-prefix", prefix }        → { deleted } (service only)
  *
- * Rules:
- *   - upload/delete only within the caller's own prefix ("<userId>/...")
- *   - download is any-key for authenticated users: keys are unguessable
- *     (uuid + timestamp) and only discoverable through RLS-protected rows,
- *     matching the existing private-bucket signed-URL model
- *
- * Env (Supabase edge-function secrets):
- *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+ * Auth:
+ *   - User JWT: upload/delete restricted to the caller's own prefix
+ *     ("<userId>/..."); download is any-key (keys are unguessable and only
+ *     discoverable via RLS-protected rows — same model as private signed URLs)
+ *   - Service-role key: unrestricted (moderation worker, deletion flows, cron)
  */
 
 const UPLOAD_TTL_SECONDS = 10 * 60;
@@ -40,55 +38,31 @@ function validKey(key: unknown): key is string {
   return typeof key === "string" && KEY_PATTERN.test(key) && !key.includes("..");
 }
 
-function r2Client() {
-  const accountId = Deno.env.get("R2_ACCOUNT_ID");
-  const accessKeyId = Deno.env.get("R2_ACCESS_KEY_ID");
-  const secretAccessKey = Deno.env.get("R2_SECRET_ACCESS_KEY");
-  const bucket = Deno.env.get("R2_BUCKET");
-  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) return null;
-  return {
-    aws: new AwsClient({ accessKeyId, secretAccessKey, service: "s3", region: "auto" }),
-    base: `https://${accountId}.r2.cloudflarestorage.com/${bucket}`
-  };
-}
-
-async function presign(
-  client: NonNullable<ReturnType<typeof r2Client>>,
-  method: "GET" | "PUT" | "DELETE",
-  key: string,
-  ttlSeconds: number
-): Promise<string> {
-  const url = new URL(`${client.base}/${key}`);
-  url.searchParams.set("X-Amz-Expires", String(ttlSeconds));
-  const signed = await client.aws.sign(new Request(url.toString(), { method }), {
-    aws: { signQuery: true }
-  });
-  return signed.url;
-}
-
 serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
   try {
-    const user = await authenticatedUser(request);
-    const client = r2Client();
-    if (!client) return jsonResponse({ error: "r2_not_configured" }, 500);
+    const service = isServiceRequest(request);
+    const user = service ? null : await authenticatedUser(request);
+    const r2 = r2FromEnv();
+    if (!r2) return jsonResponse({ error: "r2_not_configured" }, 500);
 
     const body = (await request.json()) as {
       action?: string;
       key?: string;
       keys?: string[];
+      prefix?: string;
       contentType?: string;
     };
 
     if (body.action === "upload") {
       if (!validKey(body.key)) return jsonResponse({ error: "invalid_key" }, 400);
-      if (!body.key.startsWith(`${user.id}/`)) return jsonResponse({ error: "forbidden_prefix" }, 403);
+      if (user && !body.key.startsWith(`${user.id}/`)) return jsonResponse({ error: "forbidden_prefix" }, 403);
       if (!body.contentType || !ALLOWED_CONTENT_TYPES.has(body.contentType)) {
         return jsonResponse({ error: "invalid_content_type" }, 400);
       }
-      const url = await presign(client, "PUT", body.key, UPLOAD_TTL_SECONDS);
+      const url = await presign(r2, "PUT", body.key, UPLOAD_TTL_SECONDS);
       return jsonResponse({ url });
     }
 
@@ -97,7 +71,7 @@ serve(async (request) => {
       const urls: Record<string, string> = {};
       for (const key of keys) {
         if (!validKey(key)) continue;
-        urls[key] = await presign(client, "GET", key, DOWNLOAD_TTL_SECONDS);
+        urls[key] = await presign(r2, "GET", key, DOWNLOAD_TTL_SECONDS);
       }
       return jsonResponse({ urls });
     }
@@ -106,11 +80,19 @@ serve(async (request) => {
       const keys = Array.isArray(body.keys) ? body.keys.slice(0, MAX_BATCH) : [];
       let deleted = 0;
       for (const key of keys) {
-        if (!validKey(key) || !key.startsWith(`${user.id}/`)) continue;
-        const url = await presign(client, "DELETE", key, 60);
-        const res = await fetch(url, { method: "DELETE" });
-        if (res.ok || res.status === 404) deleted += 1;
+        if (!validKey(key)) continue;
+        if (user && !key.startsWith(`${user.id}/`)) continue;
+        if (await deleteObject(r2, key)) deleted += 1;
       }
+      return jsonResponse({ deleted });
+    }
+
+    if (body.action === "purge-prefix") {
+      if (!service) return jsonResponse({ error: "service_only" }, 403);
+      if (typeof body.prefix !== "string" || body.prefix.length < 8) {
+        return jsonResponse({ error: "invalid_prefix" }, 400);
+      }
+      const deleted = await purgePrefix(r2, body.prefix);
       return jsonResponse({ deleted });
     }
 

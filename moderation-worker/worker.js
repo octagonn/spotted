@@ -65,15 +65,34 @@ async function classify(buffer) {
   }
 }
 
+/**
+ * Signed download URL for a frame on either storage path:
+ *   "r2:<key>"  -> presigned R2 GET via the r2-media edge function
+ *   "<path>"    -> legacy Supabase Storage signed URL
+ */
+async function signMediaUrl(path, bucket) {
+  if (path.startsWith("r2:")) {
+    const key = path.slice(3);
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/r2-media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "download", keys: [key] })
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    return json?.urls?.[key] ?? null;
+  }
+  const { data: signed, error: signErr } = await supabase.storage.from(bucket).createSignedUrl(path, 120);
+  if (signErr || !signed?.signedUrl) return null;
+  return signed.signedUrl;
+}
+
 async function processJob(job) {
   let worst = { nsfw: 0, frame: null, classes: null };
   for (const path of job.paths) {
-    // Fresh signed URL per frame (service role can sign any object).
-    const { data: signed, error: signErr } = await supabase.storage
-      .from(job.bucket || BUCKET)
-      .createSignedUrl(path, 120);
-    if (signErr || !signed?.signedUrl) continue;
-    const res = await fetch(signed.signedUrl);
+    const url = await signMediaUrl(path, job.bucket || BUCKET);
+    if (!url) continue;
+    const res = await fetch(url);
     if (!res.ok) continue;
     const buffer = Buffer.from(await res.arrayBuffer());
     let classes;

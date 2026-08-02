@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { corsHeaders, jsonResponse } from "../_shared/http.ts";
+import { presign, r2FromEnv } from "../_shared/r2.ts";
 import { authenticatedUser, serviceClient } from "../_shared/supabase.ts";
 
 function postIdFromBody(body: unknown) {
@@ -27,6 +28,14 @@ serve(async (request) => {
     const { data: post, error } = await supabase.from("posts").select("media_url").eq("id", postId).single();
     if (error) {
       return jsonResponse({ error: error.message }, 404);
+    }
+    // R2-migrated media ("r2:<key>") presigns against R2; legacy paths sign
+    // against Supabase Storage.
+    if (post.media_url.startsWith("r2:")) {
+      const r2 = r2FromEnv();
+      if (!r2) return jsonResponse({ error: "r2_not_configured" }, 500);
+      const url = await presign(r2, "GET", post.media_url.slice(3), 60 * 60);
+      return jsonResponse({ signed_url: url });
     }
     const { data, error: signedError } = await supabase.storage.from("posts").createSignedUrl(post.media_url, 60 * 60);
     if (signedError) {

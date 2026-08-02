@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { corsHeaders, jsonResponse } from "../_shared/http.ts";
+import { purgePrefix, r2FromEnv } from "../_shared/r2.ts";
 import { authenticatedUser, serviceClient } from "../_shared/supabase.ts";
 
 // Permanently deletes the caller's account. Required for App Store
@@ -26,6 +27,15 @@ serve(async (request) => {
       const { data: objects } = await supabase.storage.from(bucket).list(user.id, { limit: 1000 });
       if (objects && objects.length > 0) {
         await supabase.storage.from(bucket).remove(objects.map((o) => `${user.id}/${o.name}`));
+      }
+    }
+    // 1b) R2 media under the same prefix (post/story media lives in R2 now).
+    const r2 = r2FromEnv();
+    if (r2) {
+      try {
+        await purgePrefix(r2, `${user.id}/`);
+      } catch {
+        // best-effort — orphaned R2 objects are unreachable (keys die with the rows)
       }
     }
 

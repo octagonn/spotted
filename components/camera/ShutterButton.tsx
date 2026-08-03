@@ -158,8 +158,37 @@ export function ShutterButton({
         </Pressable>
       ) : (
         <GestureDetector gesture={composed}>
-          {/* Generous hit area (16px all sides) so grazes register. */}
-          <Animated.View style={[{ padding: 16 }, puckStyle]}>
+          {/* Generous hit area (16px all sides) so grazes register. The
+              tap/hold/slide gestures are invisible to screen readers, so expose
+              an accessible button (activate = photo) plus a "Record video"
+              action that starts a LOCKED recording — stoppable via the labeled
+              "Stop recording" button (WCAG 4.1.2 / 2.1.1 / 2.5.1). */}
+          <Animated.View
+            style={[{ padding: 16 }, puckStyle]}
+            accessible
+            accessibilityRole="button"
+            accessibilityState={{ disabled }}
+            accessibilityLabel={recording ? "Recording video" : "Take photo"}
+            accessibilityHint={
+              allowRecording ? "Activate to take a photo, or use the Record video action" : undefined
+            }
+            accessibilityActions={
+              allowRecording
+                ? [
+                    { name: "activate", label: "Take photo" },
+                    { name: "record", label: "Record video" }
+                  ]
+                : [{ name: "activate", label: "Take photo" }]
+            }
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === "record") {
+                onStartRecording();
+                onLock();
+              } else {
+                onTap();
+              }
+            }}
+          >
             {recording ? <ProgressRing progress={progress} /> : null}
             <ShutterRing recording={recording} locked={false} />
           </Animated.View>

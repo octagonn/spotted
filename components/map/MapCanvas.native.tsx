@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
+import { Pressable } from "@/components/ui/Pressable";
 import type { MapGym } from "@/hooks/queries/useMapGyms";
 import { colors } from "@/theme/colors";
 
@@ -79,8 +80,41 @@ export function MapCanvas({
         overScrollMode="never"
         setSupportMultipleWindows={false}
         allowsBackForwardNavigationGestures={false}
+        // The GL map canvas has no accessibility tree — hide it from screen
+        // readers and give them the "Browse gyms" list below instead (WCAG
+        // 1.1.1 / 2.1.1: the map pins are otherwise undiscoverable).
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
         style={{ flex: 1, backgroundColor: colors.black }}
       />
+      {/* Accessible, non-visual alternative to the map: a labeled control that
+          opens the gym list sheet. Sits top-center; sighted users can ignore it. */}
+      {gyms.length > 0 ? (
+        <Pressable
+          onPress={() => onCluster(gyms)}
+          accessibilityRole="button"
+          accessibilityLabel={`Browse ${gyms.length} nearby gyms as a list`}
+          style={{
+            position: "absolute",
+            top: 12,
+            alignSelf: "center",
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 999,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            borderWidth: 1,
+            borderColor: colors.iron
+          }}
+        >
+          <Text
+            allowFontScaling
+            maxFontSizeMultiplier={1.6}
+            style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}
+          >
+            Gym list
+          </Text>
+        </Pressable>
+      ) : null}
       {!ready ? (
         <View
           pointerEvents="none"

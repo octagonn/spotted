@@ -33,11 +33,14 @@ function ageOn(today: Date, year: number, monthIndex: number, day: number): numb
 function Wheel({
   items,
   index,
-  onChange
+  onChange,
+  label
 }: {
   items: string[];
   index: number;
   onChange: (index: number) => void;
+  /** Accessible name for the whole picker ("Month"/"Day"/"Year"). */
+  label: string;
 }) {
   const scrollRef = useRef<ScrollView>(null);
 
@@ -56,9 +59,29 @@ function Wheel({
   }
 
   return (
-    <View style={{ flex: 1, height: WHEEL_HEIGHT }}>
+    // WCAG 4.1.2 / 2.1.1: the scroll picker is unusable with a screen reader
+    // (swipe does nothing, the value isn't announced) — which blocked the age
+    // gate entirely. Expose it as an "adjustable" so VoiceOver/TalkBack can
+    // swipe up/down to change the value, and hide the raw rows underneath.
+    <View
+      style={{ flex: 1, height: WHEEL_HEIGHT }}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel={label}
+      accessibilityValue={{ text: items[index] }}
+      accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "increment") {
+          onChange(Math.min(index + 1, items.length - 1));
+        } else if (event.nativeEvent.actionName === "decrement") {
+          onChange(Math.max(index - 1, 0));
+        }
+      }}
+    >
       <ScrollView
         ref={scrollRef}
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
@@ -194,17 +217,21 @@ export default function BirthdayScreen() {
       {/* Three EQUAL columns, evenly spread — mismatched widths made the
           wheels sit off-center. */}
       <View className="mt-10 flex-row rounded-card border border-hairline-strong bg-glass-strong px-2 py-2">
-        <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} />
+        <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} label="Month" />
         <Wheel
           items={days}
           index={Math.min(dayIndex, maxDays - 1)}
           onChange={setDayIndex}
+          label="Day"
         />
-        <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} />
+        <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} label="Year" />
       </View>
 
       {tooYoung ? (
-        <View className="mt-6 rounded-card border border-hairline-strong bg-glass-strong p-4">
+        <View
+          className="mt-6 rounded-card border border-hairline-strong bg-glass-strong p-4"
+          accessibilityLiveRegion="assertive"
+        >
           <Text variant="micro" className="text-white">
             NOT OLD ENOUGH
           </Text>

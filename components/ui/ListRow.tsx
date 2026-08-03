@@ -37,6 +37,9 @@ export function ListRow({ big = false, left, name, sub, subStrong, time, unread,
       disabled={!onPress && !onLongPress}
       pressScale={1}
       pressOpacity={1}
+      // Compose the whole row into one spoken name so a screen reader hears
+      // "{name}, {preview}, {time}, unread" instead of scattered fragments.
+      accessibilityLabel={[name, sub, time, unread ? "unread" : null].filter(Boolean).join(", ")}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
     >
@@ -79,7 +82,7 @@ export function ListRow({ big = false, left, name, sub, subStrong, time, unread,
         {right ?? (
           <View style={{ alignItems: "flex-end", gap: 6 }}>
             {time ? (
-              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.ash }}>{time}</Text>
+              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>{time}</Text>
             ) : null}
             {unread ? (
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white }} />

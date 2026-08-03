@@ -30,6 +30,7 @@ export function OptRow({ icon, label, value, isSet, onPress }: OptRowProps) {
       disabled={!onPress}
       pressScale={1}
       pressOpacity={1}
+      accessibilityLabel={value ? `${label}, ${value}` : label}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
     >
@@ -71,7 +72,7 @@ export function OptRow({ icon, label, value, isSet, onPress }: OptRowProps) {
             {value}
           </Text>
         ) : null}
-        <ChevronRight color={colors.ash} size={16} strokeWidth={2} />
+        <ChevronRight color={colors.silver} size={16} strokeWidth={2} />
       </View>
     </Pressable>
   );

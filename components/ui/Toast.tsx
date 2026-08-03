@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Text, View } from "react-native";
+import { AccessibilityInfo, Text, View } from "react-native";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -32,6 +32,9 @@ export function ToastHost() {
     if (!toast) {
       return;
     }
+    // WCAG 4.1.3 Status Messages: the host is pointerEvents="none" and would
+    // never reach the screen-reader cursor, so speak the toast explicitly.
+    AccessibilityInfo.announceForAccessibility(toast.message);
     const id = toast.id;
     progress.value = 0;
     progress.value = withSequence(
@@ -68,6 +71,8 @@ export function ToastHost() {
       }}
     >
       <Animated.View
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
         style={[
           {
             backgroundColor: colors.white,
@@ -78,7 +83,13 @@ export function ToastHost() {
           animatedStyle
         ]}
       >
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.black }}>{toast.message}</Text>
+        <Text
+          allowFontScaling
+          maxFontSizeMultiplier={1.6}
+          style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.black }}
+        >
+          {toast.message}
+        </Text>
       </Animated.View>
     </View>
   );

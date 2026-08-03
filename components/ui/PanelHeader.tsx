@@ -73,6 +73,7 @@ export function PanelHeader({ title, sub, onBack, right, onTitlePress }: PanelHe
         >
           <Text
             numberOfLines={1}
+            accessibilityRole={onTitlePress ? undefined : "header"}
             style={{
               fontFamily: "Geist_600SemiBold",
               fontSize: 16,

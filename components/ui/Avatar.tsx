@@ -51,6 +51,14 @@ export type AvatarProps = {
   borderColor?: string;
   borderWidth?: number;
   muted?: boolean;
+  /**
+   * A11y (WCAG 1.1.1): most avatars sit next to the person's name, so by
+   * default the avatar is decorative (hidden from screen readers) to avoid a
+   * double-read and to stop the fallback initial from being announced as a lone
+   * letter. Pass `accessibilityLabel` for a STANDALONE avatar (no adjacent
+   * name) to expose it with role "image".
+   */
+  accessibilityLabel?: string;
 };
 
 /**
@@ -64,15 +72,23 @@ export function Avatar({
   rounded = "circle",
   borderColor = colors.iron,
   borderWidth = 1,
-  muted
+  muted,
+  accessibilityLabel
 }: AvatarProps) {
   const px = typeof size === "number" ? size : LEGACY_SIZES[size];
   const radius = rounded === "circle" ? px / 2 : 10;
   const [from, to] = gradientFor(name);
   const initial = name.trim().charAt(0).toUpperCase() || "?";
+  const meaningful = Boolean(accessibilityLabel);
 
   return (
     <View
+      accessible={meaningful}
+      accessibilityRole={meaningful ? "image" : undefined}
+      accessibilityLabel={accessibilityLabel}
+      // Decorative by default: hide the initial/image from screen readers so it
+      // doesn't read as a lone letter next to the name it accompanies.
+      importantForAccessibility={meaningful ? "yes" : "no-hide-descendants"}
       style={{
         width: px,
         height: px,

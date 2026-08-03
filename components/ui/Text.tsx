@@ -10,10 +10,35 @@ type TextProps = Omit<NativeTextProps, "style"> & {
   style?: never;
 };
 
-export function Text({ variant = "body", className, children, ...props }: TextProps) {
+/** Display/title variants read as headings (WCAG 1.3.1 heading navigation). */
+const HEADER_VARIANTS = new Set<TextVariant>([
+  "display-xl",
+  "display-lg",
+  "display-md",
+  "display-sm",
+  "title"
+]);
+
+export function Text({
+  variant = "body",
+  className,
+  children,
+  accessibilityRole,
+  maxFontSizeMultiplier,
+  ...props
+}: TextProps) {
   const classes = className ? `${textVariants[variant]} ${className}` : textVariants[variant];
+  const isHeader = HEADER_VARIANTS.has(variant);
   return (
-    <NativeText className={classes} {...props}>
+    <NativeText
+      className={classes}
+      // Auto heading role for display/title variants (screen-reader heading nav).
+      accessibilityRole={accessibilityRole ?? (isHeader ? "header" : undefined)}
+      // Honor Dynamic Type (WCAG 1.4.4) — NEVER disable scaling. Body text scales
+      // to 200%; large display headers cap lower so hero layouts don't shatter.
+      maxFontSizeMultiplier={maxFontSizeMultiplier ?? (isHeader ? 1.4 : 2)}
+      {...props}
+    >
       {children}
     </NativeText>
   );

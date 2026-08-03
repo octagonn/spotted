@@ -18,6 +18,8 @@ type ButtonProps = {
   className?: string;
   style?: ViewStyle;
   animateLabel?: boolean;
+  /** Required when `children` isn't a plain string (e.g. an icon-only button). */
+  accessibilityLabel?: string;
 };
 
 /**
@@ -35,7 +37,8 @@ export function Button({
   icon,
   className,
   style,
-  animateLabel = false
+  animateLabel = false,
+  accessibilityLabel
 }: ButtonProps) {
   const solid = variant === "solid" || variant === "primary";
 
@@ -58,7 +61,14 @@ export function Button({
   const textColor = solid ? (disabled ? colors.ash : colors.black) : colors.bone;
 
   return (
-    <Pressable className={className} disabled={disabled || loading} onPress={onPress} pressScale={0.98}>
+    <Pressable
+      className={className}
+      disabled={disabled || loading}
+      onPress={onPress}
+      pressScale={0.98}
+      accessibilityLabel={accessibilityLabel ?? (typeof children === "string" ? children : undefined)}
+      accessibilityState={{ busy: Boolean(loading) }}
+    >
       <View
         style={[
           {
@@ -117,7 +127,7 @@ type RelButtonProps = {
 export function RelButton({ label, kind, onPress, disabled }: RelButtonProps) {
   const primary = kind === "primary";
   return (
-    <Pressable onPress={onPress} disabled={disabled} pressScale={0.98}>
+    <Pressable onPress={onPress} disabled={disabled} pressScale={0.98} accessibilityLabel={label}>
       <View
         style={{
           minWidth: 78,

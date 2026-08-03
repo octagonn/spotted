@@ -16,6 +16,8 @@ export function Chip({ children, selected, onPress }: ChipProps) {
         selected ? "border-white bg-white" : "border-hairline-strong bg-glass"
       }`}
       onPress={onPress}
+      accessibilityLabel={typeof children === "string" ? children : undefined}
+      accessibilityState={{ selected: Boolean(selected) }}
     >
       <Text variant="micro" className={selected ? "text-black" : "text-mist"}>
         {children}

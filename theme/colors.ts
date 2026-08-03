@@ -6,7 +6,11 @@ export const colors = {
   iron: "#27272A",
   slate: "#3F3F46",
   ash: "#52525B",
-  fog: "#71717A",
+  // Raised from #71717A to meet WCAG AA (4.5:1) as body/label text on the app's
+  // dark surfaces — the old value failed (3.1–4.35:1) everywhere it was used for
+  // sub-text, placeholders, timestamps, and small labels. Kept dimmer than
+  // `silver` (#A1A1AA) so the primary/secondary/tertiary text hierarchy holds.
+  fog: "#909099",
   silver: "#A1A1AA",
   mist: "#D4D4D8",
   bone: "#E4E4E7",

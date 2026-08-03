@@ -29,6 +29,8 @@ export function ChoiceRow({ title, sub, selected, disabled, left, onPress }: Cho
       disabled={disabled || !onPress}
       pressScale={1}
       pressOpacity={1}
+      accessibilityLabel={sub ? `${title}, ${sub}` : title}
+      accessibilityState={{ selected: Boolean(selected), disabled: Boolean(disabled) }}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
     >

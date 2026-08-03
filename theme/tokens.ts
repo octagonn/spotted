@@ -23,7 +23,8 @@ export const tokens = {
   text: {
     primary: "#FAFAFA",
     secondary: "#A1A1AA",
-    tertiary: "#71717A"
+    // Raised from #71717A → WCAG AA (4.5:1) on dark surfaces; matches colors.fog.
+    tertiary: "#909099"
   },
   accent: {
     // ONE gold, app-wide. Kept at the existing warm value (#E8B44C) per product

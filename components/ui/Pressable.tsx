@@ -43,13 +43,30 @@ export function Pressable({
   style,
   onPressIn,
   onPressOut,
+  accessibilityRole,
+  accessibilityState,
+  hitSlop,
+  disabled,
   ...props
 }: PressableProps) {
   const [pressed, setPressed] = useState(false);
 
+  // A11y defaults (WCAG 4.1.2 / 2.5.5): anything with a press handler is a
+  // button to a screen reader unless the caller says otherwise (link, checkbox,
+  // radio, tab, adjustable). `disabled` is always reflected in state, and a
+  // default hitSlop lifts small icon controls toward the 44×44 target without
+  // changing layout. Callers still override any of these via props.
+  const isInteractive = Boolean(props.onPress || props.onLongPress);
+  const resolvedRole = accessibilityRole ?? (isInteractive ? "button" : undefined);
+  const resolvedState = { disabled: Boolean(disabled), ...(accessibilityState ?? {}) };
+
   return (
     <NativePressable
       {...props}
+      disabled={disabled}
+      accessibilityRole={resolvedRole}
+      accessibilityState={resolvedState}
+      hitSlop={hitSlop ?? (isInteractive ? 8 : undefined)}
       className={[className, pressed ? pressedClassName : ""].filter(Boolean).join(" ")}
       style={[style, pressed ? { transform: [{ scale: pressScale }], opacity: pressOpacity } : null]}
       onPressIn={(event) => {

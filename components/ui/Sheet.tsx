@@ -40,6 +40,10 @@ function Backdrop(props: BottomSheetBackdropProps) {
       disappearsOnIndex={-1}
       opacity={0.62}
       pressBehavior="close"
+      // A labeled dismiss affordance for screen-reader users (WCAG 4.1.2).
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel="Close"
     />
   );
 }
@@ -129,6 +133,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
 export function SheetTitle({ children, center }: { children: ReactNode; center?: boolean }) {
   return (
     <Text
+      accessibilityRole="header"
       style={{
         fontFamily: "Geist_700Bold",
         fontSize: 16,

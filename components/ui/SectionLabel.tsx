@@ -13,6 +13,7 @@ export function SectionLabel({ children, style }: SectionLabelProps) {
   return (
     <View style={[{ paddingTop: 18, paddingHorizontal: 18, paddingBottom: 10 }, style]}>
       <Text
+        accessibilityRole="header"
         style={{
           fontFamily: "GeistMono_400Regular",
           fontSize: 10.5,

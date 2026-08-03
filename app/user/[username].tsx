@@ -49,7 +49,7 @@ function ActionButton({
   compact?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} pressScale={0.97} style={compact ? undefined : { flex: 1 }}>
+    <Pressable onPress={onPress} disabled={disabled} pressScale={0.97} accessibilityLabel={label} style={compact ? undefined : { flex: 1 }}>
       <View
         style={{
           height: 40,
@@ -198,6 +198,7 @@ export default function UserProfileScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingTop: 8 }}>
           <Pressable
             disabled={!hasActiveStory && !profile?.avatar_url}
+            accessibilityLabel={hasActiveStory ? `${name}'s profile photo, has a story` : `${name}'s profile photo`}
             onPress={() => {
               if (hasActiveStory && profile) router.push(`/story?user=${profile.id}`);
               else if (profile?.avatar_url) setAvatarZoom(true);
@@ -246,7 +247,7 @@ export default function UserProfileScreen() {
           {socials.length ? (
             <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               {socials.map(({ meta, url }) => (
-                <Pressable key={meta.key} onPress={() => void Linking.openURL(url)} accessibilityLabel={meta.label} hitSlop={6}>
+                <Pressable key={meta.key} onPress={() => void Linking.openURL(url)} accessibilityRole="link" accessibilityLabel={meta.label} hitSlop={6}>
                   <View
                     style={{
                       width: 36,
@@ -315,7 +316,7 @@ export default function UserProfileScreen() {
           <>
             {/* Inline stats */}
             <View style={{ paddingHorizontal: 18, paddingTop: 24, flexDirection: "row" }}>
-              <Pressable style={{ flex: 1, alignItems: "center" }} haptic={false} onPress={() => setStreakOpen(true)} accessibilityLabel="Gym streak">
+              <Pressable style={{ flex: 1, alignItems: "center" }} haptic={false} onPress={() => setStreakOpen(true)} accessibilityLabel={`${currentStreak} Gym streak`}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Flame size={13} color={colors.gold} strokeWidth={2.2} />
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
@@ -372,11 +373,12 @@ export default function UserProfileScreen() {
                     <Pressable
                       key={post.id}
                       style={{ width: cellW, aspectRatio: 4 / 5, padding: 1 }}
+                      accessibilityLabel="Open post"
                       onPress={() => profile && router.push(`/profile-posts/${post.id}?user=${profile.id}` as Href)}
                     >
                       <View style={{ flex: 1, backgroundColor: colors.graphite }}>
                         {post.media_url ? (
-                          <Image source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
+                          <Image source={{ uri: post.media_url }} accessible={false} contentFit="cover" style={{ flex: 1 }} />
                         ) : null}
                       </View>
                     </Pressable>
@@ -393,6 +395,7 @@ export default function UserProfileScreen() {
                   <Pressable
                     key={post.id}
                     style={{ width: cellW, aspectRatio: 4 / 5, padding: 1 }}
+                    accessibilityLabel="Open post"
                     onPress={() =>
                       router.push(
                         `/daily/${localDateKey(new Date(post.created_at))}?user=${post.user_id}&post=${post.id}` as Href
@@ -401,7 +404,7 @@ export default function UserProfileScreen() {
                   >
                     <View style={{ flex: 1, backgroundColor: colors.graphite }}>
                       {post.media_url ? (
-                        <Image source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
+                        <Image source={{ uri: post.media_url }} accessible={false} contentFit="cover" style={{ flex: 1 }} />
                       ) : null}
                     </View>
                   </Pressable>
@@ -495,7 +498,7 @@ function UserProfileTab({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={{ flex: 1 }} haptic={false} accessibilityLabel={label}>
+    <Pressable onPress={onPress} style={{ flex: 1 }} haptic={false} accessibilityLabel={label} accessibilityState={{ selected: active }}>
       <View
         style={{
           flexDirection: "row",
@@ -530,7 +533,7 @@ function StatCell({ value, unit, label, onPress }: { value: number; unit?: strin
   );
   if (onPress) {
     return (
-      <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingHorizontal: 1 }} haptic={false} accessibilityLabel={label}>
+      <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingHorizontal: 1 }} haptic={false} accessibilityLabel={`${value} ${label}`}>
         {body}
       </Pressable>
     );

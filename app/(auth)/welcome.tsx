@@ -76,6 +76,10 @@ function BreathingIcon() {
         ]}
       />
       <View
+        // Decorative app icon — hide from screen readers (the "SPOTTED" wordmark
+        // below carries the name).
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         style={{
           width: ICON_SIZE,
           height: ICON_SIZE,
@@ -113,7 +117,7 @@ function SpottedReveal() {
 
   return (
     <Animated.Text
-      allowFontScaling={false}
+      maxFontSizeMultiplier={1.4}
       numberOfLines={1}
       adjustsFontSizeToFit
       style={[

@@ -159,6 +159,7 @@ export default function OnboardingCreateProfileScreen() {
               <TextInput
                 value={displayName}
                 onChangeText={setDisplayName}
+                accessibilityLabel="Display name"
                 placeholder="Display name"
                 placeholderTextColor={colors.fog}
                 autoCapitalize="words"
@@ -172,6 +173,7 @@ export default function OnboardingCreateProfileScreen() {
               <TextInput
                 value={username}
                 onChangeText={(value) => setUsername(value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                accessibilityLabel="Username"
                 placeholder="username"
                 placeholderTextColor={colors.fog}
                 autoCapitalize="none"
@@ -184,7 +186,7 @@ export default function OnboardingCreateProfileScreen() {
           </View>
         </View>
         {!usernameValid && username.length > 0 ? (
-          <Text variant="micro" className="mt-3 text-mist">
+          <Text variant="micro" accessibilityLiveRegion="polite" className="mt-3 text-mist">
             3–20 chars, lowercase letters, numbers, underscore.
           </Text>
         ) : null}

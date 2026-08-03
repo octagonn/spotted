@@ -60,7 +60,10 @@ export default function SignInScreen() {
             </Button>
           </View>
           {errorText ? (
-            <View className="rounded-card border border-hairline-strong bg-glass-strong p-4">
+            <View
+              accessibilityLiveRegion="assertive"
+              className="rounded-card border border-hairline-strong bg-glass-strong p-4"
+            >
               <Text variant="micro" className="text-white">
                 SIGN-IN ERROR
               </Text>

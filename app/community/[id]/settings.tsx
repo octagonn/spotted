@@ -312,11 +312,11 @@ export default function CommunitySettingsScreen() {
             </View>
 
             <Label>Name</Label>
-            <TextInput value={name} onChangeText={(v) => setName(v.slice(0, NAME_MAX))} maxLength={NAME_MAX} placeholder="Community name" placeholderTextColor={colors.fog} style={inputStyle} />
+            <TextInput value={name} onChangeText={(v) => setName(v.slice(0, NAME_MAX))} maxLength={NAME_MAX} accessibilityLabel="Community name" placeholder="Community name" placeholderTextColor={colors.fog} style={inputStyle} />
             <Counter value={name.length} max={NAME_MAX} />
 
             <Label>Description</Label>
-            <TextInput value={description} onChangeText={(v) => setDescription(v.slice(0, DESC_MAX))} maxLength={DESC_MAX} multiline textAlignVertical="top" placeholder="What's this community about?" placeholderTextColor={colors.fog} style={[inputStyle, { minHeight: 92, paddingTop: 12 }]} />
+            <TextInput value={description} onChangeText={(v) => setDescription(v.slice(0, DESC_MAX))} maxLength={DESC_MAX} multiline textAlignVertical="top" accessibilityLabel="Community description" placeholder="What's this community about?" placeholderTextColor={colors.fog} style={[inputStyle, { minHeight: 92, paddingTop: 12 }]} />
             <Counter value={description.length} max={DESC_MAX} />
 
             <Label>Privacy</Label>
@@ -326,7 +326,7 @@ export default function CommunitySettingsScreen() {
             </View>
 
             <Label>Location</Label>
-            <TextInput value={location} onChangeText={setLocation} placeholder="City, State — leave blank for global" placeholderTextColor={colors.fog} style={inputStyle} />
+            <TextInput value={location} onChangeText={setLocation} accessibilityLabel="Community location" placeholder="City, State — leave blank for global" placeholderTextColor={colors.fog} style={inputStyle} />
 
             <View style={{ paddingTop: 24 }}>
               <Button loading={update.isPending} disabled={update.isPending} onPress={save}>
@@ -477,7 +477,7 @@ function Toggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
 
 function SectionTitle({ children }: { children: string }) {
   return (
-    <Text style={{ paddingTop: 26, paddingBottom: 10, fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.12, textTransform: "uppercase", color: colors.fog }}>
+    <Text accessibilityRole="header" style={{ paddingTop: 26, paddingBottom: 10, fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.12, textTransform: "uppercase", color: colors.fog }}>
       {children}
     </Text>
   );
@@ -501,7 +501,7 @@ function Counter({ value, max }: { value: number; max: number }) {
 
 function PrivacyPill({ active, onPress, icon, label }: { active: boolean; onPress: () => void; icon: React.ReactNode; label: string }) {
   return (
-    <Pressable onPress={onPress} style={{ flex: 1 }}>
+    <Pressable onPress={onPress} accessibilityLabel={label} accessibilityState={{ selected: active }} style={{ flex: 1 }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: active ? colors.white : colors.iron, backgroundColor: active ? colors.white : colors.graphite }}>
         {icon}
         <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: active ? colors.black : colors.silver }}>{label}</Text>

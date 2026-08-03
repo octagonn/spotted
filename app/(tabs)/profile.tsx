@@ -356,6 +356,7 @@ export default function ProfileScreen() {
           >
             <Pressable
               accessibilityLabel={calendarOpen ? "Collapse streak calendar" : "Expand streak calendar"}
+              accessibilityState={{ expanded: calendarOpen }}
               onPress={toggleCalendar}
               style={{
                 flexDirection: "row",
@@ -423,6 +424,7 @@ export default function ProfileScreen() {
                 <Pressable
                   key={post.id}
                   style={{ width: gridCellW, aspectRatio: 4 / 5, padding: 1 }}
+                  accessibilityLabel="Open post"
                   onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
                 >
                   <GridCell post={{ media_url: post.media_url, media_type: post.mediaType, thumbnail_url: post.thumbnailUrl }} />
@@ -447,6 +449,7 @@ export default function ProfileScreen() {
               <Pressable
                 key={post.id}
                 style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
+                accessibilityLabel="Open post"
                 onPress={() =>
                   router.push(
                     `/daily/${localDateKey(new Date(post.created_at))}?user=${post.user_id}&post=${post.id}` as Href
@@ -516,7 +519,7 @@ function InlineStat({
   );
   if (onPress) {
     return (
-      <Pressable onPress={onPress} accessibilityLabel={label} haptic={false} style={{ flex: 1, alignItems: "center" }}>
+      <Pressable onPress={onPress} accessibilityLabel={`${value} ${label}`} haptic={false} style={{ flex: 1, alignItems: "center" }}>
         {body}
       </Pressable>
     );
@@ -570,7 +573,7 @@ function GridCell({ post }: { post: { media_url: string | null; media_type?: str
     // Placeholder frame while the image streams in (spec #18) — expo-image
     // decodes async + caches to disk, so cells fade in instead of popping.
     <View style={{ flex: 1, backgroundColor: isVideo && !src ? tokens.bg.subtle : colors.graphite }}>
-      {src ? <Image source={{ uri: src }} contentFit="cover" transition={140} cachePolicy="memory-disk" style={{ flex: 1 }} /> : null}
+      {src ? <Image source={{ uri: src }} accessible={false} contentFit="cover" transition={140} cachePolicy="memory-disk" style={{ flex: 1 }} /> : null}
       {isVideo ? (
         <View style={{ position: "absolute", right: 6, bottom: 6 }}>
           <Play size={16} color="rgba(255,255,255,0.9)" fill="rgba(255,255,255,0.9)" strokeWidth={1} />
@@ -592,7 +595,7 @@ function ProfileTab({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={{ flex: 1 }} haptic={false} accessibilityLabel={label}>
+    <Pressable onPress={onPress} style={{ flex: 1 }} haptic={false} accessibilityLabel={label} accessibilityState={{ selected: active }}>
       <View
         style={{
           flexDirection: "row",
@@ -615,7 +618,7 @@ function ProfileTab({
 
 function Stat({ value, label, onPress }: { value: number; label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingHorizontal: 2 }} haptic={false}>
+    <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingHorizontal: 2 }} haptic={false} accessibilityLabel={`${value} ${label}`}>
       <Text style={{ fontFamily: "Geist_700Bold", fontSize: 20, color: colors.white }}>{value}</Text>
       <Text numberOfLines={1} style={{ marginTop: 3, fontFamily: "Geist_400Regular", fontSize: 13, color: colors.silver }}>
         {label}

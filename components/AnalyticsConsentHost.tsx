@@ -132,7 +132,10 @@ export function AnalyticsConsentHost({
       onRequestClose={decline}
       statusBarTranslucent
     >
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.68)" }}>
+      <View
+        accessibilityViewIsModal
+        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.68)" }}
+      >
         <View
           style={{
             backgroundColor: colors.ink,
@@ -161,6 +164,7 @@ export function AnalyticsConsentHost({
             <BarChart3 size={23} color={colors.white} strokeWidth={2} />
           </View>
           <Text
+            accessibilityRole="header"
             style={{
               marginTop: 18,
               fontFamily: "Boldonse_400Regular",

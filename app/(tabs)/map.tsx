@@ -434,7 +434,7 @@ export default function MapTabScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.black, paddingTop: insets.top + 8 }}>
       <View style={{ paddingHorizontal: 18, paddingBottom: 4 }}>
-        <Text style={{ fontFamily: DISP, fontSize: 22, letterSpacing: 22 * -0.02, color: colors.white }}>
+        <Text accessibilityRole="header" style={{ fontFamily: DISP, fontSize: 22, letterSpacing: 22 * -0.02, color: colors.white }}>
           {tab}
         </Text>
       </View>
@@ -481,7 +481,7 @@ export default function MapTabScreen() {
           {/* LIVE PRESENCE — only when friends are actually there (spec). */}
           {presenceRows.length > 0 ? (
             <View style={{ paddingHorizontal: 18, paddingTop: 4 }}>
-              <Pressable onPress={() => setLiveOpen((v) => !v)}>
+              <Pressable onPress={() => setLiveOpen((v) => !v)} accessibilityState={{ expanded: liveOpen }}>
                 <View
                   style={{
                     flexDirection: "row",
@@ -916,32 +916,30 @@ export default function MapTabScreen() {
     const prCount = workout.prs.length;
     // Long-press: edit or delete straight from the tab. Neither touches the
     // daily post — attached workouts are forked/hidden, never removed from it.
+    const editWorkout = () => router.push(`/workout?edit=${workout.id}` as Href);
+    const confirmDelete = () =>
+      Alert.alert(
+        "Delete workout?",
+        workout.postId
+          ? "It leaves your workout history — your daily post keeps it. Trophies stay."
+          : "It disappears from your history. Trophies stay.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () =>
+              deleteWorkout.mutate(workout.id, {
+                onSuccess: () => showToast("Workout deleted"),
+                onError: () => showToast("Couldn't delete — try again")
+              })
+          }
+        ]
+      );
     const openActions = () => {
       Alert.alert(workout.name, undefined, [
-        { text: "Edit workout", onPress: () => router.push(`/workout?edit=${workout.id}` as Href) },
-        {
-          text: "Delete from history",
-          style: "destructive",
-          onPress: () =>
-            Alert.alert(
-              "Delete workout?",
-              workout.postId
-                ? "It leaves your workout history — your daily post keeps it. Trophies stay."
-                : "It disappears from your history. Trophies stay.",
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Delete",
-                  style: "destructive",
-                  onPress: () =>
-                    deleteWorkout.mutate(workout.id, {
-                      onSuccess: () => showToast("Workout deleted"),
-                      onError: () => showToast("Couldn't delete — try again")
-                    })
-                }
-              ]
-            )
-        },
+        { text: "Edit workout", onPress: editWorkout },
+        { text: "Delete from history", style: "destructive", onPress: confirmDelete },
         { text: "Cancel", style: "cancel" }
       ]);
     };
@@ -949,6 +947,14 @@ export default function MapTabScreen() {
       <Pressable
         onPress={() => router.push(`/workout/${workout.id}` as Href)}
         onLongPress={openActions}
+        accessibilityActions={[
+          { name: "edit", label: "Edit workout" },
+          { name: "delete", label: "Delete from history" }
+        ]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "edit") editWorkout();
+          else if (event.nativeEvent.actionName === "delete") confirmDelete();
+        }}
         style={{ marginHorizontal: 18, marginBottom: 12 }}
       >
         <View

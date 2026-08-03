@@ -324,7 +324,7 @@ export default function CommunityScreen() {
           <>
             <View style={{ flexDirection: "row", gap: 22, marginTop: 16, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: colors.graphite }}>
               {tabs.map((item) => (
-                <Pressable key={item} onPress={() => setTab(item)}>
+                <Pressable key={item} onPress={() => setTab(item)} accessibilityRole="tab" accessibilityState={{ selected: tab === item }}>
                   <View style={{ paddingBottom: 10, borderBottomWidth: tab === item ? 2 : 0, borderBottomColor: colors.white }}>
                     <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: tab === item ? colors.white : colors.fog }}>
                       {item}
@@ -349,6 +349,7 @@ export default function CommunityScreen() {
                     <Pressable
                       key={post.id}
                       onPress={() => (post.user_id === userId ? router.push("/(tabs)/profile") : router.push(`/user/${post.username}`))}
+                      accessibilityLabel={`Community post by @${post.username}`}
                       style={{ width: "33%" }}
                     >
                       <View style={{ aspectRatio: 3 / 4, backgroundColor: colors.graphite }}>
@@ -457,7 +458,7 @@ export default function CommunityScreen() {
             onSubmitEditing={send}
             style={{ flex: 1, paddingVertical: 7, fontSize: 14, color: colors.bone }}
           />
-          <Pressable onPress={send} disabled={!draft.trim() || sendMessage.isPending}>
+          <Pressable onPress={send} disabled={!draft.trim() || sendMessage.isPending} accessibilityLabel="Send message">
             <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: draft.trim() ? colors.white : colors.iron }}>
               <Send size={16} color={draft.trim() ? colors.black : colors.fog} />
             </View>

@@ -18,6 +18,14 @@ type TabName = "feed" | "friends" | "map" | "profile";
 const LEFT_TABS: TabName[] = ["feed", "friends"];
 const RIGHT_TABS: TabName[] = ["map", "profile"];
 
+/** Human-readable names for screen readers (route names are internal). */
+const TAB_LABELS: Record<TabName, string> = {
+  feed: "Home",
+  friends: "Friends",
+  map: "Gym map",
+  profile: "Profile"
+};
+
 function TabIcon({ name, focused }: { name: TabName; focused: boolean }) {
   const color = focused ? tokens.text.primary : tokens.text.tertiary;
   const size = 28;
@@ -44,7 +52,7 @@ function TabSlot({
       }}
       testID={`tab-${name}`}
       accessibilityRole="button"
-      accessibilityLabel={name}
+      accessibilityLabel={TAB_LABELS[name]}
       accessibilityState={{ selected: focused }}
       hitSlop={8}
       style={({ pressed }) => ({

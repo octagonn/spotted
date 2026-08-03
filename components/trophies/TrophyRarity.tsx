@@ -19,7 +19,11 @@ export function TrophyRarity({
 }) {
   const premium = pct < PREMIUM_RARITY_THRESHOLD;
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: align === "center" ? "center" : "flex-start", gap: 5 }}>
+    <View
+      accessible
+      accessibilityLabel={formatRarity(pct)}
+      style={{ flexDirection: "row", alignItems: "center", justifyContent: align === "center" ? "center" : "flex-start", gap: 5 }}
+    >
       <View
         style={{
           width: 4,

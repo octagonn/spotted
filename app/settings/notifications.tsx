@@ -483,6 +483,9 @@ export default function NotificationSettingsScreen() {
                       key={scope.key}
                       onPress={() => update.mutate({ friendCheckinsScope: scope.key })}
                       haptic={false}
+                      accessibilityLabel={scope.label}
+                      accessibilityState={{ selected }}
+                      hitSlop={8}
                     >
                       <View
                         style={{

@@ -97,7 +97,11 @@ export function StoriesRail() {
 
 function StoryBubble({ group, onPress }: { group: StoryGroup; onPress: () => void }) {
   return (
-    <Pressable style={{ width: ITEM, alignItems: "center", gap: 6 }} onPress={onPress}>
+    <Pressable
+      style={{ width: ITEM, alignItems: "center", gap: 6 }}
+      onPress={onPress}
+      accessibilityLabel={`${group.name}'s story, ${group.hasUnseen ? "new" : "seen"}`}
+    >
       <Ring active seen={!group.hasUnseen}>
         <Avatar name={group.name} uri={group.avatarUrl} size={AVATAR} />
       </Ring>

@@ -24,6 +24,9 @@ type ScenePhotoProps = {
   blurRadius?: number;
   /** Legibility gradient overlay (§0): on by default for post media. */
   legibility?: boolean;
+  /** Accessibility label for the real photo (WCAG 1.1.1). Omit for decorative
+   *  surfaces (insets, reactor thumbnails) so they stay silent to a screen reader. */
+  accessibilityLabel?: string;
   style?: ViewStyle;
 };
 
@@ -32,7 +35,7 @@ type ScenePhotoProps = {
  * (mockup `.ph`), with the spec legibility gradient
  * `linear-gradient(180deg, rgba(0,0,0,0.12), transparent 30%, transparent 62%, rgba(0,0,0,0.4))`.
  */
-export function ScenePhoto({ uri, scene = "s1", blurRadius, legibility = true, style }: ScenePhotoProps) {
+export function ScenePhoto({ uri, scene = "s1", blurRadius, legibility = true, accessibilityLabel, style }: ScenePhotoProps) {
   const def = FEED_SCENES[scene];
   const points = gradientPoints(def.angle);
   return (
@@ -50,6 +53,8 @@ export function ScenePhoto({ uri, scene = "s1", blurRadius, legibility = true, s
           contentFit="cover"
           cachePolicy="memory-disk"
           transition={150}
+          accessible={accessibilityLabel ? true : undefined}
+          accessibilityLabel={accessibilityLabel}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
         />
       ) : (

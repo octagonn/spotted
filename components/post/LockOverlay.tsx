@@ -116,7 +116,7 @@ export function LockOverlay({
           </View>
 
           <Text
-            allowFontScaling={false}
+            maxFontSizeMultiplier={1.4}
             style={{
               fontFamily: "Boldonse_400Regular",
               fontSize: 21,

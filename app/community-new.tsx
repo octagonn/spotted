@@ -139,7 +139,7 @@ export default function CommunityWizard() {
             <ChevronLeft color={colors.mist} size={18} strokeWidth={2.2} />
           </View>
         </Pressable>
-        <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>
+        <View accessible accessibilityLabel={`Step ${step + 1} of ${STEPS}`} style={{ flex: 1, flexDirection: "row", gap: 5 }}>
           {Array.from({ length: STEPS }, (_, i) => (
             <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i <= step ? colors.white : colors.iron }} />
           ))}
@@ -169,7 +169,7 @@ export default function CommunityWizard() {
               const Icon = COMMUNITY_ICONS[t.key];
               const active = type === t.key;
               return (
-                <Pressable key={t.key} onPress={() => setType(t.key)} accessibilityLabel={t.label} style={{ marginTop: 10 }}>
+                <Pressable key={t.key} onPress={() => setType(t.key)} accessibilityLabel={t.label} accessibilityState={{ selected: active }} style={{ marginTop: 10 }}>
                   <View
                     style={{
                       flexDirection: "row",
@@ -279,7 +279,12 @@ export default function CommunityWizard() {
             ) : (
               <>
                 {suggested ? (
-                  <Pressable onPress={() => setLocChoice("auto")} style={{ marginTop: 6 }}>
+                  <Pressable
+                    onPress={() => setLocChoice("auto")}
+                    accessibilityLabel={`Use detected location: ${suggested}`}
+                    accessibilityState={{ selected: locChoice === "auto" }}
+                    style={{ marginTop: 6 }}
+                  >
                     <View style={rowCard(locChoice === "auto")}>
                       <MapPin size={18} color={locChoice === "auto" ? colors.white : colors.silver} strokeWidth={2} />
                       <View style={{ flex: 1 }}>
@@ -300,7 +305,12 @@ export default function CommunityWizard() {
                     style={[inputStyle, { marginTop: 10 }]}
                   />
                 ) : (
-                  <Pressable onPress={() => setLocChoice("custom")} style={{ marginTop: 10 }}>
+                  <Pressable
+                    onPress={() => setLocChoice("custom")}
+                    accessibilityLabel={suggested ? "Change location" : "Set a location"}
+                    accessibilityState={{ selected: false }}
+                    style={{ marginTop: 10 }}
+                  >
                     <View style={rowCard(false)}>
                       <Pencil size={16} color={colors.silver} strokeWidth={2} />
                       <Text style={{ flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>
@@ -310,7 +320,12 @@ export default function CommunityWizard() {
                   </Pressable>
                 )}
 
-                <Pressable onPress={() => setLocChoice("skip")} style={{ marginTop: 10 }}>
+                <Pressable
+                  onPress={() => setLocChoice("skip")}
+                  accessibilityLabel="Skip — keep it global"
+                  accessibilityState={{ selected: locChoice === "skip" }}
+                  style={{ marginTop: 10 }}
+                >
                   <View style={rowCard(locChoice === "skip")}>
                     <Globe size={18} color={locChoice === "skip" ? colors.white : colors.silver} strokeWidth={2} />
                     <Text style={{ flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>Skip — keep it global</Text>
@@ -352,7 +367,7 @@ export default function CommunityWizard() {
 function StepTitle({ title, sub }: { title: string; sub: string }) {
   return (
     <View style={{ paddingBottom: 6 }}>
-      <Text style={{ fontFamily: "Geist_700Bold", fontSize: 21, letterSpacing: 21 * -0.02, color: colors.white }}>{title}</Text>
+      <Text accessibilityRole="header" style={{ fontFamily: "Geist_700Bold", fontSize: 21, letterSpacing: 21 * -0.02, color: colors.white }}>{title}</Text>
       <Text style={{ marginTop: 6, fontSize: 13, lineHeight: 18, color: colors.silver }}>{sub}</Text>
     </View>
   );

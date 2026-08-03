@@ -37,7 +37,7 @@ export function GymPreviewSheet({ gym, close }: { gym: MapGym; close: () => void
           <Dumbbell size={20} color={colors.white} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white }}>{gym.name}</Text>
+          <Text accessibilityRole="header" style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white }}>{gym.name}</Text>
           {gym.address ? (
             <Text style={{ marginTop: 2, fontSize: 12.5, color: colors.fog }}>{gym.address}</Text>
           ) : null}
@@ -55,7 +55,7 @@ export function GymPreviewSheet({ gym, close }: { gym: MapGym; close: () => void
                 router.push(`/user/${person.profile.username}` as Href);
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 10 }}
-              accessibilityLabel={person.profile.display_name}
+              accessibilityLabel={`${person.profile.display_name}, checked in now`}
             >
               <Avatar name={person.profile.display_name} uri={person.profile.avatar_url} size={34} />
               <View style={{ flex: 1 }}>

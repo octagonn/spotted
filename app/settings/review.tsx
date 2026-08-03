@@ -54,7 +54,7 @@ export default function ReviewQueueScreen() {
           {(queue.data ?? []).map((item) => (
             <View key={item.postId} style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.iron, overflow: "hidden", backgroundColor: colors.ink }}>
               <View style={{ aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
-                {item.mediaUrl ? <Image source={{ uri: item.mediaUrl }} contentFit="cover" style={{ flex: 1 }} /> : null}
+                {item.mediaUrl ? <Image accessibilityLabel="Flagged photo" source={{ uri: item.mediaUrl }} contentFit="cover" style={{ flex: 1 }} /> : null}
                 {item.insetUrl ? (
                   <View style={{ position: "absolute", top: 12, left: 12, width: "30%", aspectRatio: 3 / 4, borderRadius: 12, overflow: "hidden", borderWidth: 2, borderColor: colors.black }}>
                     <Image source={{ uri: item.insetUrl }} contentFit="cover" style={{ flex: 1 }} />
@@ -68,12 +68,14 @@ export default function ReviewQueueScreen() {
               </View>
               <View style={{ flexDirection: "row", gap: 10, padding: 12 }}>
                 <Pressable
+                  accessibilityLabel={`Approve flagged post by user ${item.userId}`}
                   onPress={() => resolve.mutate({ postId: item.postId, approve: true }, { onSuccess: () => showToast("Approved") })}
                   style={{ flex: 1, paddingVertical: 12, borderRadius: 999, borderWidth: 1, borderColor: colors.slate, alignItems: "center" }}
                 >
                   <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13.5, color: colors.white }}>Approve</Text>
                 </Pressable>
                 <Pressable
+                  accessibilityLabel={`Remove flagged post by user ${item.userId}`}
                   onPress={() => resolve.mutate({ postId: item.postId, approve: false }, { onSuccess: () => showToast("Removed") })}
                   style={{ flex: 1, paddingVertical: 12, borderRadius: 999, backgroundColor: "#E5484D", alignItems: "center" }}
                 >

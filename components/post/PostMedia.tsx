@@ -49,7 +49,13 @@ export function FbMedia({ post, blurRadius }: MediaProps) {
   const isLift = post.kind === "lift";
   return (
     <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
-      <ScenePhoto uri={post.mediaUri} scene={post.main} blurRadius={blurRadius} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+      <ScenePhoto
+        uri={post.mediaUri}
+        scene={post.main}
+        blurRadius={blurRadius}
+        accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
       {/* Positional photo tags (M1) — pills at their normalized coords. */}
       {post.photoTags?.length && blurRadius === undefined ? (
         <View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 }}>
@@ -180,7 +186,7 @@ export function PlateCard({ post }: MediaProps) {
           than ~1.6x lineHeight, so give it real headroom. */}
       <View style={{ flexDirection: "row", alignItems: "center" }}>
         <Text
-          allowFontScaling={false}
+          maxFontSizeMultiplier={1.4}
           numberOfLines={1}
           adjustsFontSizeToFit
           style={{
@@ -243,7 +249,13 @@ export function VideoMedia({ post, blurRadius }: MediaProps) {
   return (
     <NativePressable onPress={play} disabled={blurRadius !== undefined}>
       <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
-        <ScenePhoto uri={post.mediaUri} scene={post.main} blurRadius={blurRadius} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+        <ScenePhoto
+          uri={post.mediaUri}
+          scene={post.main}
+          blurRadius={blurRadius}
+          accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post video"}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
         {/* Extra video scrim: rgba(0,0,0,0.3) → transparent 35% → rgba(0,0,0,0.55) */}
         <LinearGradient
           colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
@@ -482,6 +494,8 @@ function RealVideoMedia({ post, blurRadius, active, onRegisterTap }: MediaProps)
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
         contentFit="cover"
         nativeControls={false}
+        accessible
+        accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post video"}
       />
       <LinearGradient
         colors={["rgba(0,0,0,0.3)", "rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
@@ -528,7 +542,7 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
         >
           {uris.map((uri) => (
             <View key={uri} style={{ width, height: "100%" }}>
-              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} />
+              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"} />
             </View>
           ))}
         </ScrollView>
@@ -582,7 +596,7 @@ function PostStack({ post, blurRadius }: MediaProps) {
         >
           {photos.map((uri) => (
             <View key={uri} style={{ width, height: "100%" }}>
-              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} />
+              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"} />
             </View>
           ))}
           {blurRadius === undefined

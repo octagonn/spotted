@@ -28,7 +28,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MessageActionMenu, type MessageAction } from "@/components/chat/MessageActionMenu";
 import { MessageBubble, TimeSeparator } from "@/components/friends/ChatBubbles";
 import { ForwardSheet } from "@/components/friends/ForwardSheet";
-import { PresenceLine } from "@/components/friends/PresenceLine";
+import { PresenceLine, presenceStatus } from "@/components/friends/PresenceLine";
 import { useMockChatStore } from "@/components/friends/chatStore";
 import { isMockThreadId, MOCK_CONVERSATIONS } from "@/components/friends/mockConversations";
 import { useInboxThreadActions } from "@/components/friends/useInboxThreads";
@@ -88,7 +88,12 @@ function AudioBubble({ uri, mine }: { uri: string | null; mine: boolean }) {
   const current = Math.min(duration, Math.round(status.currentTime || 0));
   const fg = mine ? colors.black : colors.white;
   return (
-    <Pressable onPress={toggle} accessibilityLabel={status.playing ? "Pause voice message" : "Play voice message"} haptic={false}>
+    <Pressable
+      onPress={toggle}
+      accessibilityRole="button"
+      accessibilityLabel={`${status.playing ? "Pause" : "Play"} voice message, ${duration} seconds`}
+      haptic={false}
+    >
       <View
         style={{
           alignSelf: mine ? "flex-end" : "flex-start",
@@ -109,7 +114,12 @@ function AudioBubble({ uri, mine }: { uri: string | null; mine: boolean }) {
         ) : (
           <Play size={16} color={fg} strokeWidth={2.2} fill={fg} />
         )}
-        <View style={{ width: 110, height: 3, borderRadius: 1.5, backgroundColor: mine ? "rgba(0,0,0,0.2)" : colors.iron }}>
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: duration, now: current }}
+          style={{ width: 110, height: 3, borderRadius: 1.5, backgroundColor: mine ? "rgba(0,0,0,0.2)" : colors.iron }}
+        >
           <View
             style={{
               width: `${Math.min(100, (current / duration) * 100)}%`,
@@ -469,6 +479,14 @@ export default function ChatScreen() {
   const mockConversation = mock ? MOCK_CONVERSATIONS[id] : null;
   const title = mockConversation?.title ?? profile.data?.display_name ?? "Conversation";
   const sub = mockConversation?.sub ?? (profile.data?.username ? `@${profile.data.username}` : undefined);
+  // The header Pressable collapses its children, so PresenceLine is never
+  // announced on its own — fold the live presence into the header's label (4.1.3).
+  const headerPresence = presenceStatus({
+    typing: presence.otherTyping,
+    online: presence.otherOnline,
+    lastSeenAt: activity.data?.lastSeenAt ?? null,
+    statusVisible: activity.data?.visible ?? false
+  });
 
   const realItems = useMemo(() => messages.data ?? [], [messages.data]);
   // Hide messages the user deleted from their own view (#11); keep unsent ones
@@ -606,7 +624,7 @@ export default function ChatScreen() {
             if (profile.data?.username) router.push(`/user/${profile.data.username}`);
           }}
           disabled={!profile.data?.username}
-          accessibilityLabel={`Open ${title}'s profile`}
+          accessibilityLabel={`Open ${title}'s profile${headerPresence ? `, ${headerPresence}` : ""}`}
           style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 12 }}
         >
           <Avatar name={title} uri={profile.data?.avatar_url} size={44} />
@@ -679,8 +697,44 @@ export default function ChatScreen() {
                     </Text>
                   );
                 }
+                // The reply/forward/unsend/delete/react actions live only behind
+                // a long-press menu — unreachable by a screen reader. Expose them
+                // as rotor actions routed to the same handlers (WCAG 2.1.1/2.5.1).
+                const withinWindow = Date.now() - new Date(message.sent_at).getTime() < 15 * 60_000;
+                const canUnsend = mine && withinWindow && message.media_url === null;
+                const a11yActions = [
+                  { name: "react", label: "React" },
+                  { name: "reply", label: "Reply" },
+                  ...(message.content ? [{ name: "forward", label: "Forward" }] : []),
+                  ...(canUnsend ? [{ name: "unsend", label: "Unsend for everyone" }] : []),
+                  { name: "delete", label: "Delete for me" }
+                ];
                 return (
-                  <RNPressable key={message.id} onLongPress={() => messageActions(message, mine)} delayLongPress={220}>
+                  <RNPressable
+                    key={message.id}
+                    onLongPress={() => messageActions(message, mine)}
+                    delayLongPress={220}
+                    accessibilityActions={a11yActions}
+                    onAccessibilityAction={(event) => {
+                      switch (event.nativeEvent.actionName) {
+                        case "react":
+                          messageActions(message, mine);
+                          break;
+                        case "reply":
+                          setReplyTo({ id: message.id, text: message.content ?? "Media", mine });
+                          break;
+                        case "forward":
+                          if (message.content) sheet.open(<ForwardSheet content={message.content ?? ""} />);
+                          break;
+                        case "unsend":
+                          if (canUnsend) unsend.mutate(message.id);
+                          break;
+                        case "delete":
+                          hide.mutate(message.id);
+                          break;
+                      }
+                    }}
+                  >
                     {parent ? (
                       <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "78%", marginBottom: -2, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.slate }}>
                         <Text numberOfLines={1} style={{ fontSize: 11.5, color: colors.fog }}>
@@ -711,7 +765,7 @@ export default function ChatScreen() {
                         ) : message.media_url ? (
                           <ChatMediaBubble path={message.media_url} mine={mine} onOpen={setPhotoViewer} />
                         ) : (
-                          <MessageBubble mine={mine} text={message.content ?? ""} />
+                          <MessageBubble mine={mine} text={message.content ?? ""} senderName={title} />
                         )}
                       </View>
                     </View>

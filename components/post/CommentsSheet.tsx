@@ -154,7 +154,7 @@ export function CommentsSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={dismissAndClose} statusBarTranslucent>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }} accessibilityViewIsModal>
         <Pressable style={StyleSheet.absoluteFill} onPress={dismissAndClose} accessibilityLabel="Close comments" />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
           {/* Half-screen popup — the post stays visible behind it. */}
@@ -242,6 +242,7 @@ export function CommentsSheet({
                 value={draft}
                 onChangeText={onChangeDraft}
                 onSubmitEditing={onSubmit}
+                accessibilityLabel="Add a comment"
                 // Keyboard "send" posts immediately and keeps the keyboard up
                 // for the next comment (IG-style) — no extra button press.
                 submitBehavior="submit"

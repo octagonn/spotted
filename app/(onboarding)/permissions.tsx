@@ -82,6 +82,8 @@ export default function PermissionsScreen() {
 
       <View className="mt-8 gap-3">
         <Pressable
+          accessibilityLabel={`Location while using, ${statusLabel(locationStatus).toLowerCase()}`}
+          accessibilityHint="Verify gym check-ins and find nearby gyms"
           className="flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4"
           onPress={handleLocation}
         >
@@ -94,12 +96,14 @@ export default function PermissionsScreen() {
               Verify gym check-ins and find nearby gyms.
             </Text>
           </View>
-          <Text variant="micro" className={statusColor(locationStatus)}>
+          <Text variant="micro" accessibilityLiveRegion="polite" className={statusColor(locationStatus)}>
             {statusLabel(locationStatus)}
           </Text>
         </Pressable>
 
         <Pressable
+          accessibilityLabel={`Notifications, ${statusLabel(notifStatus).toLowerCase()}`}
+          accessibilityHint="Views, streak breaks, DMs, and gym arrivals"
           className="flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4"
           onPress={handleNotifications}
         >
@@ -112,7 +116,7 @@ export default function PermissionsScreen() {
               Views, streak breaks, DMs, and gym arrivals.
             </Text>
           </View>
-          <Text variant="micro" className={statusColor(notifStatus)}>
+          <Text variant="micro" accessibilityLiveRegion="polite" className={statusColor(notifStatus)}>
             {statusLabel(notifStatus)}
           </Text>
         </Pressable>

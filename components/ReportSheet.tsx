@@ -49,7 +49,12 @@ export function ReportSheet({
       <SheetTitle>{`Report ${label}`}</SheetTitle>
       <SheetSub>Tell us what's wrong. Reports are anonymous to the other person.</SheetSub>
       {REPORT_REASONS.map((r) => (
-        <Pressable key={r} onPress={() => setReason(r)} accessibilityLabel={r}>
+        <Pressable
+          key={r}
+          onPress={() => setReason(r)}
+          accessibilityLabel={r}
+          accessibilityState={{ selected: reason === r }}
+        >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 13 }}>
             <View
               style={{

@@ -10,6 +10,15 @@ const reactions = ["🔥", "💪", "😍", "👀", "💀"] as const;
 
 type Reaction = (typeof reactions)[number];
 
+/** Spoken name for each emoji-only button (WCAG 1.1.1 / 4.1.2). */
+const REACTION_NAMES: Record<Reaction, string> = {
+  "🔥": "fire",
+  "💪": "flex",
+  "😍": "love",
+  "👀": "eyes",
+  "💀": "skull"
+};
+
 type ReactionBarProps = {
   onReact?: (reaction: Reaction) => Promise<void> | void;
 };
@@ -35,6 +44,8 @@ export function ReactionBar({ onReact }: ReactionBarProps) {
           key={reaction}
           className="h-12 w-12 items-center justify-center"
           haptic={false}
+          accessibilityLabel={`React ${REACTION_NAMES[reaction]}`}
+          accessibilityState={{ selected: active === reaction }}
           onPress={() => handlePress(reaction)}
         >
           <Animated.View style={active === reaction ? animatedStyle : undefined}>

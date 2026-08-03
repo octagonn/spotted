@@ -33,11 +33,18 @@ type MessageBubbleProps = {
   mine: boolean;
   /** Group sender first name — rendered above the bubble (`.who`, §5.2). */
   senderFirst?: string;
+  /** Sender's name for the screen-reader label (so "mine" vs "theirs" is audible). */
+  senderName?: string;
 };
 
-export function MessageBubble({ text, mine, senderFirst }: MessageBubbleProps) {
+export function MessageBubble({ text, mine, senderFirst, senderName }: MessageBubbleProps) {
+  // A screen reader can't tell my bubble from theirs by alignment/color alone —
+  // prefix the spoken text with who said it (WCAG 1.3.1).
+  const who = mine ? "You" : senderName ?? senderFirst;
   return (
     <View
+      accessible
+      accessibilityLabel={who ? `${who}: ${text}` : text}
       style={{
         maxWidth: "76%",
         alignSelf: mine ? "flex-end" : "flex-start",

@@ -216,7 +216,7 @@ export default function HomeScreen() {
             {/* App head — brand (§2.4) */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8, paddingHorizontal: 18, paddingBottom: 4 }}>
               <RNText
-                allowFontScaling={false}
+                maxFontSizeMultiplier={1.4}
                 style={{
                   fontFamily: "Boldonse_400Regular",
                   fontSize: 19,
@@ -230,7 +230,7 @@ export default function HomeScreen() {
               </RNText>
               <Pressable
                 onPress={() => router.push("/inbox")}
-                accessibilityLabel="Notifications"
+                accessibilityLabel={unreadCount > 0 ? "Notifications, unread" : "Notifications"}
                 hitSlop={11}
                 style={{ width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}
               >

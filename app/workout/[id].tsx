@@ -18,9 +18,17 @@ const NUM = "GeistMono_500Medium";
 const CARDIO = "#FF8A4C";
 const CARDIO_TINT = "rgba(255,138,76,0.14)";
 
-function Micro({ children, style }: { children: React.ReactNode; style?: object }) {
+function Micro({
+  children,
+  style,
+  accessibilityRole
+}: {
+  children: React.ReactNode;
+  style?: object;
+  accessibilityRole?: "header";
+}) {
   return (
-    <Text style={[{ fontFamily: "Geist_600SemiBold", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: tokens.text.tertiary }, style]}>
+    <Text accessibilityRole={accessibilityRole} style={[{ fontFamily: "Geist_600SemiBold", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: tokens.text.tertiary }, style]}>
       {children}
     </Text>
   );
@@ -130,7 +138,7 @@ export default function WorkoutDetailScreen() {
             />
           ) : (
             <>
-              <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: DISP, fontSize: 26, letterSpacing: -0.6, color: tokens.text.primary }}>
+              <Text accessibilityRole="header" numberOfLines={1} style={{ flexShrink: 1, fontFamily: DISP, fontSize: 26, letterSpacing: -0.6, color: tokens.text.primary }}>
                 {w.name}
               </Text>
               {w.userId === myId ? (
@@ -189,7 +197,7 @@ export default function WorkoutDetailScreen() {
         {/* trophies earned */}
         {w.prs.length > 0 ? (
           <View style={{ marginTop: 22 }}>
-            <Micro style={{ letterSpacing: 3, marginBottom: 12, marginHorizontal: 2 }}>Trophies earned</Micro>
+            <Micro accessibilityRole="header" style={{ letterSpacing: 3, marginBottom: 12, marginHorizontal: 2 }}>Trophies earned</Micro>
             <View style={{ gap: 12 }}>
               {w.prs.map((pr) => (
                 <View
@@ -223,7 +231,7 @@ export default function WorkoutDetailScreen() {
 
         {/* exercises + sets */}
         <View style={{ marginTop: 22 }}>
-          <Micro style={{ letterSpacing: 3, marginBottom: 12, marginHorizontal: 2 }}>Exercises</Micro>
+          <Micro accessibilityRole="header" style={{ letterSpacing: 3, marginBottom: 12, marginHorizontal: 2 }}>Exercises</Micro>
           <View style={{ gap: 14 }}>
             {w.exercises.map((ex) => {
               const isCardio = ex.kind === "cardio";

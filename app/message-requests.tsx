@@ -57,6 +57,7 @@ export default function MessageRequestsScreen() {
               <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                 <Pressable
                   style={{ flex: 1 }}
+                  accessibilityLabel={`Accept message request from ${request.requester?.display_name ?? "Someone"}`}
                   onPress={() =>
                     respond.mutate(
                       { conversationId: request.conversationId, accept: true },
@@ -70,6 +71,7 @@ export default function MessageRequestsScreen() {
                 </Pressable>
                 <Pressable
                   style={{ flex: 1 }}
+                  accessibilityLabel={`Decline message request from ${request.requester?.display_name ?? "Someone"}`}
                   onPress={() =>
                     respond.mutate(
                       { conversationId: request.conversationId, accept: false },

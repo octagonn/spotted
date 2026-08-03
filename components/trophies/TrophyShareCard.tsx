@@ -34,7 +34,7 @@ export function TrophyShareCard({ data }: { data: TrophyShareData }) {
       }}
     >
       <Text
-        allowFontScaling={false}
+        maxFontSizeMultiplier={1.4}
         style={{ fontFamily: "Boldonse_400Regular", fontSize: 15, letterSpacing: 1, color: colors.white, includeFontPadding: false }}
       >
         SPOTTED

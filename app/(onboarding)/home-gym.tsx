@@ -224,6 +224,8 @@ function GymCard({
   const distance = formatDistance(gym.distance_meters);
   return (
     <Pressable
+      accessibilityLabel={gym.name}
+      accessibilityState={{ selected }}
       className={`flex-row items-center gap-3 rounded-card border p-4 ${
         selected ? "border-white bg-white" : "border-hairline-strong bg-glass-strong"
       }`}

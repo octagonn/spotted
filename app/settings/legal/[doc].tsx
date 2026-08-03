@@ -21,14 +21,14 @@ function MarkdownLite({ source }: { source: string }) {
         if (!trimmed) return null;
         if (trimmed.startsWith("## ")) {
           return (
-            <Text key={i} style={{ marginTop: 18, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white }}>
+            <Text key={i} accessibilityRole="header" style={{ marginTop: 18, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white }}>
               {trimmed.slice(3)}
             </Text>
           );
         }
         if (trimmed.startsWith("# ")) {
           return (
-            <Text key={i} style={{ marginTop: 22, fontFamily: "Geist_700Bold", fontSize: 18, color: colors.white }}>
+            <Text key={i} accessibilityRole="header" style={{ marginTop: 22, fontFamily: "Geist_700Bold", fontSize: 18, color: colors.white }}>
               {trimmed.slice(2)}
             </Text>
           );

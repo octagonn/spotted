@@ -39,7 +39,7 @@ export function MessageActionMenu({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent accessibilityViewIsModal>
       <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }}>
         <Animated.View entering={ZoomIn.springify().damping(16).mass(0.6)} style={{ alignSelf: "stretch", alignItems: "center" }}>
           {/* Emoji quick bar */}

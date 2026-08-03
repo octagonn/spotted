@@ -19,7 +19,7 @@ type LegalModalProps = {
 
 function Heading({ children }: { children: ReactNode }) {
   return (
-    <Text variant="title" className="mt-8 text-white">
+    <Text variant="title" accessibilityRole="header" className="mt-8 text-white">
       {children}
     </Text>
   );
@@ -27,7 +27,7 @@ function Heading({ children }: { children: ReactNode }) {
 
 function SubHeading({ children }: { children: ReactNode }) {
   return (
-    <Text variant="micro" className="mt-6 text-mist">
+    <Text variant="micro" accessibilityRole="header" className="mt-6 text-mist">
       {children}
     </Text>
   );

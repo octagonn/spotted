@@ -163,9 +163,16 @@ export function WeeklySplit({
               </Text>
               {day.isFuture ? (
                 /* Not here yet (#9) — grayed blank, never REST. */
-                <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.graphite }} />
+                <View
+                  accessible
+                  accessibilityLabel="Upcoming"
+                  style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.graphite }}
+                />
               ) : rest ? (
-                <Text style={{ flex: 1, fontFamily: "Geist_500Medium", fontSize: 13, letterSpacing: 2, color: tokens.text.tertiary }}>
+                <Text
+                  accessibilityLabel="Rest day"
+                  style={{ flex: 1, fontFamily: "Geist_500Medium", fontSize: 13, letterSpacing: 2, color: tokens.text.tertiary }}
+                >
                   REST
                 </Text>
               ) : (
@@ -217,7 +224,9 @@ export function WeeklySplit({
         </Pressable>
         {ownProfile && onTogglePublic ? (
           <Pressable
+            accessibilityRole="switch"
             accessibilityLabel={splitPublic ? "Split is public — make private" : "Split is private — make public"}
+            accessibilityState={{ checked: Boolean(splitPublic) }}
             onPress={() => onTogglePublic(!splitPublic)}
             hitSlop={8}
             style={{ marginLeft: 12 }}

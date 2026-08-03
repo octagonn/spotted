@@ -274,6 +274,13 @@ function DayCell({ cell, onPress }: { cell: Cell; onPress: (dateKey: string) => 
   const { gym, future, preCreation, isCreation } = cell;
   const inactive = future || preCreation;
 
+  // Human date + status so the day is announced as more than a bare number, and
+  // the gym/rest/upcoming state isn't conveyed by color alone (WCAG 1.4.1).
+  const [, mm, dd] = cell.key.split("-").map(Number);
+  const dateLabel = `${MONTH_NAMES[mm - 1]} ${dd}`;
+  const statusLabel = gym ? "gym day" : future ? "upcoming" : "rest day";
+  const a11yLabel = `${dateLabel}, ${statusLabel}`;
+
   // Gym day: post preview with the date overlaid + a satisfying gold ring.
   if (gym) {
     const content = (
@@ -309,7 +316,7 @@ function DayCell({ cell, onPress }: { cell: Cell; onPress: (dateKey: string) => 
       </View>
     );
     return (
-      <Pressable onPress={() => onPress(cell.key)} accessibilityLabel={`Gym day ${cell.key}`} haptic={false} style={{ flex: 1 }}>
+      <Pressable onPress={() => onPress(cell.key)} accessibilityLabel={a11yLabel} haptic={false} style={{ flex: 1 }}>
         {content}
       </Pressable>
     );
@@ -328,7 +335,7 @@ function DayCell({ cell, onPress }: { cell: Cell; onPress: (dateKey: string) => 
   const numberColor = isCreation ? colors.gold : inactive ? colors.iron : colors.ash;
 
   return (
-    <View style={box}>
+    <View style={box} accessible accessibilityLabel={a11yLabel}>
       <Text
         style={{
           fontFamily: isCreation ? "Geist_700Bold" : "Geist_500Medium",

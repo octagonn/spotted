@@ -41,7 +41,11 @@ type Stage = "email" | "password" | "verify" | "create-password";
 
 function Requirement({ met, label }: { met: boolean; label: string }) {
   return (
-    <View className="flex-row items-center gap-1.5">
+    <View
+      accessible
+      accessibilityLabel={`${label}, ${met ? "met" : "not met"}`}
+      className="flex-row items-center gap-1.5"
+    >
       {met ? <Check color={colors.white} size={14} /> : <Circle color={colors.fog} size={12} />}
       <Text variant="micro" className={met ? "text-white" : "text-fog"}>
         {label}
@@ -291,6 +295,7 @@ export default function EmailAuthScreen() {
                   <TextInput
                     value={email}
                     onChangeText={handleEmailChange}
+                    accessibilityLabel="Email"
                     placeholder="you@gym.com"
                     placeholderTextColor={colors.fog}
                     autoCapitalize="none"
@@ -320,6 +325,7 @@ export default function EmailAuthScreen() {
                   setCode(value.replace(/\D/g, "").slice(0, 8));
                   setError(null);
                 }}
+                accessibilityLabel="Verification code"
                 placeholder="••••••••"
                 placeholderTextColor={colors.fog}
                 inputMode="numeric"
@@ -349,6 +355,7 @@ export default function EmailAuthScreen() {
                     setPassword(value);
                     setError(null);
                   }}
+                  accessibilityLabel="Password"
                   placeholder="Password"
                   placeholderTextColor={colors.fog}
                   autoCapitalize="none"
@@ -394,6 +401,7 @@ export default function EmailAuthScreen() {
                       setPassword(value);
                       setError(null);
                     }}
+                    accessibilityLabel="Create password"
                     placeholder="Create password"
                     placeholderTextColor={colors.fog}
                     autoCapitalize="none"
@@ -431,6 +439,7 @@ export default function EmailAuthScreen() {
                       setConfirmPassword(value);
                       setError(null);
                     }}
+                    accessibilityLabel="Confirm password"
                     placeholder="Confirm password"
                     placeholderTextColor={colors.fog}
                     autoCapitalize="none"
@@ -473,7 +482,11 @@ export default function EmailAuthScreen() {
           ) : null}
 
           {error ? (
-            <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)}>
+            <Animated.View
+              accessibilityLiveRegion="assertive"
+              entering={FadeIn.duration(180)}
+              exiting={FadeOut.duration(120)}
+            >
               <Text variant="caption" className="text-mist">
                 {error}
               </Text>

@@ -169,6 +169,7 @@ export default function EditProfileScreen() {
           <TextInput
             value={displayName}
             onChangeText={setDisplayName}
+            accessibilityLabel="Display name"
             placeholder="Display name"
             placeholderTextColor={colors.fog}
             maxLength={40}
@@ -181,6 +182,7 @@ export default function EditProfileScreen() {
           <TextInput
             value={bio}
             onChangeText={setBio}
+            accessibilityLabel="Bio"
             placeholder="Add a bio"
             placeholderTextColor={colors.fog}
             multiline
@@ -215,6 +217,7 @@ export default function EditProfileScreen() {
               <TextInput
                 value={social[platform.key] ?? ""}
                 onChangeText={(value) => setSocialField(platform.key, value)}
+                accessibilityLabel={platform.label}
                 placeholder={platform.placeholder}
                 placeholderTextColor={colors.fog}
                 autoCapitalize="none"

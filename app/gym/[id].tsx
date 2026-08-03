@@ -16,7 +16,7 @@ export default function GymDetailScreen() {
 
   return (
     <Screen>
-      <Text variant="display-sm">{gym?.name.toUpperCase() ?? "GYM"}</Text>
+      <Text variant="display-sm" accessibilityRole="header">{gym?.name.toUpperCase() ?? "GYM"}</Text>
       <Text variant="caption" className="mt-2 italic">
         Friends here now. Recent posts you can already see.
       </Text>
@@ -32,7 +32,10 @@ export default function GymDetailScreen() {
           </View>
         ))}
       </View>
-      <Button className="mt-8">Your gym</Button>
+      {/* Decorative, non-interactive label (no onPress) — hidden from assistive tech. */}
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Button className="mt-8">Your gym</Button>
+      </View>
     </Screen>
   );
 }

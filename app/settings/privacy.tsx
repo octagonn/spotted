@@ -241,11 +241,11 @@ export default function PrivacySettingsScreen() {
           <Toggle value={settings.quiet_checkin_default} onToggle={() => toggle("quiet_checkin_default")} />
         </View>
 
-        <Pressable onPress={() => router.push("/settings/blocked" as Href)} className="flex-row items-center border border-hairline-strong bg-ink p-4">
+        <Pressable accessibilityLabel="Blocked accounts" onPress={() => router.push("/settings/blocked" as Href)} className="flex-row items-center border border-hairline-strong bg-ink p-4">
           <Text variant="body-strong" className="flex-1">Blocked accounts</Text>
           <Text variant="caption">Manage</Text>
         </Pressable>
-        <Pressable onPress={() => router.push("/settings/restricted" as Href)} className="flex-row items-center border border-hairline-strong bg-ink p-4">
+        <Pressable accessibilityLabel="Restricted accounts" onPress={() => router.push("/settings/restricted" as Href)} className="flex-row items-center border border-hairline-strong bg-ink p-4">
           <Text variant="body-strong" className="flex-1">Restricted accounts</Text>
           <Text variant="caption">Manage</Text>
         </Pressable>

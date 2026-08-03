@@ -188,7 +188,7 @@ export default function InboxScreen() {
         {/* Friend-requests card — tap to expand and act on each. */}
         {requestRows.length > 0 ? (
           <View style={{ paddingTop: 4 }}>
-            <Pressable onPress={() => setRequestsOpen((open) => !open)}>
+            <Pressable onPress={() => setRequestsOpen((open) => !open)} accessibilityState={{ expanded: requestsOpen }}>
               <View
                 style={{
                   flexDirection: "row",
@@ -278,6 +278,7 @@ export default function InboxScreen() {
               {group.rows.map((n) => (
                 <Pressable
                   key={n.id}
+                  accessibilityLabel={`${n.actorName}${n.type === "streak_break_friend" ? "" : " "}${notificationText(n)}, ${timeAgo(n.createdAt)}${n.read ? "" : ", unread"}`}
                   onPress={() => {
                     router.push(
                       routeForNotification({

@@ -194,7 +194,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
     <View style={{ paddingTop: 16, paddingBottom: 16, backgroundColor: tokens.bg.base }}>
       {/* Header row */}
       <View style={[{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingBottom: 10 }, textBlur]}>
-        <Pressable onPress={openProfile}>
+        <Pressable onPress={openProfile} accessibilityLabel={`Open @${post.user.handle}'s profile`}>
           <Avatar name={post.user.name} uri={post.user.avatarUrl} size={40} />
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -286,6 +286,35 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             )}
           </Pressable>
         ) : null}
+        {/* Video posts autoplay muted with a tap-to-mute gesture; this is the
+            accessible, discoverable speaker control (bottom-left so it clears
+            the duration clock at bottom-right). */}
+        {post.video && !locked ? (
+          <Pressable
+            onPress={toggleAudioMuted}
+            accessibilityLabel={audioMuted ? "Unmute" : "Mute"}
+            accessibilityState={{ selected: audioMuted }}
+            hitSlop={8}
+            haptic={false}
+            style={{
+              position: "absolute",
+              bottom: 12,
+              left: 12,
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              backgroundColor: "rgba(0,0,0,0.65)",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            {audioMuted ? (
+              <VolumeX size={15} color={colors.white} strokeWidth={2.2} />
+            ) : (
+              <Volume2 size={15} color={colors.white} strokeWidth={2.2} />
+            )}
+          </Pressable>
+        ) : null}
       </View>
 
       {/* "Answered the Call" — posted within 3h of a taunt (spec B). */}
@@ -350,7 +379,8 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
           <Pressable
             onPress={() => !locked && toggleLike.mutate({ postId: post.id, liked: !liked })}
             accessibilityLabel={liked ? "Unlike" : "Like"}
-            hitSlop={6}
+            accessibilityState={{ selected: liked }}
+            hitSlop={8}
           >
             <Heart
               size={29}
@@ -365,6 +395,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
           onPress={() => !locked && setCommentsOpen((open) => !open)}
           style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
           accessibilityLabel="Toggle comments"
+          accessibilityState={{ expanded: commentsOpen }}
           hitSlop={6}
         >
           <MessageCircle size={26} color={colors.silver} strokeWidth={2} />
@@ -386,6 +417,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         <Pressable
           onPress={handleReact}
           accessibilityLabel="Add live reaction"
+          accessibilityState={{ selected: reacted }}
           style={{
             width: 36,
             height: 36,

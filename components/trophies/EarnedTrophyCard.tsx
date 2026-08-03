@@ -4,6 +4,7 @@ import { TrophyIcon } from "@/components/trophies/TrophyIcon";
 import { TrophyRarity } from "@/components/trophies/TrophyRarity";
 import { formatEarnedDate } from "@/components/trophies/trophyFormat";
 import { Pressable } from "@/components/ui/Pressable";
+import { formatRarity } from "@/lib/trophyRaritySeeds";
 import { type EarnedEntry } from "@/lib/trophySelectors";
 import { colors } from "@/theme/colors";
 
@@ -15,7 +16,7 @@ import { colors } from "@/theme/colors";
 export function EarnedTrophyCard({ entry, width, onPress }: { entry: EarnedEntry; width: number; onPress: () => void }) {
   const date = formatEarnedDate(entry.earnedAt);
   return (
-    <Pressable onPress={onPress} accessibilityLabel={entry.displayName} haptic={false}>
+    <Pressable onPress={onPress} accessibilityLabel={`${entry.displayName}, ${formatRarity(entry.rarityPct)}`} haptic={false}>
       <View
         style={{
           width,

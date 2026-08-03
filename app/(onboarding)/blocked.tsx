@@ -26,7 +26,7 @@ export default function BlockedScreen() {
   return (
     <Screen>
       <View className="flex-1 items-center justify-center px-6">
-        <Text variant="display-sm" className="text-center">
+        <Text variant="display-sm" accessibilityRole="header" className="text-center">
           ACCOUNT NOT AVAILABLE
         </Text>
         <Text variant="body" className="mt-4 text-center text-mist">

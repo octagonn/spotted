@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Eye, Flag, Heart, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import {
-  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -31,6 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { Skeleton, SkeletonRows } from "@/components/ui/Skeleton";
 import { useMarkStoryViewed, useStories, type StoryGroup } from "@/hooks/queries/useStories";
 import { REPORT_REASONS, useDeleteStory, useReportContent } from "@/hooks/queries/useContentModeration";
 import { useStoryViewers } from "@/hooks/queries/useStoryViewers";
@@ -550,8 +550,8 @@ export default function StoryViewer() {
 
   if (!queue || !group || !story) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.black, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={colors.white} />
+      <View style={{ flex: 1, backgroundColor: colors.black }}>
+        <Skeleton width="100%" radius={0} style={{ flex: 1, height: undefined }} />
       </View>
     );
   }
@@ -583,10 +583,10 @@ export default function StoryViewer() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? undefined : "height"}
       >
-        {/* Spinner behind the media so opening a story never flashes blank. */}
+        {/* Skeleton behind the media so opening a story never flashes blank. */}
         {story.mediaUrl && !mediaLoaded ? (
-          <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator color="rgba(255,255,255,0.7)" />
+          <View pointerEvents="none" style={{ position: "absolute", inset: 0 }}>
+            <Skeleton width="100%" radius={0} style={{ position: "absolute", inset: 0, height: undefined }} />
           </View>
         ) : null}
         {story.mediaUrl ? (
@@ -956,9 +956,7 @@ export default function StoryViewer() {
               </View>
               <ScrollView style={{ maxHeight: 360 }}>
                 {viewers.isLoading ? (
-                  <View style={{ paddingVertical: 24, alignItems: "center" }}>
-                    <ActivityIndicator color={colors.mist} />
-                  </View>
+                  <SkeletonRows count={4} avatar={34} />
                 ) : (viewers.data ?? []).length === 0 ? (
                   <Text style={{ paddingHorizontal: 20, paddingVertical: 16, fontSize: 12.5, color: colors.fog }}>
                     No views yet.

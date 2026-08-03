@@ -30,6 +30,7 @@ import { SearchBar } from "@/components/ui/SearchBar";
 import { SheetTextInput } from "@/components/ui/SheetTextInput";
 import { Segmented } from "@/components/ui/Segmented";
 import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
+import { SkeletonRows, SkeletonWorkoutRow } from "@/components/ui/Skeleton";
 import {
   useDiscoverCommunities,
   useJoinByCode,
@@ -450,8 +451,10 @@ export default function MapTabScreen() {
           </View>
           {sessionActive ? <InProgressCard onResume={() => router.push("/workout" as Href)} /> : null}
           {workouts.isLoading ? (
-            <View style={{ paddingVertical: 20, alignItems: "center" }}>
-              <ActivityIndicator color={colors.mist} />
+            <View style={{ paddingVertical: 10 }}>
+              <SkeletonWorkoutRow />
+              <SkeletonWorkoutRow />
+              <SkeletonWorkoutRow />
             </View>
           ) : (workouts.data ?? []).length === 0 && !sessionActive ? (
             <View style={{ alignItems: "center", paddingHorizontal: 40, paddingTop: 40 }}>
@@ -659,9 +662,7 @@ export default function MapTabScreen() {
             </Pressable>
           </View>
           {communities.isLoading ? (
-            <View style={{ paddingVertical: 16, alignItems: "center" }}>
-              <ActivityIndicator color={colors.mist} />
-            </View>
+            <SkeletonRows count={3} avatar={34} />
           ) : myCommunities.filter((c) => c.id !== hub.data?.communityId).length === 0 ? (
             <Text style={{ paddingHorizontal: 20, paddingBottom: 4, fontSize: 12, color: colors.fog }}>
               No crews yet — tap New to start one with your gym friends.
@@ -884,9 +885,7 @@ export default function MapTabScreen() {
             <SearchBar value={discoverQuery} onChangeText={setDiscoverQuery} placeholder="Search public communities" />
           </View>
           {discover.isLoading ? (
-            <View style={{ paddingVertical: 18, alignItems: "center" }}>
-              <ActivityIndicator color={colors.mist} />
-            </View>
+            <SkeletonRows count={3} avatar={34} />
           ) : (discover.data ?? []).length === 0 ? (
             <Text style={{ paddingHorizontal: 18, paddingBottom: 12, fontSize: 12.5, color: colors.fog }}>
               {discoverQuery.trim() ? "No public communities match that name." : "Nothing else to discover yet."}

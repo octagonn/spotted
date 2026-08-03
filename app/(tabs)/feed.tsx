@@ -3,7 +3,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
 import { Bell } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, RefreshControl, Text as RNText, View } from "react-native";
+import { RefreshControl, Text as RNText, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LockOverlay } from "@/components/post/LockOverlay";
@@ -265,13 +265,7 @@ export default function HomeScreen() {
           if (feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
         }}
         onEndReachedThreshold={0.6}
-        ListFooterComponent={
-          feed.isFetchingNextPage ? (
-            <View style={{ paddingVertical: 20, alignItems: "center" }}>
-              <ActivityIndicator color={colors.fog} />
-            </View>
-          ) : null
-        }
+        ListFooterComponent={feed.isFetchingNextPage ? <PostCardSkeleton /> : null}
         renderItem={({ item }: { item: FeedMockPost }) => (
           <PostCard post={item} locked={locked} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
         )}

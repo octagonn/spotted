@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import { Text } from "@/components/ui/Text";
 import { useGymPresence } from "@/hooks/queries/useGymPresence";
 
@@ -20,6 +21,7 @@ export default function GymDetailScreen() {
         Friends here now. Recent posts you can already see.
       </Text>
       <View className="mt-8 gap-3">
+        {presence.isLoading ? <SkeletonRows count={3} /> : null}
         {friends.map((friend) => (
           <View key={friend.id} className="flex-row items-center gap-3 border border-hairline-strong bg-ink p-3">
             <Avatar uri={friend.profile.avatar_url} />

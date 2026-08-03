@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SkeletonToggleRows } from "@/components/ui/Skeleton";
 import {
   useNotificationPrefs,
   useUpdateNotificationPrefs,
@@ -350,9 +351,7 @@ export default function NotificationSettingsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title="Notifications" />
       {!p ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={colors.white} />
-        </View>
+        <SkeletonToggleRows count={8} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 32 }}>
           <View

@@ -1,11 +1,12 @@
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import { useCommunity, useCommunityMembers, type CommunityMember } from "@/hooks/queries/useCommunities";
 import { relDay } from "@/lib/relDay";
 import { useAuthStore } from "@/stores/auth";
@@ -33,9 +34,7 @@ export default function CommunityMembersScreen() {
         sub={community.data ? `${community.data.name} · ${community.data.memberCount}` : undefined}
       />
       {members.isLoading ? (
-        <View style={{ paddingTop: 40, alignItems: "center" }}>
-          <ActivityIndicator color={colors.mist} />
-        </View>
+        <SkeletonRows count={5} avatar={44} />
       ) : (
         <FlashList
           data={members.data ?? []}

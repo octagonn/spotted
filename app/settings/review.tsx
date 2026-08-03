@@ -1,10 +1,11 @@
 import { Image } from "expo-image";
 import { ShieldCheck } from "lucide-react-native";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SkeletonMediaCard } from "@/components/ui/Skeleton";
 import { useIsAdmin, useReviewQueue, useReviewResolve } from "@/hooks/queries/useModeration";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -38,8 +39,9 @@ export default function ReviewQueueScreen() {
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title="Review queue" sub={queue.data ? `${queue.data.length} flagged` : undefined} />
       {queue.isLoading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={colors.white} />
+        <View style={{ paddingTop: 16 }}>
+          <SkeletonMediaCard />
+          <SkeletonMediaCard />
         </View>
       ) : (queue.data ?? []).length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40 }}>

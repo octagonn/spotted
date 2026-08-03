@@ -2,6 +2,7 @@ import { useLocalSearchParams } from "expo-router";
 
 import { Screen } from "@/components/Screen";
 import { Sheet } from "@/components/ui/Sheet";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import { Text } from "@/components/ui/Text";
 import { ViewerList } from "@/components/ViewerList";
 import { usePostViewers } from "@/hooks/queries/usePostViewers";
@@ -20,7 +21,7 @@ export default function PostDetailScreen() {
         {viewers.data ? (
           <ViewerList data={viewers.data} />
         ) : (
-          <Text variant="caption">Loading viewers</Text>
+          <SkeletonRows count={4} avatar={34} />
         )}
       </Sheet>
     </Screen>

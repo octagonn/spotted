@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { SkeletonCommentRow } from "@/components/ui/Skeleton";
 import { colors } from "@/theme/colors";
 
 export type CommentRow = {
@@ -187,7 +188,12 @@ export function CommentsSheet({
               showsVerticalScrollIndicator={false}
             >
               {loading && comments.length === 0 ? (
-                <Text style={{ fontSize: 13.5, color: colors.fog }}>Loading comments…</Text>
+                // Counteract the container's horizontal padding — the skeleton rows pad themselves.
+                <View style={{ marginHorizontal: -18 }}>
+                  <SkeletonCommentRow />
+                  <SkeletonCommentRow />
+                  <SkeletonCommentRow />
+                </View>
               ) : comments.length === 0 ? (
                 <Text style={{ fontSize: 13.5, color: colors.fog }}>No comments yet. Say something.</Text>
               ) : (

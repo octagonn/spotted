@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, Dumbbell, Flame, Pencil, SquarePen, Trash2, Trophy } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { SkeletonHeaderDetail, SkeletonWorkoutRow } from "@/components/ui/Skeleton";
 import { useDeleteWorkout, useRenameWorkout, useWorkout, type CardioSet, type LiftSet } from "@/hooks/queries/useWorkouts";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
@@ -71,8 +72,12 @@ export default function WorkoutDetailScreen() {
 
   if (workout.isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: tokens.bg.base, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={colors.white} />
+      <View style={{ flex: 1, backgroundColor: tokens.bg.base, paddingTop: insets.top + 12 }}>
+        <SkeletonHeaderDetail />
+        <SkeletonWorkoutRow />
+        <SkeletonWorkoutRow />
+        <SkeletonWorkoutRow />
+        <SkeletonWorkoutRow />
       </View>
     );
   }

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { FlatList, Text, View, type ListRenderItemInfo } from "react-native";
 
 import { Pressable } from "@/components/ui/Pressable";
+import { SkeletonWorkoutRow } from "@/components/ui/Skeleton";
 import type { WorkoutRow } from "@/hooks/queries/useWorkouts";
 import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -108,6 +109,17 @@ export function WeeklySplit({
     }
     return out;
   }, [workouts]);
+
+  // Loading: one placeholder row per day of the week.
+  if (isLoading) {
+    return (
+      <View>
+        {Array.from({ length: 7 }, (_, i) => (
+          <SkeletonWorkoutRow key={i} />
+        ))}
+      </View>
+    );
+  }
 
   // Empty state (#13): brand-new users see intent, not a wall of REST.
   if (!isLoading && workouts.length === 0) {

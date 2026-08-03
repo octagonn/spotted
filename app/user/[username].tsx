@@ -11,6 +11,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { useMutualFriends } from "@/hooks/queries/useFollowing";
 import { useRespondToRequest, useSendFriendRequest } from "@/hooks/queries/useFriends";
 import { useFriendshipStatus, useProfileByUsername, useUserStreak } from "@/hooks/queries/useProfile";
@@ -406,10 +407,14 @@ export default function UserProfileScreen() {
                   </Pressable>
                 ))}
               </View>
+            ) : tagged.isLoading ? (
+              <View style={{ paddingTop: 2 }}>
+                <SkeletonGrid count={6} />
+              </View>
             ) : (
               <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
                 <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center" }}>
-                  {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet."}
+                  No tagged posts yet.
                 </Text>
               </View>
             )}

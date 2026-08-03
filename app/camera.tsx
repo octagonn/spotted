@@ -69,6 +69,7 @@ import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { Hairline, SectionLabel } from "@/components/ui/SectionLabel";
 import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
+import { SkeletonRow, SkeletonRows, SkeletonTrackRow } from "@/components/ui/Skeleton";
 import {
   formatDistance,
   useGymSearch,
@@ -322,8 +323,11 @@ function GymSheet({
           screen so the rows below never clip past the sheet's 78% max. */}
       <View style={{ height: listHeight }}>
         {gyms.isLoading || !locationSettled ? (
-          <View style={{ paddingVertical: 24, alignItems: "center" }}>
-            <ActivityIndicator color={colors.mist} />
+          <View style={{ paddingTop: 6 }}>
+            <SkeletonRow avatar={0} />
+            <SkeletonRow avatar={0} />
+            <SkeletonRow avatar={0} />
+            <SkeletonRow avatar={0} />
           </View>
         ) : rows.length === 0 ? (
           <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
@@ -390,9 +394,7 @@ function FriendsSheet({ initial, onDone }: { initial: string[]; onDone: (ids: st
           searching, capped to the screen so the Done button never clips. */}
       <View style={{ height: listHeight }}>
         {friends.isLoading ? (
-          <View style={{ paddingVertical: 24, alignItems: "center" }}>
-            <ActivityIndicator color={colors.mist} />
-          </View>
+          <SkeletonRows count={4} style={{ paddingTop: 6 }} />
         ) : rows.length === 0 ? (
           <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
             {q ? "No friends match that name." : "No friends yet — add your crew from the Friends tab."}
@@ -483,8 +485,11 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
         {query.trim().length < 2 ? (
           // Suggested / trending gym songs for the empty picker.
           suggested.isLoading ? (
-            <View style={{ paddingVertical: 24, alignItems: "center" }}>
-              <ActivityIndicator color={colors.mist} />
+            <View style={{ paddingTop: 6 }}>
+              <SkeletonTrackRow />
+              <SkeletonTrackRow />
+              <SkeletonTrackRow />
+              <SkeletonTrackRow />
             </View>
           ) : (
             <SheetScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -504,8 +509,11 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
             </SheetScrollView>
           )
         ) : results.isLoading ? (
-          <View style={{ paddingVertical: 24, alignItems: "center" }}>
-            <ActivityIndicator color={colors.mist} />
+          <View style={{ paddingTop: 6 }}>
+            <SkeletonTrackRow />
+            <SkeletonTrackRow />
+            <SkeletonTrackRow />
+            <SkeletonTrackRow />
           </View>
         ) : results.isError ? (
           <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>

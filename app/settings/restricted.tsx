@@ -1,12 +1,13 @@
 import { UserMinus } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import { useRestrictedAccounts, useUnrestrictUser } from "@/hooks/queries/useSafety";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -39,9 +40,7 @@ export default function RestrictedAccountsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title="Restricted accounts" />
       {restricted.isLoading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={colors.white} />
-        </View>
+        <SkeletonRows count={4} />
       ) : (restricted.data ?? []).length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 44, paddingBottom: 80 }}>
           <UserMinus size={26} color={colors.slate} strokeWidth={2} />

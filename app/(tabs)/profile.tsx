@@ -12,6 +12,7 @@ import { WeeklySplit } from "@/components/profile/WeeklySplit";
 import { StreakPopup } from "@/components/profile/StreakPopup";
 import { VisibilityPicker, type Visibility } from "@/components/profile/VisibilityPicker";
 import { Avatar } from "@/components/ui/Avatar";
+import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
 import { useFriends } from "@/hooks/queries/useFriends";
@@ -428,11 +429,15 @@ export default function ProfileScreen() {
                 </Pressable>
               ))}
             </View>
+          ) : posts.isLoading ? (
+            <View style={{ paddingTop: 2 }}>
+              <SkeletonGrid count={9} />
+            </View>
           ) : (
             <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-              {posts.isLoading ? null : <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+              <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />
               <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-                {posts.isLoading ? "Loading your posts…" : "No posts yet"}
+                No posts yet
               </Text>
             </View>
           )
@@ -452,11 +457,15 @@ export default function ProfileScreen() {
               </Pressable>
             ))}
           </View>
+        ) : tagged.isLoading ? (
+          <View style={{ paddingTop: 2 }}>
+            <SkeletonGrid count={6} />
+          </View>
         ) : (
           <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-            {tagged.isLoading ? null : <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />}
+            <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />
             <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-              {tagged.isLoading ? "Loading tagged posts…" : "No tagged posts yet"}
+              No tagged posts yet
             </Text>
           </View>
         )}

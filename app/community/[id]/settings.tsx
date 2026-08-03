@@ -12,6 +12,7 @@ import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { ReportSheet } from "@/components/ReportSheet";
 import { useSheet } from "@/components/ui/Sheet";
+import { Skeleton, SkeletonHeaderDetail, SkeletonRows } from "@/components/ui/Skeleton";
 import {
   useCommunity,
   useCommunityInviteCode,
@@ -152,8 +153,13 @@ export default function CommunitySettingsScreen() {
 
   if (community.isLoading || !hydrated) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.black, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={colors.white} />
+      <View style={{ flex: 1, backgroundColor: colors.black }}>
+        <SkeletonHeaderDetail />
+        <View style={{ paddingHorizontal: 18, gap: 14 }}>
+          <Skeleton height={48} radius={12} />
+          <Skeleton height={48} radius={12} />
+          <Skeleton height={48} radius={12} />
+        </View>
       </View>
     );
   }
@@ -244,9 +250,13 @@ export default function CommunitySettingsScreen() {
           <>
             <SectionTitle>Join requests</SectionTitle>
             {(requests.data ?? []).length === 0 ? (
-              <Text style={{ paddingBottom: 8, fontSize: 12.5, color: colors.fog }}>
-                {requests.isLoading ? "Loading…" : "No pending requests."}
-              </Text>
+              requests.isLoading ? (
+                <SkeletonRows count={3} />
+              ) : (
+                <Text style={{ paddingBottom: 8, fontSize: 12.5, color: colors.fog }}>
+                  No pending requests.
+                </Text>
+              )
             ) : (
               (requests.data ?? []).map((request) => (
                 <View key={request.user_id} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9 }}>

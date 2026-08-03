@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Camera, Check, Globe, Lock, MapPin, Send, Settings, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
@@ -13,6 +13,7 @@ import { Button, RelButton } from "@/components/ui/Button";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
+import { SkeletonChatBubbles, SkeletonGrid, SkeletonHeaderDetail, SkeletonRows } from "@/components/ui/Skeleton";
 import {
   useCommunity,
   useCommunityJoinRequests,
@@ -55,9 +56,7 @@ function InviteFriendsSheet({ communityId, communityName }: { communityId: strin
       <SheetSub>{`They'll get a notification to join ${communityName}.`}</SheetSub>
       <View style={{ maxHeight: 320 }}>
         {friends.isLoading ? (
-          <View style={{ paddingVertical: 24, alignItems: "center" }}>
-            <ActivityIndicator color={colors.mist} />
-          </View>
+          <SkeletonRows count={3} />
         ) : (friends.data ?? []).length === 0 ? (
           <Text style={{ paddingVertical: 24, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
             No friends yet — add your crew from the Friends tab first.
@@ -146,8 +145,9 @@ export default function CommunityScreen() {
 
   if (community.isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.black, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={colors.white} />
+      <View style={{ flex: 1, backgroundColor: colors.black }}>
+        <SkeletonHeaderDetail />
+        <SkeletonGrid count={6} />
       </View>
     );
   }
@@ -336,9 +336,13 @@ export default function CommunityScreen() {
 
             {tab === "Posts" ? (
               (posts.data ?? []).length === 0 ? (
-                <Text style={{ paddingTop: 32, textAlign: "center", fontSize: 13, color: colors.fog, paddingHorizontal: 32 }}>
-                  {posts.isLoading ? "Loading posts…" : "No posts yet. Share a daily to this community from the camera."}
-                </Text>
+                posts.isLoading ? (
+                  <SkeletonGrid count={6} />
+                ) : (
+                  <Text style={{ paddingTop: 32, textAlign: "center", fontSize: 13, color: colors.fog, paddingHorizontal: 32 }}>
+                    No posts yet. Share a daily to this community from the camera.
+                  </Text>
+                )
               ) : (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingTop: 2 }}>
                   {(posts.data ?? []).map((post) => (
@@ -372,9 +376,13 @@ export default function CommunityScreen() {
                 // screen (outside this ScrollView), like a standard chat UI (15).
                 <View style={{ minHeight: 280, gap: 4, paddingHorizontal: 16, paddingTop: 8 }}>
                   {(messages.data ?? []).length === 0 ? (
-                    <Text style={{ paddingTop: 32, textAlign: "center", fontSize: 12, color: colors.fog }}>
-                      {messages.isLoading ? "Loading…" : "No messages yet. Say something."}
-                    </Text>
+                    messages.isLoading ? (
+                      <SkeletonChatBubbles />
+                    ) : (
+                      <Text style={{ paddingTop: 32, textAlign: "center", fontSize: 12, color: colors.fog }}>
+                        No messages yet. Say something.
+                      </Text>
+                    )
                   ) : (
                     <>
                       <TimeSeparator label="Chat" />

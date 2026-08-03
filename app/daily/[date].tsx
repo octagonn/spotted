@@ -8,6 +8,7 @@ import { PostCard } from "@/components/post/PostCard";
 import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { useSheet } from "@/components/ui/Sheet";
+import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useMyProfile, useProfileById } from "@/hooks/queries/useProfile";
 import { useSignedUserPosts, type SignedPost } from "@/hooks/queries/useSignedUserPosts";
 import { type FeedMockPost } from "@/lib/redesignData";
@@ -117,9 +118,16 @@ export default function DayScreen() {
           <PostCard post={item} locked={false} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
         )}
         ListEmptyComponent={
-          <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
-            {posts.isLoading ? "Loading…" : "No posts saved for this day."}
-          </Text>
+          posts.isLoading ? (
+            <View>
+              <PostCardSkeleton />
+              <PostCardSkeleton />
+            </View>
+          ) : (
+            <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
+              No posts saved for this day.
+            </Text>
+          )
         }
       />
     </View>

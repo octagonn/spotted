@@ -34,6 +34,7 @@ import { isMockThreadId, MOCK_CONVERSATIONS } from "@/components/friends/mockCon
 import { useInboxThreadActions } from "@/components/friends/useInboxThreads";
 import { Avatar } from "@/components/ui/Avatar";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { SkeletonChatBubbles } from "@/components/ui/Skeleton";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { Pressable } from "@/components/ui/Pressable";
 import {
@@ -744,9 +745,7 @@ export default function ChatScreen() {
               </Pressable>
             </View>
           ) : messages.isLoading || conversation.isLoading ? (
-            <View style={{ flex: 1, minHeight: 260, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>LOADING\u2026</Text>
-            </View>
+            <SkeletonChatBubbles />
           ) : (
             // Empty thread after a friend-add: system-style prompt to start the DM.
             <View style={{ flex: 1, minHeight: 260, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>

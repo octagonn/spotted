@@ -7,6 +7,7 @@ import { Text, View } from "react-native";
 import { PostCard } from "@/components/post/PostCard";
 import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
 import { PanelHeader } from "@/components/ui/PanelHeader";
+import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useSheet } from "@/components/ui/Sheet";
 import { useMyProfile, useProfileById } from "@/hooks/queries/useProfile";
 import { useSignedUserPosts, type SignedPost } from "@/hooks/queries/useSignedUserPosts";
@@ -123,11 +124,18 @@ export default function ProfilePostsScreen() {
           <PostCard post={item} locked={false} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
         )}
         ListEmptyComponent={
-          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
-            <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
-              {posts.isLoading ? "Loading…" : "No posts yet."}
-            </Text>
-          </View>
+          posts.isLoading ? (
+            <View>
+              <PostCardSkeleton />
+              <PostCardSkeleton />
+            </View>
+          ) : (
+            <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
+              <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
+                No posts yet.
+              </Text>
+            </View>
+          )
         }
       />
     </View>

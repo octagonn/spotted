@@ -4,12 +4,13 @@ import * as Location from "expo-location";
 import { router } from "expo-router";
 import { MapPin } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Platform, View } from "react-native";
+import { Alert, Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
+import { SkeletonRow } from "@/components/ui/Skeleton";
 import { Text } from "@/components/ui/Text";
 import {
   formatDistance,
@@ -162,11 +163,11 @@ export default function HomeGymScreen() {
           ItemSeparatorComponent={() => <View className="h-3" />}
           ListEmptyComponent={
             gyms.isLoading || !locationSettled ? (
-              <View className="items-center pt-16">
-                <ActivityIndicator color={colors.white} />
-                <Text variant="caption" className="mt-4 text-mist">
-                  {coords ? "Finding gyms near you…" : "Loading gyms…"}
-                </Text>
+              <View className="pt-2">
+                <SkeletonRow avatar={0} />
+                <SkeletonRow avatar={0} />
+                <SkeletonRow avatar={0} />
+                <SkeletonRow avatar={0} />
               </View>
             ) : gyms.isError ? (
               <View className="items-center pt-16">
@@ -187,13 +188,7 @@ export default function HomeGymScreen() {
               </View>
             )
           }
-          ListFooterComponent={
-            gyms.isFetchingNextPage ? (
-              <View className="items-center py-4">
-                <ActivityIndicator color={colors.mist} size="small" />
-              </View>
-            ) : null
-          }
+          ListFooterComponent={gyms.isFetchingNextPage ? <SkeletonRow avatar={0} /> : null}
         />
       </View>
 

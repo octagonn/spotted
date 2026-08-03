@@ -19,6 +19,7 @@ import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { Segmented } from "@/components/ui/Segmented";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import { useStartedThreads } from "@/hooks/useStartedThreads";
 import {
   useFriendSuggestions,
@@ -323,6 +324,10 @@ export default function FriendsScreen() {
               )
             ) : (
               <>
+                {/* Inbox still loading with nothing cached yet — skeleton rows. */}
+                {inbox.isLoading && dmThreads.length === 0 && dmPlaceholders.length === 0 ? (
+                  <SkeletonRows count={5} />
+                ) : null}
                 {/* Active conversations */}
                 {dmThreads.map((thread) => (
                   <ListRow
@@ -465,9 +470,11 @@ export default function FriendsScreen() {
                       onOpen={() => router.push(`/user/${person.handle.replace(/^@/, "")}`)}
                     />
                   ))
+                ) : suggestions.isLoading ? (
+                  <SkeletonRows count={3} />
                 ) : (
                   <Text style={{ paddingTop: 24, textAlign: "center", fontSize: 13, color: colors.fog, paddingHorizontal: 32 }}>
-                    {suggestions.isLoading ? "Finding people to add…" : "No suggestions right now. Search for friends by name or handle."}
+                    No suggestions right now. Search for friends by name or handle.
                   </Text>
                 )}
               </>

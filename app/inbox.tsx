@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { ChevronDown, MessageCircle, Swords, UserPlus, type LucideIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RelButton } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { Avatar } from "@/components/ui/Avatar";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import { useMyCommunityInvite, useRespondCommunityInvite } from "@/hooks/queries/useCommunities";
 import { useIncomingRequests, useRespondToRequest } from "@/hooks/queries/useFriends";
 import { supabase } from "@/lib/supabase";
@@ -326,15 +327,15 @@ export default function InboxScreen() {
         )}
 
         {empty ? (
-          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
-            {notifications.isLoading || requests.isLoading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
+          notifications.isLoading || requests.isLoading ? (
+            <SkeletonRows count={5} />
+          ) : (
+            <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
               <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
                 No activity yet. Friend requests and reactions show up here.
               </Text>
-            )}
-          </View>
+            </View>
+          )
         ) : null}
       </ScrollView>
     </View>

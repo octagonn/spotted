@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
 import { Ban } from "lucide-react-native";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import {
   useMessageRequests,
   useRespondMessageRequest,
@@ -31,9 +32,7 @@ export default function MessageRequestsScreen() {
       <PanelHeader title="Message requests" />
       <ScrollView contentContainerStyle={{ paddingTop: 6, paddingBottom: 28 }}>
         {requests.isLoading ? (
-          <View style={{ paddingVertical: 28, alignItems: "center" }}>
-            <ActivityIndicator color={colors.mist} />
-          </View>
+          <SkeletonRows count={3} />
         ) : rows.length === 0 ? (
           <Text style={{ paddingTop: 44, textAlign: "center", fontSize: 13, color: colors.fog }}>
             No message requests.

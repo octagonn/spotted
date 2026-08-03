@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DailyCell } from "@/components/profile/cards";
 import { TrophyCase } from "@/components/trophies/TrophyCase";
 import { PanelHeader } from "@/components/ui/PanelHeader";
+import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { useMyProfile, useUserPosts } from "@/hooks/queries/useProfile";
 import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -80,9 +81,15 @@ export default function ProfileSectionScreen() {
         {section === "posts" ? (
           <View>
             {archive.length === 0 ? (
-              <Text style={{ paddingHorizontal: 18, paddingTop: 24, fontSize: 13, color: colors.fog }}>
-                {myPosts.isLoading ? "Loading your archive…" : "No dailies yet. Your posts will collect here."}
-              </Text>
+              myPosts.isLoading ? (
+                <View style={{ paddingHorizontal: 18, paddingTop: 24 }}>
+                  <SkeletonGrid count={12} aspectRatio={1} />
+                </View>
+              ) : (
+                <Text style={{ paddingHorizontal: 18, paddingTop: 24, fontSize: 13, color: colors.fog }}>
+                  No dailies yet. Your posts will collect here.
+                </Text>
+              )
             ) : (
               archive.map((month) => (
                 <View key={month.label}>

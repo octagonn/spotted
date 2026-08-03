@@ -1,8 +1,8 @@
-import { Image } from "expo-image";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useMemo, useRef, useState } from "react";
 import { FlatList, LayoutChangeEvent, Text, View, type ListRenderItemInfo } from "react-native";
 
+import { CachedImage } from "@/components/ui/CachedImage";
 import { Pressable } from "@/components/ui/Pressable";
 import type { StreakDay, StreakDayMap } from "@/hooks/queries/useStreakDays";
 import { localDateKey } from "@/stores/ui";
@@ -288,7 +288,7 @@ function DayCell({ cell, onPress }: { cell: Cell; onPress: (dateKey: string) => 
         }}
       >
         {gym.thumbUrl ? (
-          <Image source={{ uri: gym.thumbUrl }} contentFit="cover" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+          <CachedImage source={{ uri: gym.thumbUrl }} contentFit="cover" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
         ) : null}
         {/* Scrim keeps the date legible over any photo. */}
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.32)" }} />

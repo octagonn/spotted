@@ -16,6 +16,7 @@ import { MusicChip } from "@/components/post/MusicChip";
 import { PostMedia } from "@/components/post/PostMedia";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
 import { Avatar } from "@/components/ui/Avatar";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { CtxChip } from "@/components/ui/Chips";
 import { Pressable } from "@/components/ui/Pressable";
 import { usePostReactionSelfies } from "@/hooks/queries/usePostReactionSelfies";
@@ -428,7 +429,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
                 }}
               >
                 {reactor.mediaUrl ? (
-                  <Image source={{ uri: reactor.mediaUrl }} contentFit="cover" style={{ width: 34, height: 34 }} />
+                  <CachedImage source={{ uri: reactor.mediaUrl }} contentFit="cover" style={{ width: 34, height: 34 }} />
                 ) : (
                   <Avatar name={reactor.name} size={30} borderWidth={0} />
                 )}

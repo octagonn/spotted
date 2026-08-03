@@ -1,4 +1,3 @@
-import { Image } from "expo-image";
 import * as Location from "expo-location";
 import { useRouter, type Href } from "expo-router";
 import {
@@ -25,6 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GymPreviewSheet } from "@/components/map/GymPreviewSheet";
 import { MapCanvas } from "@/components/map/MapCanvas";
 import { Button } from "@/components/ui/Button";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SheetTextInput } from "@/components/ui/SheetTextInput";
@@ -510,7 +510,7 @@ export default function MapTabScreen() {
                         }}
                       >
                         {p.avatarUrl ? (
-                          <Image source={{ uri: p.avatarUrl }} contentFit="cover" style={{ width: 24, height: 24 }} />
+                          <CachedImage source={{ uri: p.avatarUrl }} contentFit="cover" style={{ width: 24, height: 24 }} />
                         ) : (
                           <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 9, color: colors.bone }}>
                             {initialsOf(p.displayName)}
@@ -547,7 +547,7 @@ export default function MapTabScreen() {
                     >
                       <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.slate, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                         {p.avatarUrl ? (
-                          <Image source={{ uri: p.avatarUrl }} contentFit="cover" style={{ width: 26, height: 26 }} />
+                          <CachedImage source={{ uri: p.avatarUrl }} contentFit="cover" style={{ width: 26, height: 26 }} />
                         ) : (
                           <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 10, color: colors.bone }}>
                             {initialsOf(p.displayName)}
@@ -707,7 +707,7 @@ export default function MapTabScreen() {
                     >
                       <View style={{ width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: colors.slate, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
                         {community.photoUrl ? (
-                          <Image source={{ uri: community.photoUrl }} contentFit="cover" style={{ width: 34, height: 34 }} />
+                          <CachedImage source={{ uri: community.photoUrl }} contentFit="cover" style={{ width: 34, height: 34 }} />
                         ) : (
                           <Icon size={15} color={colors.mist} />
                         )}
@@ -1034,7 +1034,7 @@ export default function MapTabScreen() {
         >
           <View style={{ width: 34, height: 34, borderRadius: 9, overflow: "hidden", borderWidth: 1, borderColor: colors.slate, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" }}>
             {community.photoUrl ? (
-              <Image source={{ uri: community.photoUrl }} contentFit="cover" style={{ width: 34, height: 34 }} />
+              <CachedImage source={{ uri: community.photoUrl }} contentFit="cover" style={{ width: 34, height: 34 }} />
             ) : (
               <Icon size={15} color={colors.mist} />
             )}

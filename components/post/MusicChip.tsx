@@ -1,9 +1,9 @@
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { Image } from "expo-image";
 import { Music } from "lucide-react-native";
 import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 
+import { CachedImage } from "@/components/ui/CachedImage";
 import { useAudioStore } from "@/stores/audio";
 import { colors } from "@/theme/colors";
 
@@ -109,7 +109,7 @@ export function MusicChip({
   const body = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 18, paddingTop: 7 }}>
       {music.artworkUrl ? (
-        <Image source={{ uri: music.artworkUrl }} style={{ width: 18, height: 18, borderRadius: 4 }} contentFit="cover" />
+        <CachedImage source={{ uri: music.artworkUrl }} style={{ width: 18, height: 18, borderRadius: 4 }} contentFit="cover" />
       ) : (
         <Music size={12} color={colors.silver} strokeWidth={2} />
       )}

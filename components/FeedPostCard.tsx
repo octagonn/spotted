@@ -1,9 +1,9 @@
-import { Image } from "expo-image";
 import { Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2, Send } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
 import { useMyReactions, useReplayPost, useToggleLike, useToggleSaved } from "@/hooks/queries/usePostReactions";
@@ -65,7 +65,7 @@ export function FeedPostCard({ post, onView, onOpenViewers, onOpenProfile, onOpe
         haptic={false}
       >
         <View className="aspect-[4/5] bg-graphite">
-          <Image source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
+          <CachedImage source={{ uri: post.media_url }} contentFit="cover" style={{ flex: 1 }} />
           {hours > 0 ? (
             <View className="absolute right-3 top-3 overflow-hidden rounded-pill border border-hairline-strong bg-black/55 px-2.5 py-1">
               <Text variant="micro" className="text-white">

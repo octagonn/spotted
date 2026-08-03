@@ -48,6 +48,7 @@ export function ScenePhoto({ uri, scene = "s1", blurRadius, legibility = true, s
           recyclingKey={uri}
           blurRadius={blurRadius}
           contentFit="cover"
+          cachePolicy="memory-disk"
           transition={150}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
         />

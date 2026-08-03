@@ -1,7 +1,9 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { Image, Text, View } from "react-native";
+import { Text, View } from "react-native";
+
+import { CachedImage } from "@/components/ui/CachedImage";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -84,7 +86,9 @@ export function Avatar({
       }}
     >
       {uri ? (
-        <Image source={{ uri }} style={{ width: px, height: px }} />
+        // expo-image (memory+disk cache): avatar URLs are public and stable, so
+        // every avatar in the app renders from cache after first sight.
+        <CachedImage source={{ uri }} contentFit="cover" style={{ width: px, height: px }} />
       ) : (
         <>
           <LinearGradient

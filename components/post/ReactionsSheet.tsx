@@ -1,9 +1,9 @@
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Camera } from "lucide-react-native";
 import { Alert, Text, View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { ListRow } from "@/components/ui/ListRow";
 import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { useRemoveReaction, type ReactionSelfie } from "@/hooks/queries/usePostReactionSelfies";
@@ -45,7 +45,7 @@ export function ReactionsSheet({ reactors, postId }: { reactors: ReactionSelfie[
             key={r.userId}
             left={
               r.mediaUrl ? (
-                <Image source={{ uri: r.mediaUrl }} style={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" />
+                <CachedImage source={{ uri: r.mediaUrl }} style={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" />
               ) : (
                 <Avatar name={r.name} uri={r.avatarUrl} size={46} />
               )
@@ -58,7 +58,7 @@ export function ReactionsSheet({ reactors, postId }: { reactors: ReactionSelfie[
               r.mediaUrl ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Camera size={14} color={colors.fog} strokeWidth={2} />
-                  <Image source={{ uri: r.mediaUrl }} style={{ width: 30, height: 30, borderRadius: 8 }} contentFit="cover" />
+                  <CachedImage source={{ uri: r.mediaUrl }} style={{ width: 30, height: 30, borderRadius: 8 }} contentFit="cover" />
                 </View>
               ) : undefined
             }

@@ -1,8 +1,8 @@
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 
+import { CachedImage } from "@/components/ui/CachedImage";
 import { colors } from "@/theme/colors";
 
 /**
@@ -71,7 +71,7 @@ export function SceneMedia({
       ]}
     >
       {uri ? (
-        <Image
+        <CachedImage
           source={{ uri }}
           contentFit="cover"
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
@@ -148,7 +148,7 @@ export function FbInset({
       }}
     >
       {uri ? (
-        <Image
+        <CachedImage
           source={{ uri }}
           contentFit="cover"
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}

@@ -93,6 +93,50 @@ const SIGN_TTL_SECONDS = 6 * 60 * 60;
 const SIGN_REUSE_MS = (SIGN_TTL_SECONDS - 30 * 60) * 1000;
 const signedUrlCache = new Map<string, { url: string; at: number }>();
 
+// Persist the signed-URL cache across relaunches. Without this every cold
+// start re-signs every path — new token, new URL string — and expo-image's
+// disk cache misses on ALL post media even though the bytes are unchanged.
+// Hydration is async but fast; entries past their reuse window are dropped.
+const SIGN_CACHE_STORAGE_KEY = "signed-url-cache-v1";
+let signCachePersistTimer: ReturnType<typeof setTimeout> | null = null;
+
+if (!isWebServer) {
+  void AsyncStorage.getItem(SIGN_CACHE_STORAGE_KEY)
+    .then((raw) => {
+      if (!raw) return;
+      const now = Date.now();
+      const entries = JSON.parse(raw) as [string, { url: string; at: number }][];
+      for (const [path, entry] of entries) {
+        // Never overwrite a fresher in-memory entry signed before hydration.
+        if (now - entry.at < SIGN_REUSE_MS && !signedUrlCache.has(path)) {
+          signedUrlCache.set(path, entry);
+        }
+      }
+    })
+    .catch(() => {});
+}
+
+function persistSignCacheSoon() {
+  if (isWebServer || signCachePersistTimer) return;
+  signCachePersistTimer = setTimeout(() => {
+    signCachePersistTimer = null;
+    const now = Date.now();
+    const live = [...signedUrlCache.entries()].filter(([, e]) => now - e.at < SIGN_REUSE_MS);
+    AsyncStorage.setItem(SIGN_CACHE_STORAGE_KEY, JSON.stringify(live)).catch(() => {});
+  }, 1500);
+}
+
+function rememberSigned(path: string, url: string, at: number) {
+  signedUrlCache.set(path, { url, at });
+  persistSignCacheSoon();
+}
+
+/** Sign-out hygiene: drop cached signed URLs (they embed access tokens). */
+export async function clearSignedUrlCache(): Promise<void> {
+  signedUrlCache.clear();
+  await AsyncStorage.removeItem(SIGN_CACHE_STORAGE_KEY).catch(() => {});
+}
+
 function cachedSigned(path: string, now: number): string | null {
   const hit = signedUrlCache.get(path);
   if (hit && now - hit.at < SIGN_REUSE_MS) return hit.url;
@@ -112,14 +156,14 @@ export async function signedPostUrl(path: string) {
     const urls = await r2SignDownloads([key]);
     const url = urls.get(key);
     if (!url) throw new Error("r2_sign_failed");
-    signedUrlCache.set(path, { url, at: now });
+    rememberSigned(path, url, now);
     return url;
   }
   const { data, error } = await supabase.storage.from("posts").createSignedUrl(path, SIGN_TTL_SECONDS);
   if (error) {
     throw error;
   }
-  signedUrlCache.set(path, { url: data.signedUrl, at: now });
+  rememberSigned(path, data.signedUrl, now);
   return data.signedUrl;
 }
 
@@ -150,7 +194,7 @@ export async function signedPostUrls(paths: (string | null | undefined)[]): Prom
         const url = urls.get(r2Key(path));
         if (url) {
           map.set(path, url);
-          signedUrlCache.set(path, { url, at: now });
+          rememberSigned(path, url, now);
         }
       }
     } catch {
@@ -166,7 +210,7 @@ export async function signedPostUrls(paths: (string | null | undefined)[]): Prom
       for (const row of data ?? []) {
         if (row.path && row.signedUrl && !row.error) {
           map.set(row.path, row.signedUrl);
-          signedUrlCache.set(row.path, { url: row.signedUrl, at: now });
+          rememberSigned(row.path, row.signedUrl, now);
         }
       }
     } catch {
@@ -176,11 +220,22 @@ export async function signedPostUrls(paths: (string | null | undefined)[]): Prom
   return map;
 }
 
-/** Signed URL for chat media (private messages bucket). */
+/**
+ * Signed URL for chat media (private messages bucket). Cached like post URLs
+ * (namespaced key) so chat images keep stable URLs across re-renders and
+ * relaunches instead of re-signing every call. 1h TTL → reuse for 45 min.
+ */
+const MESSAGE_SIGN_REUSE_MS = 45 * 60 * 1000;
+
 export async function signedMessageUrl(path: string) {
+  const cacheKey = `msg:${path}`;
+  const now = Date.now();
+  const hit = signedUrlCache.get(cacheKey);
+  if (hit && now - hit.at < MESSAGE_SIGN_REUSE_MS) return hit.url;
   const { data, error } = await supabase.storage.from("messages").createSignedUrl(path, 60 * 60);
   if (error) {
     throw error;
   }
+  rememberSigned(cacheKey, data.signedUrl, now);
   return data.signedUrl;
 }

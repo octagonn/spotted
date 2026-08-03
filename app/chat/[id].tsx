@@ -33,6 +33,7 @@ import { useMockChatStore } from "@/components/friends/chatStore";
 import { isMockThreadId, MOCK_CONVERSATIONS } from "@/components/friends/mockConversations";
 import { useInboxThreadActions } from "@/components/friends/useInboxThreads";
 import { Avatar } from "@/components/ui/Avatar";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { Pressable } from "@/components/ui/Pressable";
 import {
@@ -139,7 +140,7 @@ function StoryReplyPreview({ path, mine }: { path: string; mine: boolean }) {
         {mine ? "You replied to their story" : "Replied to your story"}
       </Text>
       <View style={{ width: 54, height: 84, borderRadius: 12, overflow: "hidden", backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
-        {media.data ? <Image source={{ uri: media.data }} style={{ width: 54, height: 84 }} contentFit="cover" /> : null}
+        {media.data ? <CachedImage source={{ uri: media.data }} style={{ width: 54, height: 84 }} contentFit="cover" /> : null}
       </View>
     </View>
   );
@@ -203,7 +204,7 @@ function ChatPhotoViewer({ uri, onClose }: { uri: string; onClose: () => void })
   return (
     <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
       <Pressable onPress={onClose} accessibilityLabel="Close photo" style={{ flex: 1 }}>
-        <Image source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
+        <CachedImage source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
       </Pressable>
       <View pointerEvents="none" style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
         <X size={20} color={colors.white} strokeWidth={2.2} />
@@ -238,7 +239,7 @@ function ChatMediaBubble({ path, mine, onOpen }: { path: string; mine: boolean; 
     >
       {media.data ? (
         <RNPressable onPress={() => onOpen?.(media.data as string)} accessibilityLabel="View photo">
-          <Image source={{ uri: media.data }} style={{ width: 210, height: 270 }} contentFit="cover" />
+          <CachedImage source={{ uri: media.data }} style={{ width: 210, height: 270 }} contentFit="cover" />
         </RNPressable>
       ) : (
         <View style={{ width: 210, height: 270 }} />

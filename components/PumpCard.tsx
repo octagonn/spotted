@@ -1,10 +1,10 @@
-import { Image } from "expo-image";
 import { Eye, MessageCircle, Music2, Repeat2 } from "lucide-react-native";
 import { View } from "react-native";
 
 import { GymBadge } from "@/components/GymBadge";
 import { ReactionBar } from "@/components/ReactionBar";
 import { Avatar } from "@/components/ui/Avatar";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
 import { colors } from "@/theme/colors";
@@ -24,7 +24,7 @@ export function PumpCard({ post, onView, onViewers }: PumpCardProps) {
       onPress={onView}
     >
       <View className="relative aspect-[4/5] overflow-hidden bg-graphite">
-        <Image source={{ uri: post.media_url }} contentFit="cover" className="h-full w-full" />
+        <CachedImage source={{ uri: post.media_url }} contentFit="cover" className="h-full w-full" />
         <View className="absolute left-0 right-0 top-0 flex-row items-center gap-3 bg-black/55 p-4">
           <Avatar uri={post.profile.avatar_url} size="sm" />
           <View className="flex-1">

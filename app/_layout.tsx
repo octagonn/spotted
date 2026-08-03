@@ -1,7 +1,8 @@
 import "@/global.css";
 
 import { ThemeProvider, type Theme } from "@react-navigation/native";
-import { focusManager, QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { focusManager, useQueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Anton_400Regular } from "@expo-google-fonts/anton";
 import { Boldonse_400Regular } from "@expo-google-fonts/boldonse";
 import {
@@ -20,7 +21,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { AppState, View } from "react-native";
 
 import { DismissKeyboard } from "@/components/ui/DismissKeyboard";
-import { useProfileCache } from "@/hooks/useProfileCache";
+import { persistOptions, queryClient, wipeQueryCaches } from "@/lib/queryClient";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
@@ -34,7 +35,7 @@ import { usePresenceSync } from "@/hooks/useGeofence";
 import { useRealtime } from "@/hooks/useRealtime";
 import { useNotificationObserver, usePushTokenSync } from "@/lib/notifications";
 import { useRestoreOnLogin } from "@/hooks/useRestoreOnLogin";
-import { isSupabaseConfigured } from "@/lib/supabase";
+import { clearSignedUrlCache, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { useRelationshipsStore } from "@/stores/relationships";
 import { useUiStore } from "@/stores/ui";
@@ -76,7 +77,10 @@ function useResetOnAccountChange() {
   useEffect(() => {
     const prev = prevUserId.current;
     if (prev !== null && prev !== userId) {
-      queryClient.clear();
+      // Also wipes the PERSISTED caches — an account switch must not restore
+      // the previous user's data (or signed media URLs) from disk next launch.
+      void wipeQueryCaches();
+      void clearSignedUrlCache();
       useRelationshipsStore.getState().reset();
       useUiStore.getState().resetForAccount();
     }
@@ -97,8 +101,8 @@ function AppServices() {
   useNotificationObserver(activeUserId);
   useRestoreOnLogin(activeUserId);
   usePresenceSync();
-  // Instant own-profile loads: snapshot profile queries to disk, seed at start.
-  useProfileCache();
+  // (useProfileCache retired — the persisted query cache in lib/queryClient
+  // now restores EVERY query at launch, not just the own-profile snapshot.)
   return <AnalyticsConsentHost userId={activeUserId} pathname={pathname} />;
 }
 
@@ -147,18 +151,6 @@ function SessionGuard() {
 }
 
 export default function RootLayout() {
-  const queryClient = useMemo(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            retry: 1
-          }
-        }
-      }),
-    []
-  );
   const [loaded] = useFonts({
     Anton_400Regular,
     Boldonse_400Regular,
@@ -188,7 +180,10 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView className="flex-1 bg-black">
-      <QueryClientProvider client={queryClient}>
+      {/* Persisted cache: screens paint instantly from the last session while a
+          background refetch runs. Restore is async (AsyncStorage) — queries are
+          paused until hydration completes. */}
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
         <ThemeProvider value={navigationTheme}>
           <AppServices />
           <SessionGuard />
@@ -243,7 +238,7 @@ export default function RootLayout() {
             </DismissKeyboard>
           </SheetProvider>
         </ThemeProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </GestureHandlerRootView>
   );
 }

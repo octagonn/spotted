@@ -21,12 +21,9 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: "com.octavio.spotted",
     supportsTablet: false,
     usesAppleSignIn: true,
-    entitlements: {
-      // Apple Declared Age Range API (iOS 26+) — Age Assurance for the App
-      // Store age-rating questionnaire. Capability must also be enabled on the
-      // App ID in the developer portal.
-      "com.apple.developer.declared-age-range": true
-    },
+    // NOTE: the Declared Age Range entitlement is intentionally omitted — the
+    // native module is deferred (see modules/declared-age-range/README.md).
+    // Re-add "com.apple.developer.declared-age-range": true when restoring it.
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSCameraUsageDescription: "Spotted uses the camera to capture your posts.",

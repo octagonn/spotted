@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
 import { getDeviceId } from "@/lib/deviceId";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { requestDeclaredAgeRange } from "@/modules/declared-age-range";
 import { useAuthStore } from "@/stores/auth";
 
 const ITEM_HEIGHT = 44;
@@ -101,6 +102,30 @@ export default function BirthdayScreen() {
   const [dayIndex, setDayIndex] = useState(0);
   const [yearListIndex, setYearListIndex] = useState(18);
   const [submitting, setSubmitting] = useState(false);
+  const [appleAgeConfirmed, setAppleAgeConfirmed] = useState(false);
+
+  // Age Assurance (iOS 26+): ask the OS for the user's declared age range
+  // before the DOB form. A parent-declared child account under 13 is blocked
+  // outright — it can't lie its way past the wheel. Shared 13+ ranges show a
+  // confirmation note; declined/unavailable falls back to the DOB gate alone
+  // (declining must not punish, per Apple guidance).
+  const askedAgeRange = useRef(false);
+  useEffect(() => {
+    if (askedAgeRange.current) return;
+    askedAgeRange.current = true;
+    void (async () => {
+      const result = await requestDeclaredAgeRange();
+      if (result.status === "shared") {
+        if (typeof result.upperBound === "number" && result.upperBound < MIN_AGE) {
+          router.replace("/blocked");
+          return;
+        }
+        if (typeof result.lowerBound === "number" && result.lowerBound >= MIN_AGE) {
+          setAppleAgeConfirmed(true);
+        }
+      }
+    })();
+  }, []);
 
   const year = Number(years[yearListIndex]);
   const maxDays = daysInMonth(year, monthIndex);
@@ -187,6 +212,10 @@ export default function BirthdayScreen() {
             Spotted is for people {MIN_AGE} and up. You can't create an account yet.
           </Text>
         </View>
+      ) : appleAgeConfirmed ? (
+        <Text variant="caption" className="mt-4 text-mist">
+          Age range confirmed with Apple. Your birthday sets up your profile.
+        </Text>
       ) : null}
 
       <Button className="mt-10" onPress={handleContinue} loading={submitting} disabled={tooYoung}>

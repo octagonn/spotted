@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { randomNudgeLine } from "@/lib/nudgeLines";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import type { Gym, Profile } from "@/types/domain";
 
 /**
@@ -251,6 +252,7 @@ export function useMyRecentNudges() {
 /** Send a nudge (server enforces the 24h limit + pushes quiet members only). */
 export function useNudgeCommunity() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((s) => s.userId);
   return useMutation({
     mutationFn: async (communityId: string): Promise<number> => {
       // One-button nudge: a random line from the 20-line rotation rides along.
@@ -261,7 +263,22 @@ export function useNudgeCommunity() {
       if (error) throw error;
       return (data as number) ?? 0;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["my-nudges"] })
+    // Optimistic: the button flips to "Nudged" instantly. Rolled back when the
+    // server rejects (already nudged in the last 24h).
+    onMutate: async (communityId) => {
+      await queryClient.cancelQueries({ queryKey: ["my-nudges", userId] });
+      const prev = queryClient.getQueryData<Set<string>>(["my-nudges", userId]);
+      queryClient.setQueryData<Set<string>>(
+        ["my-nudges", userId],
+        new Set([...(prev ?? []), communityId])
+      );
+      return { prev };
+    },
+    onError: (_err, _communityId, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["my-nudges", userId], ctx.prev);
+      showToast("Couldn't nudge — you can nudge each crew once a day");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["my-nudges"] })
   });
 }
 

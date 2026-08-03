@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import { compressReactionSelfie } from "@/lib/posts";
 
 export type ReactionSelfie = {
@@ -108,7 +109,33 @@ export function useAddReactionSelfie() {
         throw error;
       }
     },
-    onSuccess: (_data, { postId }) => {
+    // Optimistic: your selfie shows in the rail immediately with the LOCAL
+    // image uri (no wait for compression + upload). Reconciled on settle.
+    onMutate: async ({ postId, selfieUri }) => {
+      if (!userId || !selfieUri) return { prev: undefined };
+      await queryClient.cancelQueries({ queryKey: ["post-reactions", postId] });
+      const prev = queryClient.getQueryData<ReactionSelfie[]>(["post-reactions", postId]);
+      const temp: ReactionSelfie = {
+        userId,
+        name: "You",
+        username: "you",
+        avatarUrl: null,
+        mediaUrl: selfieUri,
+        emoji: null,
+        mine: true
+      };
+      // Newest first; the upsert replaces any existing own row.
+      queryClient.setQueryData<ReactionSelfie[]>(["post-reactions", postId], (old) => [
+        temp,
+        ...(old ?? []).filter((r) => !r.mine)
+      ]);
+      return { prev };
+    },
+    onError: (_err, { postId }, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["post-reactions", postId], ctx.prev);
+      showToast("Couldn't send your reaction");
+    },
+    onSettled: (_data, _err, { postId }) => {
       void queryClient.invalidateQueries({ queryKey: ["post-reactions", postId] });
     }
   });

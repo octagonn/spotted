@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import type { Database } from "@/types/database";
 import type { Profile } from "@/types/domain";
 
@@ -170,7 +171,38 @@ export function useSendCommunityMessage(communityId?: string) {
         .insert({ community_id: communityId, sender_id: userId, content: trimmed.slice(0, 1000) });
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["community-messages", communityId] })
+    // Optimistic: the message lands in the thread instantly.
+    onMutate: async (content) => {
+      const trimmed = content.trim();
+      if (!communityId || !userId || !trimmed) return { prev: undefined };
+      await queryClient.cancelQueries({ queryKey: ["community-messages", communityId] });
+      const prev = queryClient.getQueryData<CommunityMessage[]>(["community-messages", communityId]);
+      const myProfile = queryClient
+        .getQueriesData<{ username?: string | null; display_name?: string | null; avatar_url?: string | null } | null>({
+          queryKey: ["profile", "me"]
+        })
+        .map(([, data]) => data)
+        .find(Boolean);
+      const temp: CommunityMessage = {
+        id: `temp-${Date.now()}`,
+        community_id: communityId,
+        sender_id: userId,
+        content: trimmed.slice(0, 1000),
+        sent_at: new Date().toISOString(),
+        sender: {
+          username: myProfile?.username ?? "you",
+          display_name: myProfile?.display_name ?? "You",
+          avatar_url: myProfile?.avatar_url ?? null
+        }
+      };
+      queryClient.setQueryData<CommunityMessage[]>(["community-messages", communityId], (old) => [...(old ?? []), temp]);
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev && communityId) queryClient.setQueryData(["community-messages", communityId], ctx.prev);
+      showToast("Couldn't send the message");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["community-messages", communityId] })
   });
 }
 
@@ -297,7 +329,29 @@ export function useJoinGymCommunity() {
       if (error) throw error;
       return data as string;
     },
-    onSuccess: (communityId) => invalidateCommunityCaches(queryClient, communityId)
+    // Optimistic: the community id isn't known yet (the RPC may create it), so
+    // flip membership on any cached community detail for this gym.
+    onMutate: async (gymId) => {
+      await queryClient.cancelQueries({ queryKey: ["community"] });
+      await queryClient.cancelQueries({ queryKey: ["my-communities"] });
+      const prevCommunities = queryClient.getQueriesData<CommunityDetail | null>({ queryKey: ["community"] });
+      const prevMine = queryClient.getQueriesData<CommunitySummary[]>({ queryKey: ["my-communities"] });
+      for (const [key, detail] of prevCommunities) {
+        if (detail && detail.gym_id === gymId && !detail.isMember) {
+          queryClient.setQueryData(key, { ...detail, isMember: true, memberCount: detail.memberCount + 1 });
+          queryClient.setQueriesData<CommunitySummary[]>({ queryKey: ["my-communities"] }, (old) =>
+            old && !old.some((c) => c.id === detail.id) ? [...old, detail] : old
+          );
+        }
+      }
+      return { prevCommunities, prevMine };
+    },
+    onError: (_err, _gymId, ctx) => {
+      for (const [key, data] of ctx?.prevCommunities ?? []) queryClient.setQueryData(key, data);
+      for (const [key, data] of ctx?.prevMine ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't join the gym community");
+    },
+    onSettled: (communityId) => invalidateCommunityCaches(queryClient, communityId ?? undefined)
   });
 }
 
@@ -312,7 +366,28 @@ export function useJoinCommunity() {
         .upsert({ community_id: communityId, user_id: userId });
       if (error) throw error;
     },
-    onSuccess: (_data, communityId) => invalidateCommunityCaches(queryClient, communityId)
+    // Optimistic: the Join button flips + the community shows in "my" lists instantly.
+    onMutate: async (communityId) => {
+      await queryClient.cancelQueries({ queryKey: ["community", communityId] });
+      await queryClient.cancelQueries({ queryKey: ["my-communities"] });
+      const prevCommunity = queryClient.getQueryData<CommunityDetail | null>(["community", communityId]);
+      const prevMine = queryClient.getQueriesData<CommunitySummary[]>({ queryKey: ["my-communities"] });
+      queryClient.setQueryData<CommunityDetail | null>(["community", communityId], (old) =>
+        old ? { ...old, isMember: true, memberCount: old.memberCount + 1 } : old
+      );
+      if (prevCommunity) {
+        queryClient.setQueriesData<CommunitySummary[]>({ queryKey: ["my-communities"] }, (old) =>
+          old && !old.some((c) => c.id === communityId) ? [...old, prevCommunity] : old
+        );
+      }
+      return { prevCommunity, prevMine };
+    },
+    onError: (_err, communityId, ctx) => {
+      if (ctx?.prevCommunity !== undefined) queryClient.setQueryData(["community", communityId], ctx.prevCommunity);
+      for (const [key, data] of ctx?.prevMine ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't join the community");
+    },
+    onSettled: (_data, _err, communityId) => invalidateCommunityCaches(queryClient, communityId)
   });
 }
 
@@ -329,7 +404,26 @@ export function useLeaveCommunity() {
         .eq("user_id", userId);
       if (error) throw error;
     },
-    onSuccess: (_data, communityId) => invalidateCommunityCaches(queryClient, communityId)
+    // Optimistic: membership flips off + the community leaves "my" lists instantly.
+    onMutate: async (communityId) => {
+      await queryClient.cancelQueries({ queryKey: ["community", communityId] });
+      await queryClient.cancelQueries({ queryKey: ["my-communities"] });
+      const prevCommunity = queryClient.getQueryData<CommunityDetail | null>(["community", communityId]);
+      const prevMine = queryClient.getQueriesData<CommunitySummary[]>({ queryKey: ["my-communities"] });
+      queryClient.setQueryData<CommunityDetail | null>(["community", communityId], (old) =>
+        old ? { ...old, isMember: false, memberCount: Math.max(0, old.memberCount - 1) } : old
+      );
+      queryClient.setQueriesData<CommunitySummary[]>({ queryKey: ["my-communities"] }, (old) =>
+        (old ?? []).filter((c) => c.id !== communityId)
+      );
+      return { prevCommunity, prevMine };
+    },
+    onError: (_err, communityId, ctx) => {
+      if (ctx?.prevCommunity !== undefined) queryClient.setQueryData(["community", communityId], ctx.prevCommunity);
+      for (const [key, data] of ctx?.prevMine ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't leave the community");
+    },
+    onSettled: (_data, _err, communityId) => invalidateCommunityCaches(queryClient, communityId)
   });
 }
 
@@ -462,7 +556,18 @@ export function useRequestToJoin(communityId?: string) {
         .upsert({ community_id: communityId, user_id: userId });
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["community-my-request", communityId] })
+    // Optimistic: the button flips to "Requested" instantly.
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["community-my-request", communityId] });
+      const prev = queryClient.getQueriesData<boolean>({ queryKey: ["community-my-request", communityId] });
+      queryClient.setQueriesData<boolean>({ queryKey: ["community-my-request", communityId] }, true);
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't send the join request");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["community-my-request", communityId] })
   });
 }
 
@@ -512,7 +617,18 @@ export function useRespondCommunityInvite() {
       });
       if (error) throw error;
     },
-    onSuccess: (_data, { communityId }) => {
+    // Optimistic: the invite banner/row disappears the instant it's answered.
+    onMutate: async ({ communityId }) => {
+      await queryClient.cancelQueries({ queryKey: ["community-invite", communityId] });
+      const prev = queryClient.getQueriesData<boolean>({ queryKey: ["community-invite", communityId] });
+      queryClient.setQueriesData<boolean>({ queryKey: ["community-invite", communityId] }, false);
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't respond to the invite");
+    },
+    onSettled: (_data, _err, { communityId }) => {
       invalidateCommunityCaches(queryClient, communityId);
       void queryClient.invalidateQueries({ queryKey: ["community-invite", communityId] });
     }
@@ -531,7 +647,20 @@ export function useRespondJoinRequest(communityId?: string) {
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    // Optimistic: the request row leaves the admin list instantly.
+    onMutate: async ({ userId: requesterId }) => {
+      await queryClient.cancelQueries({ queryKey: ["community-requests", communityId] });
+      const prev = queryClient.getQueryData<JoinRequester[]>(["community-requests", communityId]);
+      queryClient.setQueryData<JoinRequester[]>(["community-requests", communityId], (old) =>
+        (old ?? []).filter((request) => request.user_id !== requesterId)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev && communityId) queryClient.setQueryData(["community-requests", communityId], ctx.prev);
+      showToast("Couldn't respond to the request");
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["community-requests", communityId] });
       invalidateCommunityCaches(queryClient, communityId);
     }

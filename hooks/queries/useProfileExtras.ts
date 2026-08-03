@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { ProfileWithGym } from "@/hooks/queries/useProfile";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
+import type { Json } from "@/types/database";
 
 /**
  * Cheap "does this user have an active story" check for the profile story ring —
@@ -41,7 +44,20 @@ export function useSetFeaturedTrophies() {
         .eq("id", userId);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
+    // Optimistic: the pinned trophies swap in the header instantly.
+    onMutate: async (featured) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", "me"] });
+      const prev = queryClient.getQueriesData<ProfileWithGym | null>({ queryKey: ["profile", "me"] });
+      queryClient.setQueriesData<ProfileWithGym | null>({ queryKey: ["profile", "me"] }, (old) =>
+        old ? { ...old, featured_trophies: featured.slice(0, 3) as unknown as Json } : old
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't update your featured trophies");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
   });
 }
 
@@ -55,7 +71,20 @@ export function useSetSplitPublic() {
       const { error } = await supabase.from("profiles").update({ split_public: value }).eq("id", userId);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
+    // Optimistic: the privacy toggle flips instantly.
+    onMutate: async (value) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", "me"] });
+      const prev = queryClient.getQueriesData<ProfileWithGym | null>({ queryKey: ["profile", "me"] });
+      queryClient.setQueriesData<ProfileWithGym | null>({ queryKey: ["profile", "me"] }, (old) =>
+        old ? { ...old, split_public: value } : old
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't update your split privacy");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
   });
 }
 
@@ -68,6 +97,19 @@ export function useSetVisibility() {
       const { error } = await supabase.from("profiles").update({ schedule_visibility: value }).eq("id", userId);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
+    // Optimistic: the visibility picker updates instantly.
+    onMutate: async (value) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", "me"] });
+      const prev = queryClient.getQueriesData<ProfileWithGym | null>({ queryKey: ["profile", "me"] });
+      queryClient.setQueriesData<ProfileWithGym | null>({ queryKey: ["profile", "me"] }, (old) =>
+        old ? { ...old, schedule_visibility: value } : old
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't update your visibility");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
   });
 }

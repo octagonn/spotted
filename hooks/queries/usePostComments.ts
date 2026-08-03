@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 
 export type PostComment = {
   id: string;
@@ -64,7 +65,39 @@ export function useAddComment(postId: string) {
         .insert({ post_id: postId, user_id: userId, content: trimmed.slice(0, 500), parent_id: parentId });
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["post-comments", postId] })
+    // Optimistic: the comment appears in the sheet the instant it's sent.
+    onMutate: async (input) => {
+      const text = typeof input === "string" ? input : input.text;
+      const parentId = typeof input === "string" ? null : input.parentId ?? null;
+      const trimmed = text.trim();
+      if (!userId || !trimmed) return { prev: undefined };
+      await queryClient.cancelQueries({ queryKey: ["post-comments", postId] });
+      const prev = queryClient.getQueryData<PostComment[]>(["post-comments", postId]);
+      // Best-effort identity from the cached own profile (name/avatar on the temp row).
+      const myProfile = queryClient
+        .getQueriesData<{ username?: string | null; display_name?: string | null; avatar_url?: string | null } | null>({
+          queryKey: ["profile", "me"]
+        })
+        .map(([, data]) => data)
+        .find(Boolean);
+      const tempComment: PostComment = {
+        id: `temp-${Date.now()}`,
+        userId,
+        name: myProfile?.display_name ?? "You",
+        handle: myProfile?.username ?? "you",
+        avatarUrl: myProfile?.avatar_url ?? null,
+        text: trimmed.slice(0, 500),
+        createdAt: new Date().toISOString(),
+        parentId
+      };
+      queryClient.setQueryData<PostComment[]>(["post-comments", postId], (old) => [...(old ?? []), tempComment]);
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["post-comments", postId], ctx.prev);
+      showToast("Couldn't post your comment");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["post-comments", postId] })
   });
 }
 
@@ -77,6 +110,19 @@ export function useDeleteComment(postId: string) {
       const { error } = await supabase.from("post_comments").delete().eq("id", commentId);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["post-comments", postId] })
+    // Optimistic: the comment disappears instantly.
+    onMutate: async (commentId) => {
+      await queryClient.cancelQueries({ queryKey: ["post-comments", postId] });
+      const prev = queryClient.getQueryData<PostComment[]>(["post-comments", postId]);
+      queryClient.setQueryData<PostComment[]>(["post-comments", postId], (old) =>
+        (old ?? []).filter((comment) => comment.id !== commentId)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["post-comments", postId], ctx.prev);
+      showToast("Couldn't delete the comment");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["post-comments", postId] })
   });
 }

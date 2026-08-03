@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import { useIncomingRequests } from "@/hooks/queries/useFriends";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 
 export type AppNotification = {
   id: string;
@@ -89,8 +90,27 @@ export function useMarkNotificationsRead() {
         .eq("recipient_id", userId)
         .eq("read", false);
     },
-    onSuccess: () => {
+    // Instantly clear every unread flag (the inbox badge is derived from these
+    // rows in useActivityUnreadCount) and the OS badge.
+    onMutate: async () => {
+      const queryKey = ["notifications", userId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<AppNotification[]>(queryKey);
+      queryClient.setQueryData<AppNotification[]>(queryKey, (prev) =>
+        prev?.map((notification) =>
+          notification.read ? notification : { ...notification, read: true }
+        )
+      );
       void Notifications.setBadgeCountAsync(0).catch(() => false);
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["notifications", userId], context.previous);
+      }
+      showToast("Couldn't mark notifications as read");
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     }
   });

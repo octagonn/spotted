@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { RealInboxThread } from "@/components/friends/useInboxThreads";
+import type { ChatMessage } from "@/hooks/queries/useMessages";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 
 /**
  * DM epic extras: reactions (#9), unsend + per-view delete (#11), blocks
@@ -10,6 +13,8 @@ import { useAuthStore } from "@/stores/auth";
  */
 
 /* ------------------------- reactions (spec #9) ---------------------------- */
+
+type ReactionMap = Record<string, { userId: string; emoji: string }[]>;
 
 /** All reactions on a set of messages, keyed by message id. */
 export function useMessageReactions(conversationId?: string | null, messageIds?: string[]) {
@@ -54,7 +59,34 @@ export function useReactToMessage(conversationId?: string | null) {
         if (error) throw error;
       }
     },
-    onSuccess: () =>
+    // The reactions cache key ends with the joined visible-message-id list, so
+    // update every cache under the ["message-reactions", conversationId] prefix.
+    onMutate: async ({ messageId, emoji }) => {
+      if (!userId) {
+        return undefined;
+      }
+      const queryKey = ["message-reactions", conversationId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueriesData<ReactionMap>({ queryKey });
+      queryClient.setQueriesData<ReactionMap>({ queryKey }, (current) => {
+        if (!current) {
+          return current;
+        }
+        const others = (current[messageId] ?? []).filter((r) => r.userId !== userId);
+        return {
+          ...current,
+          [messageId]: emoji ? [...others, { userId, emoji }] : others
+        };
+      });
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
+      }
+      showToast("Couldn't update reaction");
+    },
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: ["message-reactions", conversationId] })
   });
 }
@@ -73,7 +105,26 @@ export function useUnsendMessage(conversationId?: string | null) {
         .eq("id", messageId);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] })
+    // Optimistically tombstone the bubble — the chat UI renders deleted state
+    // off `deleted_at` (app/chat/[id].tsx).
+    onMutate: async (messageId) => {
+      const queryKey = ["messages", conversationId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ChatMessage[]>(queryKey);
+      queryClient.setQueryData<ChatMessage[]>(queryKey, (prev) =>
+        prev?.map((message) =>
+          message.id === messageId ? { ...message, deleted_at: new Date().toISOString() } : message
+        )
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["messages", conversationId], context.previous);
+      }
+      showToast("Couldn't unsend that message");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] })
   });
 }
 
@@ -154,7 +205,28 @@ export function useSetBlocked() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onMutate: async ({ otherUserId, blocked }) => {
+      const queryKey = ["blocked-users", userId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<Set<string>>(queryKey);
+      queryClient.setQueryData<Set<string>>(queryKey, (prev) => {
+        const next = new Set(prev ?? []);
+        if (blocked) {
+          next.add(otherUserId);
+        } else {
+          next.delete(otherUserId);
+        }
+        return next;
+      });
+      return { previous };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["blocked-users", userId], context.previous);
+      }
+      showToast(variables.blocked ? "Couldn't block that user" : "Couldn't unblock that user");
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["blocked-users", userId] });
       void queryClient.invalidateQueries({ queryKey: ["message-requests", userId] });
     }
@@ -231,7 +303,23 @@ export function useRespondMessageRequest() {
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    // Accept and decline both remove the row from the Requests tab instantly.
+    onMutate: async ({ conversationId }) => {
+      const queryKey = ["message-requests", userId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<MessageRequest[]>(queryKey);
+      queryClient.setQueryData<MessageRequest[]>(queryKey, (prev) =>
+        prev?.filter((request) => request.conversationId !== conversationId)
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["message-requests", userId], context.previous);
+      }
+      showToast("Couldn't update that request");
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["message-requests", userId] });
       void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] });
     }
@@ -383,7 +471,25 @@ export function useSetThreadFolder() {
         .eq("user_id", userId);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
+    // Inbox caches are keyed ["inbox-threads", userId] — update all under the prefix.
+    onMutate: async ({ conversationId, folderId }) => {
+      const queryKey = ["inbox-threads"];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueriesData<RealInboxThread[]>({ queryKey });
+      queryClient.setQueriesData<RealInboxThread[]>({ queryKey }, (threads) =>
+        threads?.map((thread) =>
+          thread.conversationId === conversationId ? { ...thread, folderId } : thread
+        )
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
+      }
+      showToast("Couldn't move that conversation");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
   });
 }
 
@@ -421,7 +527,20 @@ export function useSetConversationMuted(conversationId?: string | null) {
         .eq("user_id", userId);
       if (error) throw error;
     },
-    onSuccess: () =>
+    onMutate: async (muted) => {
+      const queryKey = ["conversation-muted", conversationId, userId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<boolean>(queryKey);
+      queryClient.setQueryData<boolean>(queryKey, muted);
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(["conversation-muted", conversationId, userId], context.previous);
+      }
+      showToast("Couldn't update mute setting");
+    },
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: ["conversation-muted", conversationId, userId] })
   });
 }

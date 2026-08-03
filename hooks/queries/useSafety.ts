@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 
 export type SafetyRow = {
   id: string;
@@ -64,16 +65,58 @@ export function useRestrictedAccounts() {
   });
 }
 
-function useSafetyMutation(rpc: "block_user" | "unblock_user" | "restrict_user" | "unrestrict_user") {
+type SafetyRpc = "block_user" | "unblock_user" | "restrict_user" | "unrestrict_user";
+
+const SAFETY_ERROR_TOAST: Record<SafetyRpc, string> = {
+  block_user: "Couldn't block that account",
+  unblock_user: "Couldn't unblock that account",
+  restrict_user: "Couldn't restrict that account",
+  unrestrict_user: "Couldn't unrestrict that account"
+};
+
+function useSafetyMutation(rpc: SafetyRpc) {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
+  const adds = rpc === "block_user" || rpc === "restrict_user";
+  const listKey =
+    rpc === "block_user" || rpc === "unblock_user"
+      ? ["blocked-accounts", userId]
+      : ["restricted-accounts", userId];
   return useMutation({
     mutationFn: async (targetId: string) => {
       if (!isSupabaseConfigured) return;
       const { error } = await supabase.rpc(rpc, { p_target: targetId });
       if (error) throw error;
     },
-    onSuccess: () => {
+    // Optimistic add/remove in the §5/§6 list. Adds use a placeholder profile
+    // (empty names) — the onSettled invalidate fills in the real row.
+    onMutate: async (targetId) => {
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previous = queryClient.getQueryData<SafetyRow[]>(listKey);
+      queryClient.setQueryData<SafetyRow[]>(listKey, (rows) => {
+        const rest = (rows ?? []).filter((row) => row.id !== targetId);
+        return adds
+          ? [
+              {
+                id: targetId,
+                username: "",
+                displayName: "",
+                avatarUrl: null,
+                since: new Date().toISOString()
+              },
+              ...rest
+            ]
+          : rest;
+      });
+      return { previous };
+    },
+    onError: (_error, _targetId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(listKey, context.previous);
+      }
+      showToast(SAFETY_ERROR_TOAST[rpc]);
+    },
+    onSettled: () => {
       for (const key of [
         "blocked-accounts",
         "restricted-accounts",

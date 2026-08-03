@@ -1,7 +1,10 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 
+import type { StoryGroup } from "@/hooks/queries/useStories";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
+import type { FeedPost } from "@/types/domain";
 
 /** Delete one of your own posts (RLS enforces ownership). Removes storage too. */
 export function useDeletePost() {
@@ -17,7 +20,26 @@ export function useDeletePost() {
       const { error } = await supabase.from("posts").delete().eq("id", postId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    // Optimistic: the post vanishes from the feed + profile grid instantly.
+    onMutate: async ({ postId }) => {
+      await queryClient.cancelQueries({ queryKey: ["feed"] });
+      await queryClient.cancelQueries({ queryKey: ["signed-user-posts"] });
+      const prevFeed = queryClient.getQueriesData<InfiniteData<FeedPost[]>>({ queryKey: ["feed"] });
+      const prevSigned = queryClient.getQueriesData<{ id: string }[]>({ queryKey: ["signed-user-posts"] });
+      queryClient.setQueriesData<InfiniteData<FeedPost[]>>({ queryKey: ["feed"] }, (old) =>
+        old ? { ...old, pages: old.pages.map((page) => page.filter((post) => post.id !== postId)) } : old
+      );
+      queryClient.setQueriesData<{ id: string }[]>({ queryKey: ["signed-user-posts"] }, (old) =>
+        (old ?? []).filter((post) => post.id !== postId)
+      );
+      return { prevFeed, prevSigned };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prevFeed ?? []) queryClient.setQueryData(key, data);
+      for (const [key, data] of ctx?.prevSigned ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't delete the post");
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["signed-user-posts"] });
       void queryClient.invalidateQueries({ queryKey: ["my-latest-post"] });
@@ -28,6 +50,7 @@ export function useDeletePost() {
 /** Delete one of your own stories. */
 export function useDeleteStory() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
   return useMutation({
     mutationFn: async ({ storyId, mediaPath }: { storyId: string; mediaPath?: string | null }) => {
       if (!isSupabaseConfigured) return;
@@ -37,7 +60,22 @@ export function useDeleteStory() {
       const { error } = await supabase.from("stories").delete().eq("id", storyId);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["stories"] })
+    // Optimistic: the story leaves the rail/viewer instantly (empty groups drop).
+    onMutate: async ({ storyId }) => {
+      await queryClient.cancelQueries({ queryKey: ["stories", userId] });
+      const prev = queryClient.getQueryData<StoryGroup[]>(["stories", userId]);
+      queryClient.setQueryData<StoryGroup[]>(["stories", userId], (old) =>
+        (old ?? [])
+          .map((group) => ({ ...group, stories: group.stories.filter((s) => s.id !== storyId) }))
+          .filter((group) => group.stories.length > 0)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["stories", userId], ctx.prev);
+      showToast("Couldn't delete the story");
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["stories"] })
   });
 }
 

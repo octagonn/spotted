@@ -219,8 +219,10 @@ export function usePostStory() {
   });
 }
 
-/** Mark a story seen. Invalidates ["stories"] so the rail ring dims and the
- * viewed group drops to the end of the row. */
+/** Mark a story seen. Optimistically flags the story in the ["stories", userId]
+ * cache (ring dims via seen/hasUnseen) — NO invalidate: a blanket refetch here
+ * re-signed every story photo per view. Realtime / the next natural refetch
+ * reconciles ordering. */
 export function useMarkStoryViewed() {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
@@ -233,6 +235,24 @@ export function useMarkStoryViewed() {
         .from("story_views")
         .upsert({ story_id: storyId, viewer_id: userId }, { ignoreDuplicates: true });
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["stories"] })
+    onMutate: async (storyId) => {
+      await queryClient.cancelQueries({ queryKey: ["stories", userId] });
+      const prev = queryClient.getQueryData<StoryGroup[]>(["stories", userId]);
+      queryClient.setQueryData<StoryGroup[]>(["stories", userId], (old) =>
+        (old ?? []).map((group) => {
+          if (!group.stories.some((s) => s.id === storyId && !s.seen)) return group;
+          const stories = group.stories.map((s) => (s.id === storyId ? { ...s, seen: true } : s));
+          return {
+            ...group,
+            stories,
+            hasUnseen: !group.isMe && stories.some((s) => !s.seen)
+          };
+        })
+      );
+      return { prev };
+    },
+    onError: (_err, _storyId, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["stories", userId], ctx.prev);
+    }
   });
 }

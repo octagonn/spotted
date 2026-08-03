@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 
 import { mockFeed } from "@/lib/mockData";
 import { isSupabaseConfigured, signedPostUrls, supabase } from "@/lib/supabase";
@@ -123,7 +123,6 @@ export function useFeed() {
 }
 
 export function useMarkPostViewed() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (postId: string) => {
       if (!isSupabaseConfigured) {
@@ -138,9 +137,9 @@ export function useMarkPostViewed() {
       if (error) {
         throw error;
       }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["feed"] });
     }
+    // No cache write: the feed reads no per-viewer "viewed" flag (rowToFeedPost
+    // has none), and the old blanket ["feed"] invalidate re-signed every photo
+    // on every view — pure cost for zero visible change.
   });
 }

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { mockProfiles, mockSuggestions } from "@/lib/mockData";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import type { FriendSuggestion, Profile } from "@/types/domain";
 
 export function useFriends() {
@@ -191,9 +192,23 @@ export function useSendFriendRequest() {
         throw error;
       }
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["friend-suggestions"] });
-      await queryClient.invalidateQueries({ queryKey: ["friends"] });
+    // Optimistic: the suggestion card flips to "requested" (drops out of the
+    // list) the instant the button is tapped.
+    onMutate: async (friendId) => {
+      await queryClient.cancelQueries({ queryKey: ["friend-suggestions"] });
+      const prev = queryClient.getQueriesData<FriendSuggestion[]>({ queryKey: ["friend-suggestions"] });
+      queryClient.setQueriesData<FriendSuggestion[]>({ queryKey: ["friend-suggestions"] }, (old) =>
+        (old ?? []).filter((suggestion) => suggestion.id !== friendId)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't send the friend request");
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["friend-suggestions"] });
+      void queryClient.invalidateQueries({ queryKey: ["friends"] });
     }
   });
 }

@@ -5,6 +5,7 @@ import { MOCK_CONVERSATION_ID, mockMessages } from "@/lib/mockData";
 import { compressStoryPhoto } from "@/lib/posts";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import type { Database } from "@/types/database";
 
 export type ChatMessage = Database["public"]["Tables"]["messages"]["Row"];
@@ -146,9 +147,51 @@ export function useSendMessage(conversationId?: string | null) {
         throw error;
       }
     },
-    onSuccess: async () => {
+    // Optimistic echo (real path only — the mock path inserts inside mutationFn):
+    // append a temp row instantly; the realtime/invalidate flow reconciles it
+    // with the server row via the onSettled refetch.
+    onMutate: async (input) => {
+      if (!isSupabaseConfigured || !conversationId || !userId) {
+        return undefined;
+      }
+      const content = typeof input === "string" ? input : input.content;
+      const replyToId = typeof input === "string" ? null : input.replyToId ?? null;
+      const trimmed = content.trim();
+      if (trimmed.length === 0) {
+        return undefined;
+      }
+      const queryKey = ["messages", conversationId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ChatMessage[]>(queryKey);
+      const temp: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        conversation_id: conversationId,
+        sender_id: userId,
+        content: trimmed,
+        media_url: null,
+        reply_story_media: null,
+        sent_at: new Date().toISOString(),
+        read_at: null,
+        reply_to_id: replyToId,
+        deleted_at: null,
+        kind: "text",
+        shared_kind: null,
+        shared_id: null,
+        view_once: false,
+        viewed_at: null
+      };
+      queryClient.setQueryData<ChatMessage[]>(queryKey, (prev) => [...(prev ?? []), temp]);
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["messages", conversationId], context.previous);
+      }
+      showToast("Message failed to send");
+    },
+    onSettled: () => {
       if (isSupabaseConfigured) {
-        await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+        void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
       }
     }
   });
@@ -205,8 +248,43 @@ export function useSendMediaMessage(conversationId?: string | null) {
         throw error;
       }
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+    // Optimistic bubble using the LOCAL uri so the media shows instantly; the
+    // onSettled invalidate swaps it for the server row (storage path).
+    onMutate: async ({ localUri, kind, viewOnce }) => {
+      if (!isSupabaseConfigured || !conversationId || !userId) {
+        return undefined;
+      }
+      const queryKey = ["messages", conversationId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ChatMessage[]>(queryKey);
+      const temp: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        conversation_id: conversationId,
+        sender_id: userId,
+        content: viewOnce ? "Photo" : MEDIA_CFG[kind].label,
+        media_url: localUri,
+        reply_story_media: null,
+        sent_at: new Date().toISOString(),
+        read_at: null,
+        reply_to_id: null,
+        deleted_at: null,
+        kind: "text",
+        shared_kind: null,
+        shared_id: null,
+        view_once: Boolean(viewOnce),
+        viewed_at: null
+      };
+      queryClient.setQueryData<ChatMessage[]>(queryKey, (prev) => [...(prev ?? []), temp]);
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["messages", conversationId], context.previous);
+      }
+      showToast("Couldn't send that — try again");
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
     }
   });
 }

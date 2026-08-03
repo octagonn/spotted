@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { showToast } from "@/stores/ui";
 import { CANONICAL_IS_REPS, CANONICAL_LIFT, type Muscle } from "@/lib/workoutLibrary";
 import { LIFT_OPTION_BY_ID, type LiftExercise } from "@/lib/liftCatalog";
 import type { TrophyShareData } from "@/components/trophies/TrophyShareCard";
@@ -183,7 +184,20 @@ export function useDeleteWorkout() {
       const { error } = await supabase.from("workouts").delete().eq("id", workoutId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    // Optimistic: the row leaves workout history instantly.
+    onMutate: async (workoutId) => {
+      await queryClient.cancelQueries({ queryKey: ["workouts"] });
+      const prev = queryClient.getQueriesData<WorkoutRow[]>({ queryKey: ["workouts"] });
+      queryClient.setQueriesData<WorkoutRow[]>({ queryKey: ["workouts"] }, (old) =>
+        (old ?? []).filter((workout) => workout.id !== workoutId)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      for (const [key, data] of ctx?.prev ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't delete the workout");
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["workouts"] });
       void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["signed-user-posts"] });
@@ -316,7 +330,28 @@ export function useRenameWorkout() {
       if (error) throw error;
       return trimmed;
     },
-    onSuccess: (_name, vars) => {
+    // Optimistic: the new name shows in the detail view + history list instantly.
+    onMutate: async ({ workoutId, name }) => {
+      const trimmed = name.trim().slice(0, 60);
+      if (!trimmed) return { prevWorkout: undefined, prevLists: [] as [readonly unknown[], WorkoutRow[] | undefined][] };
+      await queryClient.cancelQueries({ queryKey: ["workout", workoutId] });
+      await queryClient.cancelQueries({ queryKey: ["workouts"] });
+      const prevWorkout = queryClient.getQueryData<WorkoutRow | null>(["workout", workoutId]);
+      const prevLists = queryClient.getQueriesData<WorkoutRow[]>({ queryKey: ["workouts"] });
+      queryClient.setQueryData<WorkoutRow | null>(["workout", workoutId], (old) =>
+        old ? { ...old, name: trimmed } : old
+      );
+      queryClient.setQueriesData<WorkoutRow[]>({ queryKey: ["workouts"] }, (old) =>
+        (old ?? []).map((workout) => (workout.id === workoutId ? { ...workout, name: trimmed } : workout))
+      );
+      return { prevWorkout, prevLists };
+    },
+    onError: (_err, vars, ctx) => {
+      if (ctx?.prevWorkout !== undefined) queryClient.setQueryData(["workout", vars.workoutId], ctx.prevWorkout);
+      for (const [key, data] of ctx?.prevLists ?? []) queryClient.setQueryData(key, data);
+      showToast("Couldn't rename the workout");
+    },
+    onSettled: (_name, _err, vars) => {
       void queryClient.invalidateQueries({ queryKey: ["workout", vars.workoutId] });
       void queryClient.invalidateQueries({ queryKey: ["workouts"] });
       void queryClient.invalidateQueries({ queryKey: ["feed"] });

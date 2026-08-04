@@ -120,10 +120,14 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   const commentCount = isRealPost ? comments.length : post.comments.length;
 
   // Render-phase reset when FlashList hands this instance a different post.
+  // Must clear commentReplyTo too — otherwise a "replying to …" target from the
+  // previous post leaks onto this one, and a new comment is threaded under a
+  // parent comment id that belongs to a different post.
   if (renderedPostId !== post.id) {
     setRenderedPostId(post.id);
     setCommentsOpen(false);
     setDraft("");
+    setCommentReplyTo(null);
   }
 
   const blurRadius = locked ? 14 : undefined;

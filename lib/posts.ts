@@ -162,7 +162,7 @@ export async function publishLiftVideo(input: PublishLiftVideoInput): Promise<st
     .select("id")
     .single();
   if (insert.error) {
-    await removePostObjects([path]).catch(() => {});
+    await removePostObjects([path, thumbnailPath].filter((p): p is string => Boolean(p))).catch(() => {});
     throw insert.error;
   }
   return insert.data.id;
@@ -231,7 +231,10 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
       })
       .select("id")
       .single();
-    if (insert.error) throw insert.error;
+    if (insert.error) {
+      await removePostObjects([path, thumbnailPath].filter((p): p is string => Boolean(p))).catch(() => {});
+      throw insert.error;
+    }
     return insert.data.id;
   }
   if (input.photoUris.length === 0) {
@@ -292,8 +295,9 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     .select("id")
     .single();
   if (insert.error) {
-    // Don't leave orphaned objects behind if the row insert failed.
-    await removePostObjects(paths).catch(() => {});
+    // Don't leave orphaned objects behind if the row insert failed — include
+    // the inset and grid thumbnail, not just the main photos.
+    await removePostObjects([...paths, insetPath, thumbPath].filter((p): p is string => Boolean(p))).catch(() => {});
     throw insert.error;
   }
   return insert.data.id;

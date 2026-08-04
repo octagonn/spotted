@@ -4,7 +4,8 @@ import { create } from "zustand";
 
 import { userNeedsPasswordSetup } from "@/lib/authRouting";
 import { unregisterCurrentPushToken } from "@/lib/notifications";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { wipeQueryCaches } from "@/lib/queryClient";
+import { clearSignedUrlCache, isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export type AuthStatus =
   | "loading"
@@ -191,11 +192,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       onboardingStage: null,
       needsBirthdate: false
     });
+    // Await the cache teardown so a force-kill immediately after sign-out can't
+    // leave the previous account's persisted query data or signed media URLs
+    // (which embed access tokens) on disk for whoever logs in next.
+    await wipeQueryCaches();
+    await clearSignedUrlCache();
   }
 }));
 
 if (isSupabaseConfigured) {
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabase.auth.onAuthStateChange((event, session) => {
+    // hydrate() owns startup: it validates the session against the server and
+    // drops revoked accounts. Handling INITIAL_SESSION here too would race that
+    // check (this path never validates) and could overwrite a correct
+    // signed-out state — resurrecting a deleted/revoked session. React only to
+    // real post-startup transitions (SIGNED_IN/OUT, TOKEN_REFRESHED, …).
+    if (event === "INITIAL_SESSION") return;
     void useAuthStore.getState().setSession(session);
   });
 }

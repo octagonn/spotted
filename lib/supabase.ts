@@ -189,12 +189,18 @@ export async function signedPostUrls(paths: (string | null | undefined)[]): Prom
   if (r2Paths.length) {
     try {
       const { r2Key, r2SignDownloads } = await import("@/lib/r2");
-      const urls = await r2SignDownloads(r2Paths.map(r2Key));
-      for (const path of r2Paths) {
-        const url = urls.get(r2Key(path));
-        if (url) {
-          map.set(path, url);
-          rememberSigned(path, url, now);
+      // Chunk to the r2-media function's 200-key cap — a heavy profile archive
+      // can resolve >200 keys at once, and the server silently truncates.
+      const R2_SIGN_CHUNK = 200;
+      for (let i = 0; i < r2Paths.length; i += R2_SIGN_CHUNK) {
+        const chunk = r2Paths.slice(i, i + R2_SIGN_CHUNK);
+        const urls = await r2SignDownloads(chunk.map(r2Key));
+        for (const path of chunk) {
+          const url = urls.get(r2Key(path));
+          if (url) {
+            map.set(path, url);
+            rememberSigned(path, url, now);
+          }
         }
       }
     } catch {
@@ -228,6 +234,11 @@ export async function signedPostUrls(paths: (string | null | undefined)[]): Prom
 const MESSAGE_SIGN_REUSE_MS = 45 * 60 * 1000;
 
 export async function signedMessageUrl(path: string) {
+  // An optimistic message bubble carries a LOCAL device uri (file://, content://,
+  // ph://) — and some rows may already be http. Those aren't storage keys, so
+  // return them unchanged instead of asking Storage to sign a non-existent
+  // object (which throws → the optimistic media renders as a blank box).
+  if (/^(file|content|assets-library|ph|https?):/i.test(path)) return path;
   const cacheKey = `msg:${path}`;
   const now = Date.now();
   const hit = signedUrlCache.get(cacheKey);

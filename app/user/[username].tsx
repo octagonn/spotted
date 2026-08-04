@@ -161,7 +161,8 @@ export default function UserProfileScreen() {
   const canView = isFriend || isPublic;
 
   const gymStreak = useMemo(
-    () => computeGymStreak(streakDays.data ? streakDays.data.keys() : []),
+    // instanceof Map guard — same defensive parity as the own-profile screen.
+    () => computeGymStreak(streakDays.data instanceof Map ? streakDays.data.keys() : []),
     [streakDays.data]
   );
   const currentStreak = gymStreak.count;
@@ -352,7 +353,7 @@ export default function UserProfileScreen() {
                 {calOpen ? (
                   <View style={{ paddingBottom: 16 }}>
                     <StreakCalendar
-                      days={streakDays.data ?? new Map()}
+                      days={streakDays.data instanceof Map ? streakDays.data : new Map()}
                       createdAt={profile?.created_at}
                       onDayPress={(dateKey) => profile && router.push(`/daily/${dateKey}?user=${profile.id}` as Href)}
                     />

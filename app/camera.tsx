@@ -1079,6 +1079,11 @@ export default function CameraScreen() {
     });
 
   const shareStory = () => {
+    // Guard against a double-tap posting two stories: shareStory never set the
+    // `publishing` flag the button reads, so both taps fired before navigation.
+    if (postStory.isPending) {
+      return;
+    }
     if (!photoUri) {
       Alert.alert("No photo", "The photo didn't save. Go back and retake it.");
       return;
@@ -2041,7 +2046,11 @@ export default function CameraScreen() {
                   </Text>
                 </View>
               </Pressable>
-              <Button onPress={() => void shareStory()} loading={publishing} disabled={publishing}>
+              <Button
+                onPress={() => void shareStory()}
+                loading={publishing || postStory.isPending}
+                disabled={publishing || postStory.isPending}
+              >
                 Share to story
               </Button>
             </>

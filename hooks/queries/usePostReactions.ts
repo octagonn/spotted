@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
@@ -94,16 +94,26 @@ export function useToggleSaved() {
       if (error) throw error;
     },
     onMutate: async ({ postId, saved }) => {
+      // The feed is an INFINITE query keyed ["feed", userId] with shape
+      // { pages: FeedPost[][] } — the old exact-key flat-array write matched
+      // nothing (silent no-op). Prefix-match every feed cache and map its pages.
       await queryClient.cancelQueries({ queryKey: ["feed"] });
-      const previous = queryClient.getQueryData<FeedPost[]>(["feed"]);
-      queryClient.setQueryData<FeedPost[]>(["feed"], (current) =>
-        (current ?? []).map((post) => (post.id === postId ? { ...post, saved } : post))
+      const previous = queryClient.getQueriesData<InfiniteData<FeedPost[]>>({ queryKey: ["feed"] });
+      queryClient.setQueriesData<InfiniteData<FeedPost[]>>({ queryKey: ["feed"] }, (old) =>
+        old
+          ? {
+              ...old,
+              pages: old.pages.map((page) =>
+                page.map((post) => (post.id === postId ? { ...post, saved } : post))
+              )
+            }
+          : old
       );
       return { previous };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(["feed"], context.previous);
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
       }
     },
     onSettled: () => {

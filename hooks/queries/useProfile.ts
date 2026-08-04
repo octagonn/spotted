@@ -238,7 +238,10 @@ export function useUserPosts(userId?: string | null) {
             try {
               mediaUrl = await signedPostUrl(mediaUrl);
             } catch {
-              mediaUrl = row.media_url;
+              // Fall back to a placeholder, NOT the raw "r2:<key>" path — an
+              // unsigned storage key can't render and (in a recycled grid)
+              // shows the previous cell's image.
+              mediaUrl = "";
             }
           }
           let thumbnailUrl = row.thumbnail_url;
@@ -285,7 +288,7 @@ export function useSavedDrops(userId?: string | null) {
             try {
               mediaUrl = await signedPostUrl(mediaUrl);
             } catch {
-              mediaUrl = row.media_url;
+              mediaUrl = "";
             }
           }
           return {

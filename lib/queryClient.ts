@@ -26,8 +26,15 @@ export const queryClient = new QueryClient({
   }
 });
 
-/** Query keys that must never be persisted (ephemeral/presence/search). */
+/**
+ * Query keys that must never be persisted. Presence/search/viewer lists are
+ * ephemeral; "feed" and "stories" are TODAY-only daily-reset content — persisting
+ * them would paint yesterday's posts (with long-expired signed media, worst of
+ * all offline) on the next day's cold start. They still cache within a session.
+ */
 const EPHEMERAL_KEYS = new Set([
+  "feed",
+  "stories",
   "live-presence",
   "activity-status",
   "crew-activity",
@@ -46,17 +53,23 @@ const EPHEMERAL_KEYS = new Set([
 // Set/Map into "{}", so on rehydrate the consumer's .keys()/.has() blows up.
 // Tag them on the way out and rebuild them on the way in so persistence is
 // lossless. (Bottom-up reviver: inner entries are already revived here.)
+// Namespaced sentinel + a strict shape check (exactly {__qct, v}) so a genuine
+// user object that happens to carry a "type" field is never mistaken for one.
+const TAG = "__qct";
 function reviveSpecials(_key: string, value: unknown): unknown {
-  if (value && typeof value === "object" && "__t" in value) {
-    const tagged = value as { __t?: string; v?: unknown };
-    if (tagged.__t === "Map") return new Map(tagged.v as [unknown, unknown][]);
-    if (tagged.__t === "Set") return new Set(tagged.v as unknown[]);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const tagged = value as Record<string, unknown>;
+    const keys = Object.keys(tagged);
+    if (keys.length === 2 && TAG in tagged && "v" in tagged && Array.isArray(tagged.v)) {
+      if (tagged[TAG] === "Map") return new Map(tagged.v as [unknown, unknown][]);
+      if (tagged[TAG] === "Set") return new Set(tagged.v as unknown[]);
+    }
   }
   return value;
 }
 function replaceSpecials(_key: string, value: unknown): unknown {
-  if (value instanceof Map) return { __t: "Map", v: Array.from(value.entries()) };
-  if (value instanceof Set) return { __t: "Set", v: Array.from(value.values()) };
+  if (value instanceof Map) return { [TAG]: "Map", v: Array.from(value.entries()) };
+  if (value instanceof Set) return { [TAG]: "Set", v: Array.from(value.values()) };
   return value;
 }
 

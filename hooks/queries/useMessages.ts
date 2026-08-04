@@ -10,6 +10,13 @@ import type { Database } from "@/types/database";
 
 export type ChatMessage = Database["public"]["Tables"]["messages"]["Row"];
 
+// Unique optimistic id. Date.now() alone collides when a media send and its
+// caption text fire in the same synchronous tick (both onMutate run before any
+// await), producing two rows with the same id → duplicate React keys and a
+// mis-reconciled bubble. The counter guarantees uniqueness.
+let tempSeq = 0;
+const nextTempId = () => `temp-${Date.now()}-${tempSeq++}`;
+
 /**
  * Chat routes are pushed as /chat/<profile id> (see feed.tsx and friends.tsx),
  * so this resolves the other user's id to a conversation id, creating the
@@ -164,7 +171,7 @@ export function useSendMessage(conversationId?: string | null) {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<ChatMessage[]>(queryKey);
       const temp: ChatMessage = {
-        id: `temp-${Date.now()}`,
+        id: nextTempId(),
         conversation_id: conversationId,
         sender_id: userId,
         content: trimmed,
@@ -258,7 +265,7 @@ export function useSendMediaMessage(conversationId?: string | null) {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<ChatMessage[]>(queryKey);
       const temp: ChatMessage = {
-        id: `temp-${Date.now()}`,
+        id: nextTempId(),
         conversation_id: conversationId,
         sender_id: userId,
         content: viewOnce ? "Photo" : MEDIA_CFG[kind].label,

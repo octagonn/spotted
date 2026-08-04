@@ -87,8 +87,17 @@ async function signMediaUrl(path, bucket) {
   return signed.signedUrl;
 }
 
+// FAIL CLOSED: if every frame of a job fails to sign/download/classify (e.g. an
+// R2 or edge-function outage), we must NOT report nsfw=0 — that path approves
+// the post, letting UNSCANNED media go live. Instead, leave the job unresolved
+// so claim_moderation_jobs re-claims it after its 5-min lease; after a few dead
+// attempts, resolve it into review (>=0.60) rather than ever auto-approving.
+const scanFailCounts = new Map(); // job_id -> consecutive zero-scan attempts
+const MAX_SCAN_RETRIES = 3;
+
 async function processJob(job) {
   let worst = { nsfw: 0, frame: null, classes: null };
+  let scanned = 0;
   for (const path of job.paths) {
     const url = await signMediaUrl(path, job.bucket || BUCKET);
     if (!url) continue;
@@ -102,11 +111,33 @@ async function processJob(job) {
       console.warn(`classify failed for ${path}: ${e.message}`);
       continue;
     }
+    scanned += 1;
     // Hard-explicit categories drive the verdict. "Sexy" (sports bras, gym
     // selfies) is deliberately EXCLUDED so legit fitness content isn't flagged.
     const nsfwScore = (classes.Porn || 0) + (classes.Hentai || 0);
     if (nsfwScore > worst.nsfw) worst = { nsfw: nsfwScore, frame: path, classes };
   }
+
+  // Job had media but nothing could be scanned → do NOT approve.
+  const hadFrames = Array.isArray(job.paths) && job.paths.length > 0;
+  if (hadFrames && scanned === 0) {
+    const attempts = (scanFailCounts.get(job.job_id) ?? 0) + 1;
+    if (attempts < MAX_SCAN_RETRIES) {
+      scanFailCounts.set(job.job_id, attempts);
+      console.warn(
+        `job ${job.job_id}: 0/${job.paths.length} frames scanned (attempt ${attempts}) — leaving for lease retry`
+      );
+      return; // unresolved → re-claimed after the 5-min lease
+    }
+    scanFailCounts.delete(job.job_id);
+    console.error(`job ${job.job_id}: unscannable after ${attempts} attempts — flagging for review`);
+    await supabase.rpc("resolve_moderation_job", {
+      p_job: job.job_id,
+      p_scores: { nsfw: 0.6, frame: null, breakdown: { scan_failed: true } }
+    });
+    return;
+  }
+  scanFailCounts.delete(job.job_id);
 
   const scores = {
     nsfw: Number(worst.nsfw.toFixed(4)),

@@ -41,10 +41,33 @@ const EPHEMERAL_KEYS = new Set([
   "post-viewers"
 ]);
 
+// Several queries hold Set/Map data (streak-days, message-hides, blocked-users,
+// nudges, taunts, trophy-rarity, story likes …). Plain JSON.stringify turns a
+// Set/Map into "{}", so on rehydrate the consumer's .keys()/.has() blows up.
+// Tag them on the way out and rebuild them on the way in so persistence is
+// lossless. (Bottom-up reviver: inner entries are already revived here.)
+function reviveSpecials(_key: string, value: unknown): unknown {
+  if (value && typeof value === "object" && "__t" in value) {
+    const tagged = value as { __t?: string; v?: unknown };
+    if (tagged.__t === "Map") return new Map(tagged.v as [unknown, unknown][]);
+    if (tagged.__t === "Set") return new Set(tagged.v as unknown[]);
+  }
+  return value;
+}
+function replaceSpecials(_key: string, value: unknown): unknown {
+  if (value instanceof Map) return { __t: "Map", v: Array.from(value.entries()) };
+  if (value instanceof Set) return { __t: "Set", v: Array.from(value.values()) };
+  return value;
+}
+
 export const queryPersister = createAsyncStoragePersister({
   storage: AsyncStorage,
-  key: "spotted-query-cache-v1",
-  throttleTime: 2_000
+  // v2: v1 blobs were written with lossy JSON (Set/Map → {}); a new key
+  // discards them so no corrupted Set/Map data is ever rehydrated.
+  key: "spotted-query-cache-v2",
+  throttleTime: 2_000,
+  serialize: (client) => JSON.stringify(client, replaceSpecials),
+  deserialize: (cached) => JSON.parse(cached, reviveSpecials)
 });
 
 export const persistOptions = {

@@ -107,7 +107,9 @@ export default function ProfileScreen() {
   // Streak computed from the gym-day posts with a grace window for today, so it
   // never reads 0 the morning after a post.
   const gymStreak = useMemo(
-    () => computeGymStreak(streakDays.data ? streakDays.data.keys() : []),
+    // Guard the Map contract: a stale/corrupted persisted cache could hand back
+    // a non-Map, so only call .keys() when it really is one.
+    () => computeGymStreak(streakDays.data instanceof Map ? streakDays.data.keys() : []),
     [streakDays.data]
   );
   const currentStreak = gymStreak.count;
@@ -379,7 +381,7 @@ export default function ProfileScreen() {
             </Pressable>
             {calendarOpen ? (
               <StreakCalendar
-                days={streakDays.data ?? new Map()}
+                days={streakDays.data instanceof Map ? streakDays.data : new Map()}
                 createdAt={profile?.created_at}
                 onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
               />

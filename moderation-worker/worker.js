@@ -26,6 +26,12 @@ const jpeg = require("jpeg-js");
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 5000);
+// When the queue is empty we ramp the poll delay up to this ceiling instead of
+// hammering claim_moderation_jobs every POLL_INTERVAL_MS forever. On an idle
+// app that fixed 5s poll was ~500k requests/month of pure egress for nothing;
+// backing off to 30s cuts idle polling ~6x while keeping worst-case moderation
+// latency for a freshly uploaded post at IDLE_POLL_INTERVAL_MS.
+const IDLE_POLL_INTERVAL_MS = Number(process.env.IDLE_POLL_INTERVAL_MS || 30000);
 const BATCH = Number(process.env.BATCH || 5);
 const BUCKET = "posts";
 
@@ -170,13 +176,13 @@ async function tick() {
     if (consecutiveClaimErrors >= 3) {
       console.error(`claim failing (${consecutiveClaimErrors}x): ${error.message}`);
     }
-    return;
+    return 0;
   }
   if (consecutiveClaimErrors > 0) {
     if (consecutiveClaimErrors >= 3) console.log("claim recovered");
     consecutiveClaimErrors = 0;
   }
-  if (!jobs || jobs.length === 0) return;
+  if (!jobs || jobs.length === 0) return 0;
   for (const job of jobs) {
     try {
       await processJob(job);
@@ -184,12 +190,13 @@ async function tick() {
       console.error(`job ${job.job_id} crashed: ${e.message}`);
     }
   }
+  return jobs.length;
 }
 
 async function main() {
   console.log("Loading NSFWJS model…");
   model = await nsfw.load(); // MobileNetV2, bundled
-  console.log(`Model ready. Polling every ${POLL_INTERVAL_MS}ms, batch ${BATCH}.`);
+  console.log(`Model ready. Polling ${POLL_INTERVAL_MS}ms when busy, backing off to ${IDLE_POLL_INTERVAL_MS}ms when idle, batch ${BATCH}.`);
   // Heartbeat every 10 min so the log never goes ambiguously silent — you can
   // always confirm the loop is alive even when there's no work + no errors.
   const HEARTBEAT_MS = 10 * 60_000;
@@ -201,16 +208,23 @@ async function main() {
     lastBeat = Date.now();
   };
   // Simple sequential loop — one tick can't overlap the next.
+  let delay = POLL_INTERVAL_MS;
   for (;;) {
+    let found = 0;
     try {
       const before = totalProcessed;
-      await tick();
+      found = await tick();
       processedSinceBeat += totalProcessed - before;
     } catch (e) {
       console.error(`tick error: ${e.message}`);
     }
     if (Date.now() - lastBeat >= HEARTBEAT_MS) beat();
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    // Adaptive backoff: snap back to the fast interval whenever there's work to
+    // clear (so a backlog drains quickly), otherwise double the delay up to the
+    // idle ceiling. Idle is the common case on a low-traffic app, and it's what
+    // was quietly burning the Supabase egress budget at a fixed 5s cadence.
+    delay = found > 0 ? POLL_INTERVAL_MS : Math.min(delay * 2, IDLE_POLL_INTERVAL_MS);
+    await new Promise((r) => setTimeout(r, delay));
   }
 }
 

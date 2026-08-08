@@ -7,5 +7,6 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-5000}
+      IDLE_POLL_INTERVAL_MS: ${IDLE_POLL_INTERVAL_MS:-30000}
       BATCH: ${BATCH:-5}
     # No ports exposed — the worker only makes OUTBOUND calls to Supabase.

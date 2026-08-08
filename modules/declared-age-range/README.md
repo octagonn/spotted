@@ -19,13 +19,19 @@ AgeRange: lowerBound: Int?, upperBound: Int?
 
 ## Build requirements
 
+- **The pod / Swift-module name must NOT be `DeclaredAgeRange`.** That is the
+  name of Apple's system framework. If our pod shares it (it did originally),
+  `import DeclaredAgeRange` resolves to *our own module* instead of Apple's,
+  `canImport(DeclaredAgeRange)` is true for the wrong reason, and the build
+  fails with `cannot find 'AgeRangeService' in scope` — regardless of Xcode
+  version. The pod is therefore named **`SpottedAgeGate`** (see the podspec).
 - **EAS image ≥ Xcode 26.2** (pinned to `macos-tahoe-26.5-xcode-26.6` in
-  `eas.json`). Older Xcode fails with `cannot find 'AgeRangeService' in scope`.
+  `eas.json`) so Apple's framework actually contains `AgeRangeService`.
 - Entitlement `com.apple.developer.declared-age-range` in `app.config.ts`.
 - The **Declared Age Range capability must be enabled on the App ID**
   (`com.octavio.spotted`) in the developer portal, then EAS regenerates the
   provisioning profile.
-- `DeclaredAgeRange` is **weak-linked** (podspec) so the app still launches on
-  iOS < 26.
+- Apple's `DeclaredAgeRange` framework is **weak-linked** (podspec) so the app
+  still launches on iOS < 26.2.
 
 Runs on a real device only (the API is unavailable in the Simulator).

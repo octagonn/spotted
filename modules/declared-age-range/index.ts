@@ -1,13 +1,12 @@
 import { Platform } from "react-native";
 
 /**
- * JS wrapper for the Declared Age Range native module (iOS 26+ only).
+ * JS wrapper for the Declared Age Range native module (iOS 26.2+ only).
  *
- * NATIVE SIDE CURRENTLY DEFERRED (see README.md): the Swift module is removed,
- * so requireNativeModule() throws and this resolves { status: "unavailable" }
- * everywhere — the birthday screen then falls back to the DOB age gate. Safe on
- * Android, older iOS, Expo Go, and web regardless. Restoring the native module
- * makes this light up again with no changes here.
+ * Resolves { status: "unavailable" } on Android, older iOS, Expo Go, and web
+ * (the native module isn't linked there), so the birthday screen safely falls
+ * back to the DOB age gate. On a compatible build/device it presents Apple's
+ * system age-range sheet.
  */
 
 export type DeclaredAgeRangeResult =

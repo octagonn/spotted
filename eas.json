@@ -9,7 +9,7 @@
       "distribution": "internal",
       "ios": {
         "resourceClass": "m-medium",
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "android": {
         "buildType": "apk"
@@ -23,7 +23,7 @@
       },
       "ios": {
         "resourceClass": "m-medium",
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "android": {
         "buildType": "app-bundle"
@@ -37,7 +37,7 @@
       },
       "ios": {
         "resourceClass": "m-medium",
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       },
       "android": {
         "buildType": "app-bundle"

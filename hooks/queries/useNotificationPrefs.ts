@@ -138,11 +138,15 @@ export function useUpdateNotificationPrefs() {
     mutationFn: async (patch: Partial<NotificationPrefs>) => {
       if (!isSupabaseConfigured || !userId) return;
       const dbPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      // Only these three are postgres `time` columns needing an "HH:MM:00"
+      // value. NOTE: must be an exact match — `quietHoursEnabled` is a BOOLEAN,
+      // so a `startsWith("quietHours")` check would wrongly send it "true:00"
+      // and the write would fail, silently reverting the toggle.
+      const TIME_KEYS = new Set(["dailyNudgeTime", "quietHoursStart", "quietHoursEnd"]);
       for (const [key, value] of Object.entries(patch)) {
         const col = COLUMN[key];
         if (!col) continue;
-        // time columns need seconds for postgres `time`
-        dbPatch[col] = key === "dailyNudgeTime" || key.startsWith("quietHours") ? `${value}:00` : value;
+        dbPatch[col] = TIME_KEYS.has(key) ? `${value}:00` : value;
       }
       const { error } = await supabase
         .from("notification_preferences")

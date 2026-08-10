@@ -1,10 +1,11 @@
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
+import { colors } from "@/theme/colors";
 import { getDeviceId } from "@/lib/deviceId";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { requestDeclaredAgeRange } from "@/modules/declared-age-range";
@@ -126,6 +127,9 @@ export default function BirthdayScreen() {
   const [yearListIndex, setYearListIndex] = useState(18);
   const [submitting, setSubmitting] = useState(false);
   const [appleAgeConfirmed, setAppleAgeConfirmed] = useState(false);
+  // Apple's age-range sheet takes a beat to present. Show a loading state until
+  // it resolves so the screen doesn't read as frozen.
+  const [ageChecking, setAgeChecking] = useState(true);
 
   // Age Assurance (iOS 26+): ask the OS for the user's declared age range
   // before the DOB form. A parent-declared child account under 13 is blocked
@@ -137,16 +141,23 @@ export default function BirthdayScreen() {
     if (askedAgeRange.current) return;
     askedAgeRange.current = true;
     void (async () => {
-      const result = await requestDeclaredAgeRange();
-      if (result.status === "shared") {
-        if (typeof result.upperBound === "number" && result.upperBound < MIN_AGE) {
-          router.replace("/blocked");
-          return;
+      try {
+        const result = await requestDeclaredAgeRange();
+        if (result.status === "shared") {
+          if (typeof result.upperBound === "number" && result.upperBound < MIN_AGE) {
+            // Under-13 (parent-declared): hard block. Leave the loading state up
+            // while we navigate so the DOB form never flashes into view.
+            router.replace("/blocked");
+            return;
+          }
+          if (typeof result.lowerBound === "number" && result.lowerBound >= MIN_AGE) {
+            setAppleAgeConfirmed(true);
+          }
         }
-        if (typeof result.lowerBound === "number" && result.lowerBound >= MIN_AGE) {
-          setAppleAgeConfirmed(true);
-        }
+      } catch {
+        // Any failure just falls back to the manual DOB gate below.
       }
+      setAgeChecking(false);
     })();
   }, []);
 
@@ -214,40 +225,56 @@ export default function BirthdayScreen() {
         WHEN WERE YOU BORN?
       </Text>
 
-      {/* Three EQUAL columns, evenly spread — mismatched widths made the
-          wheels sit off-center. */}
-      <View className="mt-10 flex-row rounded-card border border-hairline-strong bg-glass-strong px-2 py-2">
-        <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} label="Month" />
-        <Wheel
-          items={days}
-          index={Math.min(dayIndex, maxDays - 1)}
-          onChange={setDayIndex}
-          label="Day"
-        />
-        <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} label="Year" />
-      </View>
-
-      {tooYoung ? (
+      {ageChecking ? (
         <View
-          className="mt-6 rounded-card border border-hairline-strong bg-glass-strong p-4"
-          accessibilityLiveRegion="assertive"
+          className="mt-10 items-center justify-center"
+          style={{ minHeight: WHEEL_HEIGHT + 96 }}
+          accessibilityLiveRegion="polite"
+          accessibilityLabel="Checking your age range with Apple"
         >
-          <Text variant="micro" className="text-white">
-            NOT OLD ENOUGH
-          </Text>
-          <Text variant="caption" className="mt-2 text-mist">
-            Spotted is for people {MIN_AGE} and up. You can't create an account yet.
+          <ActivityIndicator color={colors.mist} />
+          <Text variant="caption" className="mt-4 text-mist">
+            Checking your age range with Apple…
           </Text>
         </View>
-      ) : appleAgeConfirmed ? (
-        <Text variant="caption" className="mt-4 text-mist">
-          Age range confirmed with Apple. Your birthday sets up your profile.
-        </Text>
-      ) : null}
+      ) : (
+        <>
+          {/* Three EQUAL columns, evenly spread — mismatched widths made the
+              wheels sit off-center. */}
+          <View className="mt-10 flex-row rounded-card border border-hairline-strong bg-glass-strong px-2 py-2">
+            <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} label="Month" />
+            <Wheel
+              items={days}
+              index={Math.min(dayIndex, maxDays - 1)}
+              onChange={setDayIndex}
+              label="Day"
+            />
+            <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} label="Year" />
+          </View>
 
-      <Button className="mt-10" onPress={handleContinue} loading={submitting} disabled={tooYoung}>
-        Continue
-      </Button>
+          {tooYoung ? (
+            <View
+              className="mt-6 rounded-card border border-hairline-strong bg-glass-strong p-4"
+              accessibilityLiveRegion="assertive"
+            >
+              <Text variant="micro" className="text-white">
+                NOT OLD ENOUGH
+              </Text>
+              <Text variant="caption" className="mt-2 text-mist">
+                Spotted is for people {MIN_AGE} and up. You can't create an account yet.
+              </Text>
+            </View>
+          ) : appleAgeConfirmed ? (
+            <Text variant="caption" className="mt-4 text-mist">
+              Age range confirmed with Apple. Your birthday sets up your profile.
+            </Text>
+          ) : null}
+
+          <Button className="mt-10" onPress={handleContinue} loading={submitting} disabled={tooYoung}>
+            Continue
+          </Button>
+        </>
+      )}
     </Screen>
   );
 }

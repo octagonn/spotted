@@ -11,7 +11,16 @@ import { logger } from "@/lib/logger";
 export function useRestoreOnLogin(userId: string | null) {
   const doneRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isSupabaseConfigured || !userId || doneRef.current === userId) return;
+    // Reset the guard on sign-out so a subsequent login re-runs — even as the
+    // SAME user. The delete→sign-out→sign-back-in-to-cancel flow keeps the same
+    // userId, and because the root layout never unmounts, doneRef would stay
+    // pinned to that id and skip the restore, stranding the account in
+    // pending_deletion while it's actively in use (heading for a silent purge).
+    if (!userId) {
+      doneRef.current = null;
+      return;
+    }
+    if (!isSupabaseConfigured || doneRef.current === userId) return;
     doneRef.current = userId;
     void (async () => {
       try {

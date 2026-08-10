@@ -1,0 +1,74 @@
+<!--
+  Spotted — email verification (OTP) template.
+  Paste the SUBJECT and this HTML into Supabase → Authentication → Emails, for
+  the "Confirm signup" template (and the "Magic Link" template, since
+  signInWithOtp uses it for returning users). The code variable is {{ .Token }}.
+
+  Subject:  Your Spotted verification code
+  (Alt:     {{ .Token }} is your Spotted verification code)
+
+  Design notes: table layout + inline styles only, no external images/fonts/CSS
+  (external resources hurt deliverability and don't load by default), light page
+  background for universal rendering, balanced real text so it doesn't read as a
+  one-link email. Brand: gold #E8B44C on near-black #0A0A0A.
+-->
+<body style="margin:0; padding:0; background-color:#f4f4f5;">
+  <!-- Hidden preheader (inbox preview text) -->
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#f4f4f5; font-size:1px; line-height:1px;">
+    Your Spotted verification code is inside — it expires shortly.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px; width:100%; background-color:#ffffff; border:1px solid #e5e5e5; border-radius:16px; overflow:hidden;">
+
+          <!-- Brand header -->
+          <tr>
+            <td align="center" style="background-color:#0A0A0A; padding:22px 24px;">
+              <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; letter-spacing:4px; color:#E8B44C; text-transform:uppercase;">Spotted</span>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 32px 8px 32px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+              <h1 style="margin:0 0 12px 0; font-size:19px; line-height:26px; font-weight:700; color:#18181b;">Confirm your email</h1>
+              <p style="margin:0 0 24px 0; font-size:15px; line-height:22px; color:#3f3f46;">
+                Enter this verification code in Spotted to finish setting up your account:
+              </p>
+            </td>
+          </tr>
+
+          <!-- Code -->
+          <tr>
+            <td align="center" style="padding:0 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">
+                <tr>
+                  <td align="center" style="background-color:#faf6ec; border:1px solid #efe2c0; border-radius:12px; padding:18px 12px;">
+                    <span style="font-family:'SF Mono',SFMono-Regular,Menlo,Consolas,monospace; font-size:34px; font-weight:700; letter-spacing:10px; color:#0A0A0A; padding-left:10px;">{{ .Token }}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer text -->
+          <tr>
+            <td style="padding:24px 32px 32px 32px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+              <p style="margin:0 0 16px 0; font-size:13px; line-height:20px; color:#71717a;">
+                This code expires shortly for your security. If you didn't try to sign in to Spotted, you can safely ignore this email — no account will be created.
+              </p>
+              <hr style="border:none; border-top:1px solid #eeeeee; margin:20px 0;">
+              <p style="margin:0; font-size:12px; line-height:18px; color:#a1a1aa;">
+                Spotted — the gym social app.<br>
+                This is an automated message; please don't reply.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>

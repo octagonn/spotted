@@ -30,7 +30,6 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSCameraUsageDescription: "Spotted uses the camera to capture your posts.",
-      NSContactsUsageDescription: "Spotted uses your contacts to help you find friends who already use Spotted.",
       NSMicrophoneUsageDescription: "Spotted uses the microphone when you record video posts.",
       NSLocationAlwaysAndWhenInUseUsageDescription:
         "Spotted uses location to verify gym check-ins and keep your presence accurate.",

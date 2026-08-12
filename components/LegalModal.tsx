@@ -108,10 +108,16 @@ export function Terms() {
         Archived posts may remain visible from your profile to authorized viewers until you delete them.
         Even after deletion we may retain backup copies for a limited period or as required by law.
       </P>
+      <P>
+        You are solely responsible for your User Content. You represent and warrant that you own it or have
+        all rights necessary to post it, and that it does not infringe the intellectual-property, privacy, or
+        publicity rights of any person.
+      </P>
 
       <Heading>4. Acceptable Use</Heading>
       <P>You agree not to use the Service to:</P>
       <Bullet>Post sexually explicit, violent, harassing, hateful, defamatory, or unlawful content.</Bullet>
+      <Bullet>Post content that infringes any copyright, trademark, or other intellectual-property right.</Bullet>
       <Bullet>Impersonate another person or misrepresent your affiliation with any person or entity.</Bullet>
       <Bullet>Photograph or record any person without their consent where consent is required by law.</Bullet>
       <Bullet>Disclose any individual's home address, phone number, or other personal information without consent.</Bullet>
@@ -120,10 +126,51 @@ export function Terms() {
       <Bullet>Use the Service to violate any applicable law, regulation, or third-party right.</Bullet>
       <P>
         We may, in our sole discretion, remove any content or terminate any account that we believe violates
-        these standards.
+        these standards. We have no tolerance for objectionable content or abusive behavior on the Service.
       </P>
 
-      <Heading>5. Gym Check-ins & Location</Heading>
+      <Heading>5. Content Moderation & Reporting</Heading>
+      <P>We use a combination of automated systems and human review to keep the Service safe:</P>
+      <Bullet>
+        Automated moderation: photos and videos you upload are automatically scanned by machine-learning
+        moderation models, and captions, messages, and other text may be screened by automated filters. These
+        systems run on infrastructure we control. Flagged content may be hidden, removed, or queued for human
+        review, and serious or repeated violations may lead to account restriction or termination.
+      </Bullet>
+      <Bullet>
+        Reporting and blocking: you can report content or users, and block users, directly in the App. We
+        review reports of objectionable content promptly — generally within 24 hours — and will remove
+        violating content and, where warranted, eject the responsible user.
+      </Bullet>
+      <Bullet>
+        Appeals: automated systems are not perfect. If you believe your content was removed or your account
+        was restricted in error, contact us at support@spottedgymapp.com and a human will review the
+        decision.
+      </Bullet>
+
+      <Heading>6. Copyright Complaints (DMCA)</Heading>
+      <P>
+        We respect intellectual-property rights and expect users to do the same. We will remove or disable
+        access to User Content that we are properly notified is infringing, and we will terminate the
+        accounts of repeat infringers in appropriate circumstances.
+      </P>
+      <P>
+        If you believe content on the Service infringes your copyright, send a takedown notice to
+        support@spottedgymapp.com that includes: (1) identification of the copyrighted work; (2)
+        identification of the infringing material and information sufficient to locate it; (3) your name,
+        mailing address, telephone number, and email address; (4) a statement that you have a good-faith
+        belief that the use is not authorized by the copyright owner, its agent, or the law; (5) a statement,
+        under penalty of perjury, that your notice is accurate and that you are the copyright owner or
+        authorized to act on the owner's behalf; and (6) your physical or electronic signature.
+      </P>
+      <P>
+        If your content was removed because of a takedown notice and you believe the removal was a mistake or
+        misidentification, you may send us a counter-notice containing the information required by 17 U.S.C.
+        § 512(g). We may restore the content unless the original claimant files a court action within the
+        statutory period.
+      </P>
+
+      <Heading>7. Gym Check-ins & Location</Heading>
       <P>
         Spotted verifies posts are made at a participating gym using foreground (while-using) location. You
         choose whether to grant this permission. We do not collect background location and we do not share
@@ -131,7 +178,7 @@ export function Terms() {
         to the friends you have explicitly added.
       </P>
 
-      <Heading>6. Friends & Visibility</Heading>
+      <Heading>8. Friends & Visibility</Heading>
       <P>
         You control who can view your posts by managing your friend list. You may block users at any time;
         blocked users will not see your profile, posts, or check-ins. Default visibility for posts and
@@ -139,7 +186,7 @@ export function Terms() {
         Service in accordance with the visibility settings you choose in the App.
       </P>
 
-      <Heading>7. Notifications</Heading>
+      <Heading>9. Notifications</Heading>
       <P>
         Push notifications are optional and are not required to use the Service. If enabled, you can choose
         categories, friend check-in scope, daily reminder time, and quiet hours in the App, and you can
@@ -149,13 +196,13 @@ export function Terms() {
         notifications.
       </P>
 
-      <Heading>8. Privacy</Heading>
+      <Heading>10. Privacy</Heading>
       <P>
         Our Privacy Policy, accessible from the same screen as these Terms, describes how we collect, use, and
         share information. By using the Service you also agree to that policy.
       </P>
 
-      <Heading>9. Intellectual Property</Heading>
+      <Heading>11. Intellectual Property</Heading>
       <P>
         Other than User Content, all materials available through the Service — including the Spotted name, the
         S mark, the user interface, the underlying software, and any documentation — are owned by Spotted or
@@ -164,7 +211,7 @@ export function Terms() {
         accordance with these Terms.
       </P>
 
-      <Heading>10. Termination</Heading>
+      <Heading>12. Termination</Heading>
       <P>
         You may stop using the Service at any time and may delete your account through the App or by
         contacting us. We may suspend or terminate your access at any time, with or without notice, if we
@@ -173,7 +220,7 @@ export function Terms() {
         indemnification, and limits of liability) shall survive.
       </P>
 
-      <Heading>11. Disclaimer of Warranties</Heading>
+      <Heading>13. Disclaimer of Warranties</Heading>
       <P>
         THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR
         IMPLIED, INCLUDING WITHOUT LIMITATION ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
@@ -181,7 +228,7 @@ export function Terms() {
         WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.
       </P>
 
-      <Heading>12. Limitation of Liability</Heading>
+      <Heading>14. Limitation of Liability</Heading>
       <P>
         TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL SPOTTED, ITS AFFILIATES, OFFICERS,
         EMPLOYEES, AGENTS, OR LICENSORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR
@@ -193,7 +240,7 @@ export function Terms() {
         PRECEDING THE CLAIM, OR (B) ONE HUNDRED U.S. DOLLARS (USD 100).
       </P>
 
-      <Heading>13. Indemnification</Heading>
+      <Heading>15. Indemnification</Heading>
       <P>
         You agree to indemnify, defend, and hold harmless Spotted and its affiliates, officers, directors,
         employees, and agents from any claims, damages, losses, liabilities, and expenses (including
@@ -202,7 +249,7 @@ export function Terms() {
         rights of any third party.
       </P>
 
-      <Heading>14. Governing Law & Dispute Resolution</Heading>
+      <Heading>16. Governing Law & Dispute Resolution</Heading>
       <P>
         These Terms are governed by the laws of the State of California, without regard to conflict-of-laws
         principles. Any dispute arising out of or relating to these Terms or the Service that cannot be
@@ -214,7 +261,7 @@ export function Terms() {
         intellectual-property rights.
       </P>
 
-      <Heading>15. Changes</Heading>
+      <Heading>17. Changes</Heading>
       <P>
         We may modify these Terms from time to time. If we make material changes, we will provide notice
         within the App or by email. Continued use of the Service after a change becomes effective constitutes
@@ -222,7 +269,7 @@ export function Terms() {
         using the Service and delete your account.
       </P>
 
-      <Heading>16. Apple-Specific Terms</Heading>
+      <Heading>18. Apple-Specific Terms</Heading>
       <P>
         These Terms are between you and Spotted, not Apple. Apple has no obligation to provide maintenance or
         support for the App. In the event of any failure of the App to conform to any applicable warranty,
@@ -230,9 +277,9 @@ export function Terms() {
         third-party beneficiary of these Terms and has the right to enforce them against you.
       </P>
 
-      <Heading>17. Contact</Heading>
+      <Heading>19. Contact</Heading>
       <P>
-        Questions about these Terms? Email <Text className="text-white">support@spotted.app</Text>.
+        Questions about these Terms? Email <Text className="text-white">support@spottedgymapp.com</Text>.
       </P>
     </View>
   );
@@ -269,6 +316,7 @@ export function Privacy() {
       <Bullet>Device, network, and app logs needed to operate and secure the Service, such as app version, OS version, IP address, request time, and error details.</Bullet>
       <Bullet>Location: foreground (while-using) location, used only to verify check-ins at participating gyms. We do not collect background location.</Bullet>
       <Bullet>Notifications: an Expo Push Token linked to your account and app installation, device platform, permission and category settings, delivery ticket or receipt status, errors, and the time you open a notification.</Bullet>
+      <Bullet>Content safety scans: photos and videos you upload are automatically analyzed by machine-learning moderation models, and captions, messages, and other text may be screened against blocked-term filters, to detect content that violates our Terms (see Automated Content Moderation below).</Bullet>
       <Bullet>Local storage: small amounts of data (sessions, preferences, cached lists) stored on-device via AsyncStorage and MMKV.</Bullet>
 
       <SubHeading>OPTIONAL PRODUCT ANALYTICS</SubHeading>
@@ -286,6 +334,7 @@ export function Privacy() {
       <Bullet>To deliver push notifications you have opted into.</Bullet>
       <Bullet>To record and demonstrate your acceptance of our current legal terms.</Bullet>
       <Bullet>To suggest friends and gyms and personalize your feed.</Bullet>
+      <Bullet>To detect, review, and remove content that violates our Terms, using automated moderation systems supported by human review.</Bullet>
       <Bullet>To enforce these Terms, prevent abuse, and protect the safety of users and the Service.</Bullet>
       <Bullet>With your consent, to analyze product usage and improve features, performance, and reliability.</Bullet>
       <Bullet>To respond to your support requests and communicate with you about the Service.</Bullet>
@@ -295,7 +344,7 @@ export function Privacy() {
       <P>
         If you are located in the European Economic Area or the United Kingdom, we process your information
         on the following legal bases: performance of our contract with you (delivering the Service);
-        legitimate interests (security, fraud prevention, product improvement); consent (push notifications,
+        legitimate interests (security, fraud prevention, content moderation, product improvement); consent (push notifications,
         location, and any optional features that ask for it); and compliance with legal obligations.
       </P>
 
@@ -307,9 +356,10 @@ export function Privacy() {
       </P>
       <Bullet>
         With service providers who process data on our behalf: Supabase (database, authentication, storage,
-        edge functions), Expo / EAS (builds, over-the-air updates, and Expo Push Service), Apple (App Store,
-        Sign in with Apple, and APNs), Google (FCM on Android), and our SMTP provider (transactional email
-        delivery). These providers process data under their own terms and privacy commitments.
+        edge functions), Cloudflare (storage and delivery of photos and videos), Expo / EAS (builds,
+        over-the-air updates, and Expo Push Service), Apple (App Store, Sign in with Apple, and APNs), Google
+        (FCM on Android), and Resend (transactional email delivery). These providers process data under
+        their own terms and privacy commitments.
       </Bullet>
       <Bullet>With other users, only the information you choose to share — your profile, posts, and check-ins, in line with your visibility settings.</Bullet>
       <Bullet>For legal reasons: when we believe disclosure is required to comply with law, lawful requests, or legal process; to enforce our Terms; or to protect rights, property, or safety.</Bullet>
@@ -320,7 +370,9 @@ export function Privacy() {
       <P>
         Photos you take through the App are uploaded to a private storage bucket controlled by your account.
         They are accessible only via short-lived signed URLs to friends you have authorized to view a
-        specific post. We access a photo from your camera roll only when you explicitly select it. When you
+        specific post. Uploaded media is automatically scanned for content that violates our Terms (see
+        Automated Content Moderation below). We access a photo from your camera roll only when you
+        explicitly select it. When you
         tap Save after taking or editing a photo, we request permission to add that specific photo to your
         library; saving does not give Spotted permission to upload other library photos.
       </P>
@@ -344,7 +396,18 @@ export function Privacy() {
         removed, and signing out unregisters the current installation on a best-effort basis.
       </P>
 
-      <Heading>8. Retention</Heading>
+      <Heading>8. Automated Content Moderation</Heading>
+      <P>
+        We use automated systems — including machine-learning models that analyze uploaded photos and
+        videos, and filters that screen text — to help keep the Service safe. These systems score content
+        for violations of our Terms and can hide or remove content and, in serious cases, restrict accounts.
+        They run on infrastructure we operate; your photos, videos, and messages are not shared with
+        third-party AI providers for moderation, and we do not use your content to train AI models.
+        Significant moderation decisions can be appealed by contacting us at the address below, and a human
+        will review them.
+      </P>
+
+      <Heading>9. Retention</Heading>
       <P>
         Daily posts and stories leave the current feed after 24 hours; archived posts remain until you delete
         them. Direct messages remain in a conversation according to our messaging controls. In-app
@@ -359,30 +422,31 @@ export function Privacy() {
         security, legal, or operational obligations.
       </P>
 
-      <Heading>9. Your Choices & Rights</Heading>
+      <Heading>10. Your Choices & Rights</Heading>
       <Bullet>Access and correction: review or update your profile information at any time in the App.</Bullet>
-      <Bullet>Deletion: delete individual posts in the App, or start full account deletion under Settings → Danger Zone.</Bullet>
-      <Bullet>Permissions: revoke camera, microphone, photo library, location, notifications, and contacts permissions in your device settings at any time.</Bullet>
+      <Bullet>Deletion: delete individual posts in the App, or start full account deletion under Settings → Danger Zone. You can choose deletion with a 30-day restore window or immediate permanent deletion.</Bullet>
+      <Bullet>Permissions: revoke camera, microphone, photo library, location, and notification permissions in your device settings at any time.</Bullet>
       <Bullet>Product analytics: optional and off by default. Enable or withdraw consent under Settings → Privacy.</Bullet>
       <Bullet>Marketing: we do not run marketing-email campaigns by default; transactional emails (sign-in codes, account alerts) cannot be turned off without disabling sign-in.</Bullet>
       <Bullet>California (CCPA/CPRA): you have rights to know, delete, correct, limit use of sensitive info, opt out of sale or sharing, and not be discriminated against for exercising rights. We currently do not sell or share Personal Information. Email us to make a verifiable request.</Bullet>
       <Bullet>EEA / UK (GDPR): you have rights to access, rectify, erase, restrict, port, or object to processing of your information, and to lodge a complaint with your local supervisory authority.</Bullet>
 
-      <Heading>10. Children's Privacy</Heading>
+      <Heading>11. Children's Privacy</Heading>
       <P>
         The Service is not directed to children under 13, and we do not knowingly collect Personal
-        Information from anyone under 13. If you believe a child under 13 has provided us with information,
-        please contact us so we can remove it.
+        Information from anyone under 13. We use a birth-date gate and, on supported devices, Apple's
+        declared age range to prevent under-13 sign-ups. If you believe a child under 13 has provided us
+        with information, please contact us so we can remove it.
       </P>
 
-      <Heading>11. International Transfers</Heading>
+      <Heading>12. International Transfers</Heading>
       <P>
         Spotted operates from the United States and processes data on US-based infrastructure. If you access
         the Service from outside the US, your information may be transferred to and processed in countries
         with different data-protection laws than your home jurisdiction.
       </P>
 
-      <Heading>12. Security</Heading>
+      <Heading>13. Security</Heading>
       <P>
         We use technical and organizational safeguards designed to protect your information, including
         encryption in transit, encryption of stored credentials, row-level security on database tables,
@@ -390,18 +454,18 @@ export function Privacy() {
         cannot guarantee absolute security.
       </P>
 
-      <Heading>13. Changes</Heading>
+      <Heading>14. Changes</Heading>
       <P>
         We may update this Policy. If we make material changes, we will notify you in the App or by email
         before the changes take effect. The "Effective" date at the top tells you when the current version
         was published.
       </P>
 
-      <Heading>14. Contact</Heading>
+      <Heading>15. Contact</Heading>
       <P>
         Questions, requests, or complaints? Email{" "}
-        <Text className="text-white">privacy@spotted.app</Text>. We respond within thirty (30) days, sooner
-        where required by law.
+        <Text className="text-white">support@spottedgymapp.com</Text>. We respond within thirty (30) days,
+        sooner where required by law.
       </P>
     </View>
   );

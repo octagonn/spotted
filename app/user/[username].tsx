@@ -156,8 +156,10 @@ export default function UserProfileScreen() {
   const socials = useMemo(() => socialEntries(parseSocialLinks(profile?.social_links)), [profile?.social_links]);
   const hasActiveStory = Boolean(profile && stories.data?.some((g) => g.userId === profile.id));
 
-  // Public accounts are viewable by anyone; private ones unlock only for friends.
-  const isPublic = profile?.discoverable === true;
+  // Public accounts are viewable by anyone; private ones unlock only for
+  // friends. is_private is the content gate — discoverable only governs
+  // search visibility and must not unlock profiles.
+  const isPublic = profile?.is_private === false;
   const canView = isFriend || isPublic;
 
   const gymStreak = useMemo(

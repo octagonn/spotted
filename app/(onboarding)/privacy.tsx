@@ -56,7 +56,9 @@ function Option({
 /**
  * Onboarding privacy choice (§2, adjusted per request: chosen in onboarding
  * rather than defaulted). Private is preselected — safe by default — but the
- * user explicitly picks. Writes is_private + discoverable to the profile.
+ * user explicitly picks. Writes only is_private: private accounts stay
+ * discoverable in search (content is still friends-only) so Find Friends
+ * works; hiding from search is the separate Discoverable toggle in Settings.
  */
 export default function PrivacyScreen() {
   const [choice, setChoice] = useState<Choice>("private");
@@ -75,7 +77,7 @@ export default function PrivacyScreen() {
         const isPrivate = choice === "private";
         await supabase
           .from("profiles")
-          .update({ is_private: isPrivate, discoverable: !isPrivate })
+          .update({ is_private: isPrivate })
           .eq("id", uid);
       }
       router.push("/home-gym");

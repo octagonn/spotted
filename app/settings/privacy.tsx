@@ -353,9 +353,7 @@ export default function PrivacySettingsScreen() {
             right={
               <Toggle
                 value={settings.is_private}
-                onToggle={() =>
-                  updateSettings.mutate({ is_private: !settings.is_private, discoverable: settings.is_private })
-                }
+                onToggle={() => updateSettings.mutate({ is_private: !settings.is_private })}
               />
             }
           />

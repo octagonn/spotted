@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { compressStoryPhoto } from "@/lib/posts";
 import { removePostObjects, uploadPostObject } from "@/lib/r2";
 import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 
 export type StoryMusic = {
@@ -24,6 +25,9 @@ export type StoryItem = {
   seen: boolean;
   music: StoryMusic | null;
   tags: StoryTag[];
+  /** Set when this story RESHARES a post the owner was tagged in — the viewer
+   *  shows a credit chip that opens the original. */
+  sharedPostId: string | null;
 };
 
 export type StoryGroup = {
@@ -33,6 +37,10 @@ export type StoryGroup = {
   avatarUrl: string | null;
   isMe: boolean;
   hasUnseen: boolean;
+  /** Set when this group is a PRIVATE story (audience-limited list). Posts to
+   *  a private story group separately from the owner's main story. */
+  privateStoryId: string | null;
+  privateStoryName: string | null;
   stories: StoryItem[];
 };
 
@@ -54,7 +62,7 @@ export function useStories() {
         supabase
           .from("stories")
           .select(
-            "id, user_id, media_url, created_at, music_title, music_artist, music_preview_url, music_artwork_url, music_clip_start, profiles:user_id(display_name, username, avatar_url), story_tags(profile:user_id(id, username))"
+            "id, user_id, media_url, created_at, private_story_id, shared_post_id, music_title, music_artist, music_preview_url, music_artwork_url, music_clip_start, private_stories(name), profiles:user_id(display_name, username, avatar_url), story_tags(profile:user_id(id, username))"
           )
           .gt("expires_at", nowIso)
           .order("created_at", { ascending: true }),
@@ -68,18 +76,23 @@ export function useStories() {
         user_id: string;
         media_url: string;
         created_at: string;
+        private_story_id: string | null;
+        shared_post_id: string | null;
         music_title: string | null;
         music_artist: string | null;
         music_preview_url: string | null;
         music_artwork_url: string | null;
         music_clip_start: number;
+        private_stories: { name: string } | null;
         profiles: { display_name: string; username: string; avatar_url: string | null } | null;
         story_tags: { profile: { id: string; username: string } | null }[] | null;
       }[];
 
+      // Private stories group separately from the owner's main story.
       const byUser = new Map<string, StoryGroup>();
       for (const row of rows) {
-        let group = byUser.get(row.user_id);
+        const groupKey = `${row.user_id}:${row.private_story_id ?? "main"}`;
+        let group = byUser.get(groupKey);
         if (!group) {
           group = {
             userId: row.user_id,
@@ -88,9 +101,11 @@ export function useStories() {
             avatarUrl: row.profiles?.avatar_url ?? null,
             isMe: row.user_id === userId,
             hasUnseen: false,
+            privateStoryId: row.private_story_id,
+            privateStoryName: row.private_stories?.name ?? null,
             stories: []
           };
-          byUser.set(row.user_id, group);
+          byUser.set(groupKey, group);
         }
         let media: string | null = row.media_url;
         if (media && !media.startsWith("http")) {
@@ -119,7 +134,8 @@ export function useStories() {
           tags: (row.story_tags ?? [])
             .map((t) => t.profile)
             .filter((p): p is { id: string; username: string } => Boolean(p))
-            .map((p) => ({ userId: p.id, username: p.username }))
+            .map((p) => ({ userId: p.id, username: p.username })),
+          sharedPostId: row.shared_post_id ?? null
         });
         if (!storySeen && row.user_id !== userId) {
           group.hasUnseen = true;
@@ -128,6 +144,13 @@ export function useStories() {
 
       return [...byUser.values()].sort((a, b) => {
         if (a.isMe !== b.isMe) return a.isMe ? -1 : 1;
+        // Own groups: main story before private lists.
+        if (a.isMe && b.isMe) {
+          const aPriv = a.privateStoryId ? 1 : 0;
+          const bPriv = b.privateStoryId ? 1 : 0;
+          if (aPriv !== bPriv) return aPriv - bPriv;
+          return 0;
+        }
         if (a.hasUnseen !== b.hasUnseen) return a.hasUnseen ? -1 : 1;
         return 0;
       });
@@ -142,6 +165,10 @@ export type PostStoryInput = {
   tagUserIds?: string[];
   /** Raw text overlays (baked into the image) — saved for slur scanning. */
   overlayText?: string;
+  /** Post into a private story (audience = its member list) instead of the main story. */
+  privateStoryId?: string | null;
+  /** Display name of that private story (for the optimistic rail group). */
+  privateStoryName?: string | null;
 };
 
 /** Upload a story photo (reuses the posts bucket) and insert the story row. */
@@ -153,7 +180,7 @@ export function usePostStory() {
     // backoff before surfacing an error, so a flaky network doesn't drop a story.
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
-    mutationFn: async ({ photoUri, music, tagUserIds, overlayText }: PostStoryInput) => {
+    mutationFn: async ({ photoUri, music, tagUserIds, overlayText, privateStoryId }: PostStoryInput) => {
       if (!isSupabaseConfigured || !userId) return;
       const uploadUri = await compressStoryPhoto(photoUri);
       const response = await fetch(uploadUri);
@@ -163,6 +190,7 @@ export function usePostStory() {
       const insert = await supabase.from("stories").insert({
         user_id: userId,
         media_url: path,
+        private_story_id: privateStoryId ?? null,
         music_title: music?.title ?? null,
         music_artist: music?.artist ?? null,
         music_preview_url: music?.previewUrl ?? null,
@@ -186,7 +214,7 @@ export function usePostStory() {
     // Optimistic: drop a temp story into your own group with the LOCAL photo uri
     // so the "Your story" ring + profile reflect it instantly (no wait for the
     // upload). Reconciled with the server row on settle.
-    onMutate: async ({ photoUri, music }) => {
+    onMutate: async ({ photoUri, music, privateStoryId, privateStoryName }) => {
       if (!userId) return { prev: undefined };
       await queryClient.cancelQueries({ queryKey: ["stories", userId] });
       const prev = queryClient.getQueryData<StoryGroup[]>(["stories", userId]);
@@ -197,15 +225,27 @@ export function usePostStory() {
         createdAt: new Date().toISOString(),
         seen: true,
         music: music ?? null,
-        tags: []
+        tags: [],
+        sharedPostId: null
       };
       queryClient.setQueryData<StoryGroup[]>(["stories", userId], (old) => {
         const groups = old ? old.map((g) => ({ ...g, stories: [...g.stories] })) : [];
-        const meIdx = groups.findIndex((g) => g.isMe);
+        const targetPs = privateStoryId ?? null;
+        const meIdx = groups.findIndex((g) => g.isMe && (g.privateStoryId ?? null) === targetPs);
         if (meIdx >= 0) {
           groups[meIdx].stories.push(tempStory);
         } else {
-          groups.unshift({ userId, name: "You", username: "", avatarUrl: null, isMe: true, hasUnseen: false, stories: [tempStory] });
+          groups.unshift({
+            userId,
+            name: "You",
+            username: "",
+            avatarUrl: null,
+            isMe: true,
+            hasUnseen: false,
+            privateStoryId: targetPs,
+            privateStoryName: privateStoryName ?? null,
+            stories: [tempStory]
+          });
         }
         // Own group sorts first.
         return groups.sort((a, b) => (a.isMe === b.isMe ? 0 : a.isMe ? -1 : 1));
@@ -234,6 +274,7 @@ export function useMarkStoryViewed() {
       await supabase
         .from("story_views")
         .upsert({ story_id: storyId, viewer_id: userId }, { ignoreDuplicates: true });
+      trackAnalyticsEvent("story_viewed");
     },
     onMutate: async (storyId) => {
       await queryClient.cancelQueries({ queryKey: ["stories", userId] });
@@ -254,5 +295,24 @@ export function useMarkStoryViewed() {
     onError: (_err, _storyId, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(["stories", userId], ctx.prev);
     }
+  });
+}
+
+/**
+ * Repost a post you're tagged in to your own story (server-enforced — the
+ * repost_tagged_to_story RPC checks the tag, copies the raw media path, and
+ * refuses videos and duplicates).
+ */
+export function useRepostToStory() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      if (!isSupabaseConfigured) return;
+      const { error } = await supabase.rpc("repost_tagged_to_story" as never, { p_post_id: postId } as never);
+      if (error) throw error;
+      trackAnalyticsEvent("story_reposted");
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["stories", userId] })
   });
 }

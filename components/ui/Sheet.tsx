@@ -7,7 +7,7 @@ import {
   type BottomSheetBackdropProps
 } from "@gorhom/bottom-sheet";
 import type { ReactNode } from "react";
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, useEffect } from "react";
 import { Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,6 +19,12 @@ type SheetApi = {
   /** Opens the single sheet host with arbitrary content. Replaces any open sheet. */
   open: (content: ReactNode) => void;
   close: () => void;
+  /**
+   * True while a sheet is presented. Screens that play audio in the background
+   * (the story review preview) use this to pause themselves, so a sheet with
+   * its own player — the music picker — is never fighting them for the speaker.
+   */
+  isOpen: boolean;
 };
 
 const SheetContext = createContext<SheetApi | null>(null);
@@ -70,17 +76,44 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     easing: easing.emphasized
   });
 
+  const [isOpen, setIsOpen] = useState(false);
+  // Intent flag: the sheet may only be on screen between open() and the
+  // matching dismiss. The dynamic-sizing modal has been seen re-presenting
+  // itself (as a tiny empty sheet) after a dismiss when its content
+  // re-measured — onChange below slams it shut whenever that happens.
+  const wantOpen = useRef(false);
+
   const open = useCallback((node: ReactNode) => {
     openCount.current += 1;
     setContent({ node, key: openCount.current });
-    requestAnimationFrame(() => modalRef.current?.present());
+    setIsOpen(true);
+    wantOpen.current = true;
   }, []);
 
+  // Present once the (freshly mounted) modal has a ref — see the render below:
+  // the BottomSheetModal is only in the tree while content is set.
+  const contentKey = content?.key ?? 0;
+  useEffect(() => {
+    if (!contentKey) return;
+    let cancelled = false;
+    const tryPresent = () => {
+      if (cancelled) return;
+      if (modalRef.current) modalRef.current.present();
+      else requestAnimationFrame(tryPresent);
+    };
+    const id = requestAnimationFrame(tryPresent);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [contentKey]);
+
   const close = useCallback(() => {
+    wantOpen.current = false;
     modalRef.current?.dismiss();
   }, []);
 
-  const api = useMemo(() => ({ open, close }), [open, close]);
+  const api = useMemo(() => ({ open, close, isOpen }), [open, close, isOpen]);
 
   // SheetContext MUST wrap BottomSheetModalProvider: the modal re-parents its
   // children into a portal host at the BottomSheetModalProvider level, so any
@@ -90,17 +123,33 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     <SheetContext.Provider value={api}>
       <BottomSheetModalProvider>
         {children}
+        {content ? (
         <BottomSheetModal
           ref={modalRef}
           enableDynamicSizing
           maxDynamicContentSize={windowHeight * 0.78}
-          // "extend": when the keyboard opens the sheet grows to its max
-          // height, so search fields sit well above the keyboard with room
-          // for results in between.
-          keyboardBehavior="extend"
+          // "interactive": the sheet keeps its content height and floats above
+          // the keyboard. The old "extend" grew the sheet to its max while the
+          // content (fixed-height lists) stayed short — the surplus rendered
+          // as a dead graphite band between the list and the keyboard (the
+          // reported "weird gap / black bar" in the tag-friends sheet).
+          keyboardBehavior="interactive"
           keyboardBlurBehavior="restore"
           android_keyboardInputMode="adjustResize"
           animationConfigs={animationConfigs}
+          // Drop the content once the dismiss animation has fully finished —
+          // content left mounted kept re-measuring (query settling, row state
+          // flipping) and dynamic sizing re-presented the sheet on its own
+          // (the "invite sheet pops up a second time" report). Clearing here,
+          // not mid-animation, avoids the bounce/crash noted above.
+          onDismiss={() => {
+            wantOpen.current = false;
+            setIsOpen(false);
+            setContent(null);
+          }}
+          onChange={(index) => {
+            if (index >= 0 && !wantOpen.current) modalRef.current?.dismiss();
+          }}
           backdropComponent={Backdrop}
           backgroundStyle={{
             backgroundColor: colors.graphite,
@@ -121,9 +170,10 @@ export function SheetProvider({ children }: { children: ReactNode }) {
           <BottomSheetView key={content?.key ?? 0} style={{ paddingBottom: 28 + insets.bottom }}>
             {/* Tap on sheet dead space closes the keyboard (modals portal
                 outside the root DismissKeyboard wrapper). */}
-            <DismissKeyboard style={{ flex: 0 }}>{content?.node ?? null}</DismissKeyboard>
+            <DismissKeyboard style={{ flex: 0 }}>{content.node}</DismissKeyboard>
           </BottomSheetView>
         </BottomSheetModal>
+        ) : null}
       </BottomSheetModalProvider>
     </SheetContext.Provider>
   );

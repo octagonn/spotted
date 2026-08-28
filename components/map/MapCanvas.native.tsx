@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import { Pressable } from "@/components/ui/Pressable";
-import type { MapGym } from "@/hooks/queries/useMapGyms";
+import type { MapBounds, MapGym } from "@/hooks/queries/useMapGyms";
+import { allowMapNavigation } from "@/lib/mapNavigation";
 import { colors } from "@/theme/colors";
 
 /** Orange County fallback center when device location is unavailable. */
@@ -31,24 +32,44 @@ export function MapCanvas({
   gyms,
   coords,
   onGym,
-  onCluster
+  onCluster,
+  onRegion
 }: {
   gyms: MapGym[];
   coords: { latitude: number; longitude: number } | null;
   onGym: (gym: MapGym) => void;
   onCluster: (gyms: MapGym[]) => void;
+  /** Fired after each pan/zoom settles — drives viewport gym fetching. */
+  onRegion?: (bounds: MapBounds) => void;
 }) {
   const [ready, setReady] = useState(false);
+  const webRef = useRef<WebView>(null);
   const gymById = useMemo(() => new Map(gyms.map((g) => [g.id, g])), [gyms]);
 
-  // Freeze the page at mount (same contract as before: parent waits for
-  // location + gyms to settle before mounting).
+  // The page mounts once with the initial gyms baked in; later gym-set changes
+  // stream into the live GeoJSON source (no reload, no remount).
   const html = useRef<string | null>(null);
   if (html.current === null) html.current = buildMapHtml(gyms, coords);
+  const firstData = useRef(true);
+  useEffect(() => {
+    if (!ready) return;
+    if (firstData.current) {
+      firstData.current = false;
+      return; // initial set is already in the HTML
+    }
+    const features = gyms.map((g) => ({
+      type: "Feature",
+      properties: { id: g.id },
+      geometry: { type: "Point", coordinates: [g.longitude, g.latitude] }
+    }));
+    webRef.current?.injectJavaScript(`window.__setGyms(${JSON.stringify(features)}); true;`);
+  }, [gyms, ready]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
-      let msg: { type?: string; ids?: string[] } | null = null;
+      let msg:
+        | { type?: string; ids?: string[]; minLat?: number; minLng?: number; maxLat?: number; maxLng?: number }
+        | null = null;
       try {
         msg = JSON.parse(event.nativeEvent.data);
       } catch {
@@ -61,14 +82,23 @@ export function MapCanvas({
       } else if (msg.type === "cluster" && msg.ids?.length) {
         const list = msg.ids.map((id) => gymById.get(id)).filter((g): g is MapGym => Boolean(g));
         if (list.length) onCluster(list);
+      } else if (
+        msg.type === "region" &&
+        typeof msg.minLat === "number" &&
+        typeof msg.minLng === "number" &&
+        typeof msg.maxLat === "number" &&
+        typeof msg.maxLng === "number"
+      ) {
+        onRegion?.({ minLat: msg.minLat, minLng: msg.minLng, maxLat: msg.maxLat, maxLng: msg.maxLng });
       }
     },
-    [gymById, onGym, onCluster]
+    [gymById, onGym, onCluster, onRegion]
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <WebView
+        ref={webRef}
         originWhitelist={["*"]}
         source={{ html: html.current }}
         onMessage={handleMessage}
@@ -80,6 +110,17 @@ export function MapCanvas({
         overScrollMode="never"
         setSupportMultipleWindows={false}
         allowsBackForwardNavigationGestures={false}
+        // This WebView holds a postMessage bridge into the app, so it must
+        // never be able to BECOME a page we don't control. The map only ever
+        // needs its own inline document plus the library/style/tile hosts;
+        // anything else (a redirect, an attribution link tap, an injected
+        // navigation) is refused instead of loading inside the bridge.
+        onShouldStartLoadWithRequest={(request) => allowMapNavigation(request.url)}
+        // Keep the sandbox shut: no file:// reach-around, no popups.
+        allowFileAccess={false}
+        allowFileAccessFromFileURLs={false}
+        allowUniversalAccessFromFileURLs={false}
+        javaScriptCanOpenWindowsAutomatically={false}
         // The GL map canvas has no accessibility tree — hide it from screen
         // readers and give them the "Browse gyms" list below instead (WCAG
         // 1.1.1 / 2.1.1: the map pins are otherwise undiscoverable).
@@ -173,7 +214,9 @@ function buildMapHtml(gyms: MapGym[], coords: { latitude: number; longitude: num
     style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
     center: [${center.longitude}, ${center.latitude}],
     zoom: ${zoom},
-    minZoom: 8,
+    // Zoom all the way out to country scale; gym layers hide below GYM_MIN_ZOOM
+    // (see layer minzoom) so a continental view isn't thousands of bubbles.
+    minZoom: 3,
     maxZoom: 18,
     attributionControl: { compact: true },
     pitchWithRotate: false,
@@ -181,6 +224,17 @@ function buildMapHtml(gyms: MapGym[], coords: { latitude: number; longitude: num
   });
   map.touchZoomRotate.disableRotation();
   map.touchPitch.disable();
+
+  // Live gym updates from RN (viewport fetches). Buffered until the source
+  // exists so an early inject can't race the style load.
+  var pendingGyms = null;
+  var gymsReady = false;
+  window.__setGyms = function (features) {
+    pendingGyms = features;
+    if (gymsReady) {
+      map.getSource("gyms").setData({ type: "FeatureCollection", features: pendingGyms });
+    }
+  };
 
   map.on("load", function () {
     map.addSource("gyms", {
@@ -190,12 +244,45 @@ function buildMapHtml(gyms: MapGym[], coords: { latitude: number; longitude: num
       clusterMaxZoom: 15,
       clusterRadius: 46
     });
+    gymsReady = true;
+    if (pendingGyms) {
+      map.getSource("gyms").setData({ type: "FeatureCollection", features: pendingGyms });
+    }
+
+    // Below this zoom the gym layers hide (readability at country scale).
+    // Declared BEFORE reportRegion, which reads it — it used to be declared
+    // afterwards, so the first call compared against undefined and only
+    // worked by accident.
+    //
+    // Lowered 7 -> 5: at 7 the map went completely empty between the minimum
+    // zoom (3) and 7, so zooming out looked broken ("can't zoom out far
+    // enough"). Clustering already keeps this cheap to draw.
+    var GYM_MIN_ZOOM = 5;
+
+    // Report the settled viewport after every pan/zoom (and once on load) so
+    // RN can fetch gyms for wherever the user is looking. Skip while zoomed
+    // out past the gym layers' cutoff — the bubbles are hidden there and a
+    // country-sized bbox fetch is pure waste.
+    var reportRegion = function () {
+      if (map.getZoom() < GYM_MIN_ZOOM) return;
+      var b = map.getBounds();
+      post({
+        type: "region",
+        minLat: b.getSouth(),
+        minLng: b.getWest(),
+        maxLat: b.getNorth(),
+        maxLng: b.getEast()
+      });
+    };
+    map.on("moveend", reportRegion);
+    reportRegion();
 
     // Cluster bubbles — white fill with a dark keyline for the dark basemap.
     map.addLayer({
       id: "clusters",
       type: "circle",
       source: "gyms",
+      minzoom: GYM_MIN_ZOOM,
       filter: ["has", "point_count"],
       paint: {
         "circle-color": "#FFFFFF",
@@ -208,6 +295,7 @@ function buildMapHtml(gyms: MapGym[], coords: { latitude: number; longitude: num
       id: "cluster-count",
       type: "symbol",
       source: "gyms",
+      minzoom: GYM_MIN_ZOOM,
       filter: ["has", "point_count"],
       layout: {
         "text-field": "{point_count_abbreviated}",
@@ -222,6 +310,7 @@ function buildMapHtml(gyms: MapGym[], coords: { latitude: number; longitude: num
       id: "gym",
       type: "circle",
       source: "gyms",
+      minzoom: GYM_MIN_ZOOM,
       filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-color": "#FFFFFF",

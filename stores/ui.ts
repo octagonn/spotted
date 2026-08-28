@@ -27,6 +27,10 @@ type UiState = {
   flashSignal: number;
   flash: () => void;
 
+  /** Incrementing signal — PostCelebration plays the publish burst whenever this changes. */
+  celebrationSignal: number;
+  celebrate: () => void;
+
   /** Local date key ("YYYY-MM-DD") of the last published daily post, or null. */
   postedDate: string | null;
   postedHydrated: boolean;
@@ -56,6 +60,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   flashSignal: 0,
   flash: () => set((state) => ({ flashSignal: state.flashSignal + 1 })),
+
+  celebrationSignal: 0,
+  celebrate: () => set((state) => ({ celebrationSignal: state.celebrationSignal + 1 })),
 
   postedDate: null,
   postedHydrated: false,
@@ -177,4 +184,9 @@ export function showToast(message: string): void {
 
 export function triggerFlash(): void {
   useUiStore.getState().flash();
+}
+
+/** Publish burst (confetti + stamp + haptic salvo) — fire right after posting. */
+export function triggerPostCelebration(): void {
+  useUiStore.getState().celebrate();
 }

@@ -1,7 +1,8 @@
 import { router } from "expo-router";
+import { appAlert } from "@/components/ui/AppDialog";
 import { TriangleAlert } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PanelHeader } from "@/components/ui/PanelHeader";
@@ -82,7 +83,7 @@ export default function DeleteAccountScreen() {
 
   const confirmHardDelete = () => {
     if (deleting) return;
-    Alert.alert(
+    appAlert(
       "Delete permanently now?",
       "This erases your account and everything in it right now. It cannot be undone.",
       [

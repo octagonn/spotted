@@ -9,7 +9,10 @@ serve(async (request) => {
   try {
     const user = await authenticatedUser(request);
     const supabase = serviceClient();
-    const { data, error } = await supabase.rpc("get_friend_suggestions", { p_user_id: user.id, p_limit: 20 });
+    // Honor the client's requested page size (it was silently ignored before).
+    const body = await request.json().catch(() => ({}));
+    const limit = Math.max(1, Math.min(50, Number((body as { limit?: unknown })?.limit) || 20));
+    const { data, error } = await supabase.rpc("get_friend_suggestions", { p_user_id: user.id, p_limit: limit });
     if (error) {
       return jsonResponse({ error: error.message }, 500);
     }

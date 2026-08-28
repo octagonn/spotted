@@ -1,25 +1,31 @@
-import { useIsFocused } from "@react-navigation/native";
-import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams } from "expo-router";
-import { useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { useMemo } from "react";
+import { Text } from "react-native";
 
-import { PostCard } from "@/components/post/PostCard";
-import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
-import { PanelHeader } from "@/components/ui/PanelHeader";
-import { useSheet } from "@/components/ui/Sheet";
-import { PostCardSkeleton } from "@/components/ui/Skeleton";
+import { ImageOff, Moon } from "lucide-react-native";
+
+import { PostPagerScreen } from "@/components/post/PostPagerScreen";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useMyProfile, useProfileById } from "@/hooks/queries/useProfile";
 import { useSignedUserPosts, type SignedPost } from "@/hooks/queries/useSignedUserPosts";
+import { useStreakDays } from "@/hooks/queries/useStreakDays";
 import { type FeedMockPost } from "@/lib/redesignData";
+import { signedPostToFeedPost } from "@/lib/toFeedPost";
 import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-/** "9:41 AM" stamp for a same-day post. */
+/**
+ * Card stamp: clock time ("9:41 AM") while the day is still today, feed-style
+ * relative age ("10d") once it's history — testers read a bare date/time on an
+ * old post as a bug because every other surface shows relative age.
+ */
 function timeOf(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const then = new Date(iso);
+  const mins = Math.round((Date.now() - then.getTime()) / 60000);
+  if (mins >= 60 * 24) return `${Math.round(mins / (60 * 24))}d`;
+  return then.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 /**
@@ -31,12 +37,16 @@ function timeOf(iso: string): string {
  */
 export default function DayScreen() {
   const { date = "", user, post } = useLocalSearchParams<{ date: string; user?: string; post?: string }>();
-  const sheet = useSheet();
   const myProfile = useMyProfile();
   const otherProfile = useProfileById(user);
   const ownerId = user ?? myProfile.data?.id;
   const owner = user ? otherProfile.data : myProfile.data;
   const posts = useSignedUserPosts(ownerId);
+  // The gym-day ledger keeps a day alive after its post is deleted (that's what
+  // preserves the streak) — so this screen must be able to SAY that, instead of
+  // a bare "no posts" that contradicts the calendar cell the user just tapped.
+  const streakDays = useStreakDays(ownerId);
+  const ledgerDay = streakDays.data instanceof Map ? streakDays.data.get(date) : undefined;
 
   const parts = date.split("-").map(Number);
   const day = Number.isFinite(parts[2]) ? parts[2] : 1;
@@ -56,80 +66,44 @@ export default function DayScreen() {
   );
 
   const feedPosts: FeedMockPost[] = useMemo(
-    () =>
-      dayPosts.map((p: SignedPost) => ({
-        id: p.id,
-        user: { name, handle, avatarUrl },
-        time: timeOf(p.created_at),
-        kind: p.mediaType === "video" ? "video" : "fb",
-        mediaUri: p.mediaType === "video" ? undefined : p.media_url ?? undefined,
-        video: p.mediaType === "video" && p.media_url ? { uri: p.media_url, trimStart: 0, trimEnd: 0 } : undefined,
-        insetUri: p.inset_url ?? undefined,
-        mediaUris: p.media_urls?.length ? p.media_urls : undefined,
-        workouts: p.workouts.length ? p.workouts : undefined,
-        caption: p.caption ?? undefined,
-        music: p.music
-          ? { title: p.music.title, artist: p.music.artist, artworkUrl: p.music.artworkUrl, previewUrl: p.music.previewUrl, clipStart: p.music.clipStart }
-          : undefined,
-        reactions: [],
-        comments: []
-      })),
+    () => dayPosts.map((p: SignedPost) => signedPostToFeedPost(p, { name, handle, avatarUrl }, timeOf(p.created_at))),
     [dayPosts, name, handle, avatarUrl]
   );
 
-  const initialIndex = Math.max(
-    0,
-    feedPosts.findIndex((p) => p.id === post)
-  );
-
-  const isFocused = useIsFocused();
-  const [activePostId, setActivePostId] = useState<string | null>(null);
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: { isViewable: boolean; item?: FeedMockPost }[] }) => {
-      const first = viewableItems.find((v) => v.isViewable && v.item);
-      setActivePostId(first?.item?.id ?? null);
-    }
-  ).current;
-
-  const openReactionCapture = (id: string) => {
-    sheet.open(<ReactionCaptureSheet postId={id} onClose={sheet.close} />);
-  };
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.black }}>
-      <PanelHeader
-        title={`${month} ${day}`}
-        sub={
-          feedPosts.length
-            ? `@${handle} · ${feedPosts.length} ${feedPosts.length === 1 ? "post" : "posts"}`
-            : `@${handle}`
-        }
-      />
-      <FlashList
-        data={feedPosts}
-        keyExtractor={(item: FeedMockPost) => item.id}
-        initialScrollIndex={initialIndex}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        renderItem={({ item }: { item: FeedMockPost }) => (
-          <PostCard post={item} locked={false} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
-        )}
-        ListEmptyComponent={
-          posts.isLoading ? (
-            <View>
-              <PostCardSkeleton />
-              <PostCardSkeleton />
-            </View>
-          ) : (
-            <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
-              No posts saved for this day.
-            </Text>
-          )
-        }
-      />
-    </View>
+    <PostPagerScreen
+      title={`${month} ${day}`}
+      sub={
+        feedPosts.length
+          ? `@${handle} · ${feedPosts.length} ${feedPosts.length === 1 ? "post" : "posts"}`
+          : `@${handle}`
+      }
+      posts={feedPosts}
+      initialPostId={post}
+      isLoading={posts.isLoading || streakDays.isLoading}
+      empty={
+        ledgerDay?.kind === "gym" ? (
+          // The day counted (and still counts toward the streak) but its post
+          // is gone — say so, or the calendar looks like it's lying.
+          <EmptyState
+            icon={<ImageOff size={22} color={colors.fog} strokeWidth={1.8} />}
+            title="This day's post was deleted"
+            body={`The gym day still counts — ${user ? "their" : "your"} streak keeps it.`}
+            paddingTop={48}
+          />
+        ) : ledgerDay?.kind === "rest" ? (
+          <EmptyState
+            icon={<Moon size={22} color={colors.silver} strokeWidth={1.8} />}
+            title="Rest day"
+            body="No post — the streak was frozen for the day, not broken."
+            paddingTop={48}
+          />
+        ) : (
+          <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
+            No posts saved for this day.
+          </Text>
+        )
+      }
+    />
   );
 }

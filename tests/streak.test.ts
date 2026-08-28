@@ -51,4 +51,51 @@ describe("computeGymStreak", () => {
       keepAlive: false
     });
   });
+
+  describe("rest days freeze the streak", () => {
+    it("a rest day bridges the run without adding to it", () => {
+      // Trained 3 days, rested yesterday, trained today: still 4 real gym days.
+      expect(
+        computeGymStreak(
+          [keyOffset(0), keyOffset(2), keyOffset(3), keyOffset(4)],
+          NOW,
+          [keyOffset(1)]
+        )
+      ).toEqual({ count: 4, keepAlive: false });
+    });
+
+    it("does NOT increment the count", () => {
+      // Same gym days, with and without a rest day in the middle, agree.
+      const withRest = computeGymStreak([keyOffset(0), keyOffset(2)], NOW, [keyOffset(1)]);
+      expect(withRest).toEqual({ count: 2, keepAlive: false });
+    });
+
+    it("today being a rest day keeps yesterday's streak alive", () => {
+      expect(computeGymStreak([keyOffset(1), keyOffset(2)], NOW, [keyOffset(0)])).toEqual({
+        count: 2,
+        keepAlive: false
+      });
+    });
+
+    it("rest days alone are not a streak", () => {
+      expect(computeGymStreak([], NOW, [keyOffset(0), keyOffset(1)])).toEqual({
+        count: 0,
+        keepAlive: false
+      });
+    });
+
+    it("a rest day does not bridge a two-day hole", () => {
+      // Rested 1 day ago but did nothing 2 days ago — the older run is cut off.
+      expect(
+        computeGymStreak([keyOffset(3), keyOffset(4)], NOW, [keyOffset(1)])
+      ).toEqual({ count: 0, keepAlive: false });
+    });
+
+    it("behaves exactly as before when no rest days are passed", () => {
+      expect(computeGymStreak([keyOffset(0), keyOffset(1)], NOW)).toEqual({
+        count: 2,
+        keepAlive: false
+      });
+    });
+  });
 });

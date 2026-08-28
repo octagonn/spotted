@@ -100,9 +100,20 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
               }}
             >
               <Text
+                // Explicit line height + no font padding: every option's label
+                // renders on the SAME baseline (the selected pill's label used
+                // to sit a hair off the others).
+                // Always one line: a longer label ("Add Friends") must shrink
+                // to fit rather than wrap and clip in the fixed-height segment.
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
                 style={{
                   fontFamily: "Geist_600SemiBold",
                   fontSize: 13,
+                  lineHeight: 18,
+                  includeFontPadding: false,
+                  textAlignVertical: "center",
                   letterSpacing: 13 * 0.01,
                   color: on ? colors.black : tokens.text.secondary
                 }}

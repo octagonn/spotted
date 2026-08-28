@@ -2,6 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import { isAuthApiError, isAuthSessionMissingError } from "@supabase/supabase-js";
 import { create } from "zustand";
 
+import { flushAnalytics, trackAnalyticsEvent } from "@/lib/analytics";
 import { userNeedsPasswordSetup } from "@/lib/authRouting";
 import { unregisterCurrentPushToken } from "@/lib/notifications";
 import { wipeQueryCaches } from "@/lib/queryClient";
@@ -165,9 +166,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ session, ...resolved });
   },
   markProfileCreated: (profileId) => {
+    trackAnalyticsEvent("profile_created");
     set({ status: "needs-onboarding", onboardingStage: "permissions", profileId, needsBirthdate: false });
   },
   setOnboardingStage: (stage) => {
+    trackAnalyticsEvent("onboarding_stage", { stage });
     if (stage === "complete") {
       set({ status: "ready", onboardingStage: null });
     } else {
@@ -175,6 +178,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   signOut: async () => {
+    trackAnalyticsEvent("sign_out");
+    await flushAnalytics();
     if (isSupabaseConfigured) {
       try {
         await unregisterCurrentPushToken();

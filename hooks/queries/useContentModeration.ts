@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 
 import type { StoryGroup } from "@/hooks/queries/useStories";
+import { removePostObjects } from "@/lib/r2";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
-import { showToast } from "@/stores/ui";
+import { showToast, useUiStore } from "@/stores/ui";
 import type { FeedPost } from "@/types/domain";
 
 /** Delete one of your own posts (RLS enforces ownership). Removes storage too. */
@@ -15,10 +17,11 @@ export function useDeletePost() {
       // Best-effort storage cleanup (paths, not signed URLs).
       const paths = mediaPaths.filter((p) => p && !p.startsWith("http"));
       if (paths.length) {
-        await supabase.storage.from("posts").remove(paths).catch(() => {});
+        await removePostObjects(paths).catch(() => {});
       }
       const { error } = await supabase.from("posts").delete().eq("id", postId);
       if (error) throw error;
+      trackAnalyticsEvent("post_deleted");
     },
     // Optimistic: the post vanishes from the feed + profile grid instantly.
     onMutate: async ({ postId }) => {
@@ -39,10 +42,34 @@ export function useDeletePost() {
       for (const [key, data] of ctx?.prevSigned ?? []) queryClient.setQueryData(key, data);
       showToast("Couldn't delete the post");
     },
+    onSuccess: async () => {
+      // Daily gate integrity: if that was the user's LAST post of the day,
+      // the feed must re-lock. The server check re-derives on invalidation,
+      // but the local optimistic "posted today" flag (set at publish time)
+      // would keep the feed open — clear it when no post remains today.
+      const userId = useAuthStore.getState().userId;
+      if (!userId || !isSupabaseConfigured) return;
+      try {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const { count } = await supabase
+          .from("posts")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .gte("created_at", startOfDay.toISOString());
+        if ((count ?? 0) === 0) {
+          useUiStore.getState().clearPostedToday();
+        }
+      } catch {
+        // Server check failed — leave the flag; the next my-latest-post
+        // refetch still corrects cross-device state.
+      }
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["feed"] });
       void queryClient.invalidateQueries({ queryKey: ["signed-user-posts"] });
       void queryClient.invalidateQueries({ queryKey: ["my-latest-post"] });
+      void queryClient.invalidateQueries({ queryKey: ["today-daily-post"] });
     }
   });
 }
@@ -55,7 +82,7 @@ export function useDeleteStory() {
     mutationFn: async ({ storyId, mediaPath }: { storyId: string; mediaPath?: string | null }) => {
       if (!isSupabaseConfigured) return;
       if (mediaPath && !mediaPath.startsWith("http")) {
-        await supabase.storage.from("posts").remove([mediaPath]).catch(() => {});
+        await removePostObjects([mediaPath]).catch(() => {});
       }
       const { error } = await supabase.from("stories").delete().eq("id", storyId);
       if (error) throw error;
@@ -79,7 +106,7 @@ export function useDeleteStory() {
   });
 }
 
-export type ReportContentType = "post" | "story" | "user" | "comment" | "community";
+export type ReportContentType = "post" | "story" | "user" | "comment" | "community" | "conversation";
 
 export const REPORT_REASONS = [
   "Spam or scam",
@@ -112,8 +139,10 @@ export function useReportContent() {
         note: input.note ?? null
       });
       if (error) throw error;
-      // Reporting a POST hides it immediately pending review (App Store: act on
-      // reports fast). Best-effort — the report itself is already filed.
+      trackAnalyticsEvent("content_reported", { content_type: input.contentType, reason: input.reason });
+      // Reporting a POST marks it 'reported' — it STAYS visible to everyone
+      // and enters the admin review queue; only the reviewer's decision (or
+      // the NSFW auto-flag) removes it. Best-effort — the report is filed.
       if (input.contentType === "post") {
         try {
           await supabase.rpc("flag_post_from_report", { p_post: input.contentId });

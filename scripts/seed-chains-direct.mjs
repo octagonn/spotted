@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-env node */
 /**
  * Scrapes EOS Fitness + 24 Hour Fitness public location pages directly.
  * Both expose schema.org JSON-LD with latitude/longitude.
@@ -142,16 +143,23 @@ async function fetchAll(urls, parser, label) {
           g.address
         )}, ${g.latitude}, ${g.longitude});`
     ),
-    `insert into gyms (name, address, latitude, longitude)
+    // category is REQUIRED for the map (gyms_in_bounds filters on it).
+    // Dedupe: gym_dupe_exists (accent/prefix-normalized name within ~165m)
+    // plus a wider brand-proximity net for these two chains specifically.
+    `insert into gyms (name, address, latitude, longitude, category, source)
 select distinct on (lower(s.name), round(s.latitude::numeric, 4), round(s.longitude::numeric, 4))
-  s.name, s.address, s.latitude, s.longitude
+  s.name, s.address, s.latitude, s.longitude, 'gym', 'chain'
 from _seed_direct s
-where not exists (
-  select 1 from gyms g
-  where lower(g.name) = lower(s.name)
-    and round(g.latitude::numeric, 4) = round(s.latitude::numeric, 4)
-    and round(g.longitude::numeric, 4) = round(s.longitude::numeric, 4)
-);`,
+where not gym_dupe_exists(s.name, s.latitude, s.longitude)
+  and not exists (
+    select 1 from gyms g
+    where (
+        (gym_name_key(s.name) like 'eos%' and gym_name_key(g.name) like 'eos%')
+        or (gym_name_key(s.name) like '24hour%' and gym_name_key(g.name) like '24hour%')
+      )
+      and abs(g.latitude - s.latitude) < 0.0025
+      and abs(g.longitude - s.longitude) < 0.003
+  );`,
     "drop table _seed_direct;",
     "commit;"
   ];

@@ -1,5 +1,6 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { UserRound } from "lucide-react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
@@ -40,37 +41,85 @@ type MediaProps = {
   /** Registers a single-tap action (video mute) with the gesture frame above,
    *  so taps route through MediaFrame instead of a tap-stealing Pressable. */
   onRegisterTap?: (handler: (() => void) | null) => void;
+  /** Dual posts: inset/main swap, lifted to PostCard so the pinch-zoom
+   *  preview always mirrors the CURRENTLY shown main photo. */
+  swapped?: boolean;
+  onToggleSwap?: () => void;
 };
 
 /** Front-and-back photo (`.fb`, §4.3.1) — full-bleed 3/3.6 with optional 31% inset selfie. */
-export function FbMedia({ post, blurRadius }: MediaProps) {
+export function FbMedia({ post, blurRadius, swapped: swappedProp, onToggleSwap, onRegisterTap }: MediaProps) {
   const router = useRouter();
   const hasInset = Boolean(post.inset || post.insetUri);
   const isLift = post.kind === "lift";
+  // BeReal-style: tapping the corner selfie swaps it with the main photo (and
+  // back). Controlled by PostCard when provided (keeps zoom in sync); local
+  // state is the fallback for standalone uses.
+  const [localSwapped, setLocalSwapped] = useState(false);
+  const swapped = swappedProp ?? localSwapped;
+  const toggleSwap = onToggleSwap ?? (() => setLocalSwapped((s) => !s));
+  // IG-style tags: pills start HIDDEN; a single tap on the photo (or the
+  // person icon bottom-left) reveals them. They also hide while the inset is
+  // swapped in — their coordinates belong to the main photo.
+  const [showTags, setShowTags] = useState(false);
+  const hasTags = Boolean(post.photoTags?.length);
+  useEffect(() => {
+    if (!hasTags || !onRegisterTap) return;
+    onRegisterTap(() => setShowTags((v) => !v));
+    return () => onRegisterTap(null);
+  }, [hasTags, onRegisterTap]);
+  const mainUri = swapped && hasInset ? post.insetUri : post.mediaUri;
+  const mainScene = swapped && hasInset ? post.inset : post.main;
+  const cornerUri = swapped ? post.mediaUri : post.insetUri;
+  const cornerScene = swapped ? post.main : post.inset;
   return (
     <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
       <ScenePhoto
-        uri={post.mediaUri}
-        scene={post.main}
+        uri={mainUri}
+        scene={mainScene}
         blurRadius={blurRadius}
         accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"}
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
       />
-      {/* Positional photo tags (M1) — pills at their normalized coords. */}
-      {post.photoTags?.length && blurRadius === undefined ? (
+      {/* Positional photo tags (M1) — pills at their normalized coords,
+          revealed by tapping the photo or the person icon. */}
+      {hasTags && showTags && !swapped && blurRadius === undefined ? (
         <View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 }}>
-          {post.photoTags.map((t, i) => (
+          {post.photoTags!.map((t, i) => (
             <NativePressable
               key={`${t.username}-${i}`}
               onPress={() => router.push(`/user/${t.username}`)}
               style={{ position: "absolute", left: `${t.x * 100}%`, top: `${t.y * 100}%` }}
             >
               <View style={{ marginTop: -14, flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 9, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.72)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" }}>
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12, color: colors.white }}>@{t.username}</Text>
+                <Text style={{ fontFamily: "Geist_500Medium", fontSize: 12, color: colors.white }}>@{t.username}</Text>
               </View>
             </NativePressable>
           ))}
         </View>
+      ) : null}
+      {/* Tagged-users toggle — person puck bottom-left (opposite the music
+          speaker), shown whenever the photo has tags. */}
+      {hasTags && blurRadius === undefined ? (
+        <NativePressable
+          onPress={() => setShowTags((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={showTags ? "Hide tagged people" : "Show tagged people"}
+          style={{
+            position: "absolute",
+            bottom: 12,
+            left: 12,
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: "rgba(0,0,0,0.65)",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 6
+          }}
+        >
+          <UserRound size={15} color={colors.white} strokeWidth={2.2} />
+        </NativePressable>
       ) : null}
       {isLift ? (
         <LinearGradient
@@ -81,7 +130,10 @@ export function FbMedia({ post, blurRadius }: MediaProps) {
         />
       ) : null}
       {hasInset ? (
-        <View
+        <NativePressable
+          onPress={() => blurRadius === undefined && toggleSwap()}
+          accessibilityRole="button"
+          accessibilityLabel={swapped ? "Show the main photo full size" : "Show the front-camera photo full size"}
           style={{
             position: "absolute",
             top: 12,
@@ -100,8 +152,8 @@ export function FbMedia({ post, blurRadius }: MediaProps) {
             elevation: 8
           }}
         >
-          <ScenePhoto uri={post.insetUri} scene={post.inset} blurRadius={blurRadius} legibility={false} />
-        </View>
+          <ScenePhoto uri={cornerUri} scene={cornerScene} blurRadius={blurRadius} legibility={false} />
+        </NativePressable>
       ) : null}
       {isLift && post.lift ? (
         <LiftTag lift={post.lift.lift} weight={post.lift.weight} style={{ position: "absolute", top: 12, left: 12, zIndex: 4 }} />
@@ -172,9 +224,9 @@ export function PlateCard({ post }: MediaProps) {
       />
       <Text
         style={{
-          fontFamily: "GeistMono_400Regular",
-          fontSize: 10.5,
-          letterSpacing: 10.5 * 0.24,
+          fontFamily: "Geist_500Medium",
+          fontSize: 11,
+          letterSpacing: 2,
           textTransform: "uppercase",
           color: colors.silver,
           marginBottom: 10
@@ -309,9 +361,9 @@ function CmpTag({ label, right }: { label: string; right?: boolean }) {
     >
       <Text
         style={{
-          fontFamily: "GeistMono_500Medium",
+          fontFamily: "Geist_600SemiBold",
           fontSize: 10,
-          letterSpacing: 10 * 0.16,
+          letterSpacing: 1,
           color: right ? colors.black : colors.silver
         }}
       >
@@ -489,6 +541,16 @@ function RealVideoMedia({ post, blurRadius, active, onRegisterTap }: MediaProps)
 
   return (
     <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
+      {/* Poster frame paints instantly under the player while the stream
+          buffers — without it the tile sits flat graphite and reads as slow. */}
+      {video.posterUrl ? (
+        <Image
+          source={{ uri: video.posterUrl }}
+          accessible={false}
+          contentFit="cover"
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      ) : null}
       <VideoView
         player={player}
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
@@ -549,7 +611,7 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
       ) : null}
       {/* Counter chip */}
       <View pointerEvents="none" style={{ position: "absolute", top: 12, right: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.6)" }}>
-        <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 10.5, color: colors.white }}>
+        <Text style={{ fontFamily: "Geist_500Medium", fontSize: 12, color: colors.white }}>
           {`${index + 1}/${uris.length}`}
         </Text>
       </View>
@@ -581,6 +643,12 @@ function PostStack({ post, blurRadius }: MediaProps) {
   const workouts = post.workouts ?? [];
   const [index, setIndex] = useState(0);
   const [width, setWidth] = useState(0);
+  // Dual-camera selfie. FbMedia drew this but the stack never did, so
+  // attaching a workout to a dual post silently DROPPED the front camera from
+  // the feed ("dual posts only keep the back camera photo when u add ur
+  // workout"). Same corner PIP + tap-to-swap as FbMedia, on the photo slide.
+  const [swapped, setSwapped] = useState(false);
+  const hasInset = Boolean(post.insetUri);
   const total = photos.length + workouts.length;
   return (
     <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
@@ -594,11 +662,42 @@ function PostStack({ post, blurRadius }: MediaProps) {
           onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
           style={{ flex: 1 }}
         >
-          {photos.map((uri) => (
-            <View key={uri} style={{ width, height: "100%" }}>
-              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"} />
-            </View>
-          ))}
+          {photos.map((uri, photoIndex) => {
+            const showInset = hasInset && photoIndex === 0;
+            const mainUri = showInset && swapped ? (post.insetUri as string) : uri;
+            const cornerUri = swapped ? uri : post.insetUri;
+            return (
+              <View key={uri} style={{ width, height: "100%" }}>
+                <ScenePhoto uri={mainUri} blurRadius={blurRadius} legibility={false} accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"} />
+                {showInset ? (
+                  <NativePressable
+                    onPress={() => blurRadius === undefined && setSwapped((s) => !s)}
+                    accessibilityRole="button"
+                    accessibilityLabel={swapped ? "Show the main photo full size" : "Show the front-camera photo full size"}
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      left: 12,
+                      width: "31%",
+                      aspectRatio: 3 / 4,
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: colors.black,
+                      overflow: "hidden",
+                      zIndex: 3,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.55,
+                      shadowRadius: 20,
+                      shadowOffset: { width: 0, height: 6 },
+                      elevation: 8
+                    }}
+                  >
+                    <ScenePhoto uri={cornerUri} blurRadius={blurRadius} legibility={false} />
+                  </NativePressable>
+                ) : null}
+              </View>
+            );
+          })}
           {blurRadius === undefined
             ? workouts.map((w) => (
                 <View key={w.id} style={{ width, height: "100%" }}>
@@ -609,7 +708,7 @@ function PostStack({ post, blurRadius }: MediaProps) {
         </ScrollView>
       ) : null}
       <View pointerEvents="none" style={{ position: "absolute", top: 12, right: 12, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.6)" }}>
-        <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 10.5, color: colors.white }}>{`${index + 1}/${total}`}</Text>
+        <Text style={{ fontFamily: "Geist_500Medium", fontSize: 12, color: colors.white }}>{`${index + 1}/${total}`}</Text>
       </View>
       <View pointerEvents="none" style={{ position: "absolute", bottom: 10, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 }}>
         {Array.from({ length: total }).map((_, i) => (
@@ -630,7 +729,7 @@ function PostStack({ post, blurRadius }: MediaProps) {
 }
 
 /** Media router (§4.3) — picks the media kind for a post. */
-export function PostMedia({ post, blurRadius, active, onRegisterTap }: MediaProps) {
+export function PostMedia({ post, blurRadius, active, onRegisterTap, swapped, onToggleSwap }: MediaProps) {
   if (post.video) {
     return <RealVideoMedia post={post} blurRadius={blurRadius} active={active} onRegisterTap={onRegisterTap} />;
   }
@@ -650,5 +749,5 @@ export function PostMedia({ post, blurRadius, active, onRegisterTap }: MediaProp
   if (post.kind === "compare") {
     return <CompareMedia post={post} blurRadius={blurRadius} />;
   }
-  return <FbMedia post={post} blurRadius={blurRadius} />;
+  return <FbMedia post={post} blurRadius={blurRadius} swapped={swapped} onToggleSwap={onToggleSwap} onRegisterTap={onRegisterTap} />;
 }

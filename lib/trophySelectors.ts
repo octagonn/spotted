@@ -35,8 +35,8 @@ export type TrophyCardModel = {
   /** Short requirement shown on locked cards. */
   requirement: string | null;
   earnedAt: string | null;
-  /** Only present for "progress" trophies (streaks, weekend, home turf, nomad). */
-  progress: { current: number; target: number; unit?: string } | null;
+  /** Only present for "progress" trophies; `toward` names the tier the bar climbs to. */
+  progress: { current: number; target: number; unit?: string; toward?: string | null } | null;
 };
 
 export type EarnedEntry = {
@@ -92,7 +92,7 @@ export function cardModel(def: TrophyDefinition, ctx: Ctx): TrophyCardModel {
       rarityPct: tierRarityPct(def.id, display.value, ctx.live),
       requirement: highest ? null : def.tiers[0].requirement,
       earnedAt: record?.earnedAt ?? null,
-      progress: showProgress && prog ? { current: prog.currentValue, target: prog.targetValue, unit: def.unit } : null
+      progress: showProgress && prog ? { current: prog.currentValue, target: prog.targetValue, unit: def.unit, toward: prog.nextTierName ?? null } : null
     };
   }
 
@@ -109,7 +109,7 @@ export function cardModel(def: TrophyDefinition, ctx: Ctx): TrophyCardModel {
     rarityPct: tierRarityPct(def.id, null, ctx.live),
     requirement: record ? null : def.requirement,
     earnedAt: record?.earnedAt ?? null,
-    progress: showProgress && prog ? { current: prog.currentValue, target: prog.targetValue, unit: def.unit } : null
+    progress: showProgress && prog ? { current: prog.currentValue, target: prog.targetValue, unit: def.unit, toward: prog.nextTierName ?? null } : null
   };
 }
 

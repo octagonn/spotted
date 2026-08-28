@@ -34,6 +34,52 @@ export function useMyReactions() {
   });
 }
 
+/** One row of the "who liked this post" list. */
+export type PostLiker = {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  createdAt: string;
+};
+
+const likersKey = (postId: string) => ["post-likers", postId] as const;
+
+/**
+ * Everyone who heart-liked a post, newest first. RLS: anyone who can read the
+ * post can read its reaction rows, so this is a plain select — it powers both
+ * the like count on the card and the "who liked" sheet.
+ */
+export function usePostLikers(postId: string, enabled = true) {
+  return useQuery({
+    queryKey: likersKey(postId),
+    enabled: isSupabaseConfigured && Boolean(postId) && enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<PostLiker[]> => {
+      const { data, error } = await supabase
+        .from("post_reactions")
+        .select("user_id, created_at, profiles:user_id(display_name, username, avatar_url)")
+        .eq("post_id", postId)
+        .eq("reaction", LIKE_REACTION)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as {
+        user_id: string;
+        created_at: string;
+        profiles: { display_name: string; username: string; avatar_url: string | null } | null;
+      }[];
+      return rows.map((row) => ({
+        userId: row.user_id,
+        username: row.profiles?.username ?? "",
+        displayName: row.profiles?.display_name ?? "Someone",
+        avatarUrl: row.profiles?.avatar_url ?? null,
+        createdAt: row.created_at
+      }));
+    }
+  });
+}
+
 /** Toggle a like: insert/delete a post_reactions row with optimistic cache update. */
 export function useToggleLike() {
   const queryClient = useQueryClient();
@@ -45,16 +91,27 @@ export function useToggleLike() {
         return;
       }
       if (liked) {
+        // Upsert keeps an existing selfie row's media_url intact.
         const { error } = await supabase
           .from("post_reactions")
           .upsert({ post_id: postId, user_id: userId, reaction: LIKE_REACTION });
         if (error) throw error;
       } else {
+        // Unlike must not wipe a selfie reaction that shares the row: rows with
+        // a selfie keep the row (reaction → null), like-only rows delete.
+        const { error: clearError } = await supabase
+          .from("post_reactions")
+          .update({ reaction: null })
+          .eq("post_id", postId)
+          .eq("user_id", userId)
+          .not("media_url", "is", null);
+        if (clearError) throw clearError;
         const { error } = await supabase
           .from("post_reactions")
           .delete()
           .eq("post_id", postId)
-          .eq("user_id", userId);
+          .eq("user_id", userId)
+          .is("media_url", null);
         if (error) throw error;
       }
     },
@@ -66,16 +123,33 @@ export function useToggleLike() {
         const next = (current ?? []).filter((id) => id !== postId);
         return liked ? [...next, postId] : next;
       });
-      return { previous };
+      // The visible like count comes from the likers list — bump it optimistically.
+      await queryClient.cancelQueries({ queryKey: likersKey(postId) });
+      const previousLikers = queryClient.getQueryData<PostLiker[]>(likersKey(postId));
+      if (userId) {
+        queryClient.setQueryData<PostLiker[]>(likersKey(postId), (current) => {
+          const rest = (current ?? []).filter((liker) => liker.userId !== userId);
+          if (!liked) return rest;
+          return [
+            { userId, username: "", displayName: "You", avatarUrl: null, createdAt: new Date().toISOString() },
+            ...rest
+          ];
+        });
+      }
+      return { previous, previousLikers, postId };
     },
-    onError: (_error, _variables, context) => {
+    onError: (_error, variables, context) => {
       if (context?.previous) {
         queryClient.setQueryData(myReactionsKey(userId), context.previous);
       }
+      if (context?.previousLikers !== undefined) {
+        queryClient.setQueryData(likersKey(variables.postId), context.previousLikers);
+      }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, variables) => {
       if (isSupabaseConfigured) {
         void queryClient.invalidateQueries({ queryKey: myReactionsKey(userId) });
+        void queryClient.invalidateQueries({ queryKey: likersKey(variables.postId) });
       }
     }
   });

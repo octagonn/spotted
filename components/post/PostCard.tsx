@@ -2,7 +2,7 @@ import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { Camera, Check, Flame, Heart, Home, MapPin, Medal, MessageCircle, MoreHorizontal, Send, Users, Volume2, VolumeX } from "lucide-react-native";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { CommentsSheet, type CommentRow, type ReplyTarget } from "@/components/post/CommentsSheet";
@@ -21,13 +21,18 @@ import { CtxChip } from "@/components/ui/Chips";
 import { Pressable } from "@/components/ui/Pressable";
 import { usePostReactionSelfies } from "@/hooks/queries/usePostReactionSelfies";
 import { useAddComment, useDeleteComment, usePostComments } from "@/hooks/queries/usePostComments";
-import { useMyReactions, useToggleLike } from "@/hooks/queries/usePostReactions";
+import { usePostLikers, useMyReactions, useToggleLike } from "@/hooks/queries/usePostReactions";
+import { useRepostToStory } from "@/hooks/queries/useStories";
+import { LikedByLine } from "@/components/post/LikedByLine";
+import { LikersSheet } from "@/components/post/LikersSheet";
+import { useFriends } from "@/hooks/queries/useFriends";
 import { useMyProfile } from "@/hooks/queries/useProfile";
+import { splitMentions } from "@/lib/mentions";
 import { type FeedCtxIcon, type FeedMockPost } from "@/lib/redesignData";
 import { useAudioStore } from "@/stores/audio";
 import { showToast, useUiStore } from "@/stores/ui";
 import { colors } from "@/theme/colors";
-import { tokens } from "@/theme/tokens";
+import { tokens, typeScale } from "@/theme/tokens";
 
 /** Real Supabase posts carry UUID ids; fixture/demo posts use short slugs. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,9 +47,6 @@ function relTime(iso: string): string {
   return `${Math.round(mins / (60 * 24))}d`;
 }
 
-function mono(size: number, color: string, ls = 0) {
-  return { fontFamily: "GeistMono_400Regular", fontSize: size, color, letterSpacing: size * ls };
-}
 
 type PostCardProps = {
   post: FeedMockPost;
@@ -53,10 +55,14 @@ type PostCardProps = {
   audible?: boolean;
   /** Opens the reaction capture sheet for this post. */
   onReact?: (postId: string) => void;
+  /** Full-screen pinch preview (root overlay). Turn OFF inside native modals
+   *  (post/[id]) — they render above the root host, so the overlay would be
+   *  invisible there; those fall back to the in-place zoom. */
+  zoomPreview?: boolean;
 };
 
 /** Feed post card (spec §4.2–4.4). */
-export function PostCard({ post, locked = false, audible = false, onReact }: PostCardProps) {
+export function PostCard({ post, locked = false, audible = false, onReact, zoomPreview = true }: PostCardProps) {
   const sheet = useSheet();
   const deletePost = useDeletePost();
   const isRealPost = UUID_RE.test(post.id);
@@ -64,6 +70,15 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   const reactedLocally = localSelfieUri !== undefined;
   const myProfile = useMyProfile();
   const myName = myProfile.data?.display_name ?? "You";
+  const myId = myProfile.data?.id ?? null;
+  // Shared react-query cache, so this is one request for the whole feed rather
+  // than one per card. It decides WHICH liker's name leads the "Liked by" line
+  // — a name you recognise is the only reason that line is worth reading.
+  const friends = useFriends();
+  const friendIds = useMemo(
+    () => new Set((friends.data ?? []).map((friend) => friend.id)),
+    [friends.data]
+  );
 
   // Real reactions from the backend — this is what surfaces a friend's reaction
   // on your feed. Only queried for real posts (fixtures have no rows).
@@ -82,6 +97,11 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   // reaction rail.
   const myReactions = useMyReactions();
   const toggleLike = useToggleLike();
+  const repostToStory = useRepostToStory();
+  // Who liked this post — drives the "Liked by …" line and the Likes sheet,
+  // which share this cache entry. Optimistically patched by useToggleLike so
+  // the line updates the instant you tap the heart.
+  const likersQuery = usePostLikers(isRealPost ? post.id : "");
   // Global feed audio switch — drives the IG-style speaker on musical posts.
   const audioMuted = useAudioStore((st) => st.muted);
   const toggleAudioMuted = useAudioStore((st) => st.toggleMuted);
@@ -109,6 +129,9 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
     parentId: c.parentId
   }));
   const [commentReplyTo, setCommentReplyTo] = useState<ReplyTarget | null>(null);
+  // Dual posts: which photo is currently the big one (tap the inset to swap).
+  // Lifted here so the pinch-zoom preview mirrors the visible main photo.
+  const [swapped, setSwapped] = useState(false);
   const fixtureComments: CommentRow[] = post.comments.map((c, i) => ({
     id: `f-${i}`,
     name: c.name ?? c.handle,
@@ -128,9 +151,22 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
     setCommentsOpen(false);
     setDraft("");
     setCommentReplyTo(null);
+    setSwapped(false);
   }
 
   const blurRadius = locked ? 14 : undefined;
+  // IG-style full-screen pinch preview — plain photo posts only; videos,
+  // carousels, plates, and workout stacks keep the in-place zoom.
+  const isPlainPhoto =
+    !post.video &&
+    !(post.workouts?.length ?? 0) &&
+    (post.mediaUris?.length ?? 0) <= 1 &&
+    post.kind !== "pr" &&
+    post.kind !== "streak" &&
+    post.kind !== "video" &&
+    post.kind !== "compare";
+  const zoomUri =
+    isPlainPhoto && zoomPreview ? (swapped && post.insetUri ? post.insetUri : post.mediaUri) || null : null;
   const textBlur = locked ? { opacity: 0.55 } : null;
 
   const openProfile = () => {
@@ -169,13 +205,38 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   const LocIcon = post.gym ? MapPin : Home;
 
   const isOwnPost = isRealPost && Boolean(myProfile.data?.username) && myProfile.data?.username === post.user.handle;
+  // Tagged in this post (caption tags or on-photo tags) → the ⋯ menu offers
+  // "Add to your story" (IG-style reshare; the RPC re-checks the tag).
+  const myHandle = myProfile.data?.username ?? null;
+  const taggedInPost =
+    isRealPost &&
+    !isOwnPost &&
+    Boolean(myHandle) &&
+    (Boolean(post.taggedFriends?.some((friend) => friend.handle.replace(/^@/, "") === myHandle)) ||
+      Boolean(post.photoTags?.some((tag) => tag.username === myHandle)));
   const openMenu = () => {
     sheet.open(
       <ContentMenu
         contentType="post"
         contentId={post.id}
         reportLabel="post"
-        reportedUserId={undefined}
+        reportedUserId={post.authorId ?? undefined}
+        onAddToStory={
+          taggedInPost && post.kind !== "video" && !post.video
+            ? () =>
+                repostToStory.mutate(post.id, {
+                  onSuccess: () => showToast("Added to your story"),
+                  onError: (error) => {
+                    const message = error instanceof Error ? error.message : "";
+                    showToast(
+                      message.includes("already_reposted")
+                        ? "Already on your story"
+                        : "Couldn't add to your story"
+                    );
+                  }
+                })
+            : undefined
+        }
         onDelete={
           isOwnPost
             ? () =>
@@ -193,23 +254,22 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
   };
 
   return (
-    // A 16px bg.base gap between posts (no hairline) reads cleaner than an
-    // edge-to-edge divider.
+    // 16+16 bg.base gap between posts (no hairline) — 32px section separation.
     <View style={{ paddingTop: 16, paddingBottom: 16, backgroundColor: tokens.bg.base }}>
       {/* Header row */}
-      <View style={[{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingBottom: 10 }, textBlur]}>
+      <View style={[{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 12 }, textBlur]}>
         <Pressable onPress={openProfile} accessibilityLabel={`Open @${post.user.handle}'s profile`}>
           <Avatar name={post.user.name} uri={post.user.avatarUrl} size={40} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: tokens.text.primary, letterSpacing: -0.14 }}>
+          <Text style={{ ...typeScale.username, color: tokens.text.primary }}>
             {post.user.handle}
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 1 }}>
-            <LocIcon size={14} color={post.gym ? tokens.text.secondary : tokens.text.tertiary} strokeWidth={2} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+            <LocIcon size={13} color={tokens.text.tertiary} strokeWidth={2} />
             <Text
               style={{
-                fontSize: 13,
+                ...typeScale.meta,
                 color: post.gym ? tokens.text.secondary : tokens.text.tertiary,
                 fontStyle: post.gym ? "normal" : "italic"
               }}
@@ -218,9 +278,9 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             </Text>
           </View>
         </View>
-        <Text style={{ fontFamily: "Geist_400Regular", fontSize: 12, color: tokens.text.tertiary }}>{post.time}</Text>
+        <Text style={{ ...typeScale.meta, color: tokens.text.tertiary }}>{post.time}</Text>
         {isRealPost && !locked ? (
-          <Pressable onPress={openMenu} accessibilityLabel="Post options" hitSlop={8} haptic={false} style={{ paddingLeft: 4 }}>
+          <Pressable onPress={openMenu} accessibilityLabel="Post options" hitSlop={8} haptic={false} style={{ paddingLeft: 8 }}>
             <MoreHorizontal size={18} color={tokens.text.tertiary} strokeWidth={2} />
           </Pressable>
         ) : null}
@@ -236,9 +296,9 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
 
       {/* Owner-only: this post is hidden from others pending moderation review. */}
       {post.underReview ? (
-        <View style={{ marginHorizontal: 18, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: "rgba(232,180,76,0.4)", backgroundColor: "rgba(232,180,76,0.10)" }}>
+        <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: "rgba(232,180,76,0.4)", backgroundColor: "rgba(232,180,76,0.10)" }}>
           <Flame size={14} color={colors.gold} strokeWidth={2.2} />
-          <Text style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
+          <Text style={{ flex: 1, ...typeScale.micro, color: colors.silver }}>
             Under review — hidden from others until it&apos;s checked.
           </Text>
         </View>
@@ -249,6 +309,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
       <View>
         <MediaFrame
           locked={locked}
+          zoomUri={zoomUri}
           onLike={() => {
             if (isRealPost && !liked) {
               toggleLike.mutate({ postId: post.id, liked: true });
@@ -261,6 +322,8 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             blurRadius={blurRadius}
             active={audible && !locked}
             onRegisterTap={registerMediaTap}
+            swapped={swapped}
+            onToggleSwap={() => setSwapped((s) => !s)}
           />
         </MediaFrame>
         {/* IG-style speaker, bottom-right of the media — only on posts with
@@ -321,65 +384,11 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         ) : null}
       </View>
 
-      {/* "Answered the Call" — posted within 3h of a taunt (spec B). */}
-      {post.answeredCall ? (
-        <View style={[{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 10 }, textBlur]}>
-          <Pressable onPress={() => !locked && router.push(`/user/${post.answeredCall}`)}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(232,180,76,0.45)", backgroundColor: "rgba(232,180,76,0.12)", paddingVertical: 5, paddingHorizontal: 12 }}>
-              <Medal size={12} color={colors.gold} strokeWidth={2.2} />
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 11.5, color: colors.gold }}>
-                Answered the Call · @{post.answeredCall}
-              </Text>
-            </View>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {/* Public-feed context chips */}
-      {post.ctx?.length ? (
-        <View style={[{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 18, paddingTop: 10 }, textBlur]}>
-          {post.ctx.map((chip) => {
-            const Icon = CTX_ICONS[chip.icon];
-            return (
-              <CtxChip key={chip.label} icon={<Icon size={11} color={colors.silver} strokeWidth={2} />}>
-                {chip.label}
-              </CtxChip>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {/* Tagged friends — tappable chips that open each profile */}
-      {post.taggedFriends?.length ? (
-        <View style={[{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingTop: 10 }, textBlur]}>
-          <Users size={12} color={colors.fog} strokeWidth={2} />
-          <Text style={{ fontSize: 12.5, color: colors.fog }}>with</Text>
-          {post.taggedFriends.map((friend) => (
-            <Pressable
-              key={friend.handle}
-              onPress={() => !locked && router.push(`/user/${friend.handle.replace(/^@/, "")}`)}
-              accessibilityLabel={`Open @${friend.handle}'s profile`}
-            >
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12.5, color: colors.white }}>
-                @{friend.handle.replace(/^@/, "")}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {/* Caption — larger, more prominent (tester feedback) */}
-      {post.caption ? (
-        <Text style={[{ fontSize: 15.5, color: colors.bone, lineHeight: 15.5 * 1.4, paddingHorizontal: 18, paddingTop: 11 }, textBlur]}>
-          <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>{post.user.handle}</Text>
-          {"  "}
-          {post.caption}
-        </Text>
-      ) : null}
-
       {/* Reactions row */}
-      <View style={[{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 }, textBlur]}>
+      <View style={[{ flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 2 }, textBlur]}>
         {isRealPost ? (
+          // Bare heart, IG-style — the count lives in the "Liked by" line below
+          // rather than being printed twice on the same card.
           <Pressable
             onPress={() => !locked && toggleLike.mutate({ postId: post.id, liked: !liked })}
             accessibilityLabel={liked ? "Unlike" : "Like"}
@@ -387,7 +396,7 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             hitSlop={8}
           >
             <Heart
-              size={29}
+              size={26}
               color={liked ? "#FF2D55" : colors.silver}
               fill={liked ? "#FF2D55" : "transparent"}
               strokeWidth={2}
@@ -397,13 +406,13 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
         {/* Comments — right after like, IG order. */}
         <Pressable
           onPress={() => !locked && setCommentsOpen((open) => !open)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
           accessibilityLabel="Toggle comments"
           accessibilityState={{ expanded: commentsOpen }}
           hitSlop={6}
         >
           <MessageCircle size={26} color={colors.silver} strokeWidth={2} />
-          <Text style={{ fontSize: 14, fontFamily: "Geist_600SemiBold", color: colors.silver }}>{commentCount}</Text>
+          <Text style={{ ...typeScale.meta, fontFamily: "Geist_500Medium", color: colors.silver }}>{commentCount}</Text>
         </Pressable>
         {/* Share — after comments, out of the 3-dots menu. */}
         {isRealPost ? (
@@ -512,10 +521,94 @@ export function PostCard({ post, locked = false, audible = false, onReact }: Pos
             ) : null}
           </Pressable>
         ) : null}
-        <Text style={mono(11, colors.fog)}>
+        <Text style={{ ...typeScale.meta, color: colors.fog }}>
           {`${reactorCount} live reaction${reactorCount === 1 ? "" : "s"}`}
         </Text>
       </View>
+
+      {/* "Liked by <name> and N others" — IG puts this between the actions and
+          the caption. Hidden on a locked post along with the rest of the text. */}
+      {isRealPost ? (
+        <View style={textBlur}>
+          <LikedByLine
+            likers={likersQuery.data ?? []}
+            myId={myId}
+            myAvatarUrl={myProfile.data?.avatar_url ?? null}
+            friendIds={friendIds}
+            onPress={locked ? undefined : () => sheet.open(<LikersSheet postId={post.id} />)}
+          />
+        </View>
+      ) : null}
+
+      {/* "Answered the Call" — posted within 3h of a taunt (spec B). */}
+      {post.answeredCall ? (
+        <View style={[{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 12 }, textBlur]}>
+          <Pressable onPress={() => !locked && router.push(`/user/${post.answeredCall}`)}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 999, borderWidth: 1, borderColor: "rgba(232,180,76,0.45)", backgroundColor: "rgba(232,180,76,0.12)", paddingVertical: 4, paddingHorizontal: 12 }}>
+              <Medal size={12} color={colors.gold} strokeWidth={2.2} />
+              <Text style={{ ...typeScale.micro, color: colors.gold }}>
+                Answered the Call · @{post.answeredCall}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Public-feed context chips */}
+      {post.ctx?.length ? (
+        <View style={[{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingTop: 12 }, textBlur]}>
+          {post.ctx.map((chip) => {
+            const Icon = CTX_ICONS[chip.icon];
+            return (
+              <CtxChip key={chip.label} icon={<Icon size={11} color={colors.silver} strokeWidth={2} />}>
+                {chip.label}
+              </CtxChip>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {/* Tagged friends — tappable names that open each profile */}
+      {post.taggedFriends?.length ? (
+        <View style={[{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 12 }, textBlur]}>
+          <Users size={12} color={colors.fog} strokeWidth={2} />
+          <Text style={{ ...typeScale.meta, color: colors.fog }}>with</Text>
+          {post.taggedFriends.map((friend) => (
+            <Pressable
+              key={friend.handle}
+              onPress={() => !locked && router.push(`/user/${friend.handle.replace(/^@/, "")}`)}
+              accessibilityLabel={`Open @${friend.handle}'s profile`}
+            >
+              <Text style={{ ...typeScale.meta, fontFamily: "Geist_600SemiBold", color: colors.white }}>
+                @{friend.handle.replace(/^@/, "")}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Caption — @handles are live links to profiles */}
+      {post.caption ? (
+        <Text style={[{ ...typeScale.body, color: colors.bone, paddingHorizontal: 16, paddingTop: 2 }, textBlur]}>
+          <Text style={{ ...typeScale.bodyStrong, color: colors.white }}>{post.user.handle}</Text>
+          {"  "}
+          {splitMentions(post.caption).map((seg, i) =>
+            seg.handle ? (
+              <Text
+                key={`${seg.text}-${i}`}
+                suppressHighlighting
+                onPress={() => !locked && router.push(`/user/${seg.handle}`)}
+                accessibilityRole="link"
+                style={{ ...typeScale.bodyStrong, color: colors.white }}
+              >
+                {seg.text}
+              </Text>
+            ) : (
+              <Text key={`${seg.text}-${i}`}>{seg.text}</Text>
+            )
+          )}
+        </Text>
+      ) : null}
 
       {/* Comments open in a keyboard-avoiding bottom sheet so the input stays visible. */}
       <CommentsSheet

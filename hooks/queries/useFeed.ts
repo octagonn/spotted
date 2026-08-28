@@ -1,5 +1,7 @@
-import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useCallback, useRef } from "react";
 
+import { logger } from "@/lib/logger";
 import { mockFeed } from "@/lib/mockData";
 import { isSupabaseConfigured, signedPostUrls, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
@@ -47,6 +49,9 @@ function rowToFeedPost(row: FeedRow, signed: Map<string, string>): FeedPost {
     media_url: mediaUrl ?? "",
     inset_url: insetUrl,
     media_urls: mediaUrls,
+    // Signed poster frame — video posts paint this instantly while the stream
+    // buffers (otherwise the tile sits flat graphite and reads as "slow").
+    thumbnail_url: resolveSigned(row.thumbnail_url, signed),
     profile,
     gym: row.gyms,
     viewer_count: 0,
@@ -90,6 +95,11 @@ export function useFeed() {
   return useInfiniteQuery({
     queryKey: ["feed", userId],
     refetchOnWindowFocus: "always",
+    // Foreground freshness: realtime posts-INSERT invalidation is the fast
+    // path, but WAL-RLS can drop events under subquery-heavy policies — this
+    // interval guarantees new posts land without backgrounding the app.
+    // (Intervals only fire while the app is focused.)
+    refetchInterval: 60_000,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }): Promise<FeedPost[]> => {
       if (!isSupabaseConfigured) {
@@ -114,7 +124,9 @@ export function useFeed() {
       if (error) throw error;
       const rows = (data ?? []) as unknown as FeedRow[];
       // One batched signing call for every photo on the page (retried inside).
-      const signed = await signedPostUrls(rows.flatMap((r) => [r.media_url, r.inset_url, ...(r.media_urls ?? [])]));
+      const signed = await signedPostUrls(
+        rows.flatMap((r) => [r.media_url, r.inset_url, r.thumbnail_url, ...(r.media_urls ?? [])])
+      );
       return rows.map((row) => rowToFeedPost(row, signed));
     },
     getNextPageParam: (lastPage) =>
@@ -122,24 +134,24 @@ export function useFeed() {
   });
 }
 
-export function useMarkPostViewed() {
-  return useMutation({
-    mutationFn: async (postId: string) => {
-      if (!isSupabaseConfigured) {
-        return;
-      }
-      // Local session state — auth.getUser() is a network round-trip per call.
-      const userId = useAuthStore.getState().userId;
-      if (!userId) {
-        return;
-      }
-      const { error } = await supabase.from("post_views").upsert({ post_id: postId, viewer_id: userId });
-      if (error) {
-        throw error;
-      }
-    }
-    // No cache write: the feed reads no per-viewer "viewed" flag (rowToFeedPost
-    // has none), and the old blanket ["feed"] invalidate re-signed every photo
-    // on every view — pure cost for zero visible change.
-  });
+/**
+ * Fire-and-forget post-view capture (backend analytics only — nothing in the
+ * UI reads this yet). Returns a recorder that hits the record_post_view RPC
+ * at most once per post per mount; the server skips your own posts and bumps
+ * last_viewed_at / view_count on repeat views across sessions. Errors are
+ * swallowed: view capture must never surface in the feed.
+ */
+export function useRecordPostViews() {
+  const seen = useRef<Set<string>>(new Set());
+  return useCallback((postId: string) => {
+    if (!isSupabaseConfigured || seen.current.has(postId)) return;
+    // Local session state — auth.getUser() is a network round-trip per call.
+    if (!useAuthStore.getState().userId) return;
+    seen.current.add(postId);
+    void supabase
+      .rpc("record_post_view", { p_post_id: postId })
+      .then(({ error }) => {
+        if (error) logger.warn("record_post_view_failed", { message: error.message });
+      });
+  }, []);
 }

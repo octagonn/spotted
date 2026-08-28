@@ -16,22 +16,18 @@ type CheckinRow = {
 export function useGymPresence() {
   return useQuery({
     queryKey: ["gym-presence"],
-    queryFn: async (): Promise<{ gyms: Gym[]; presence: FriendPresence[] }> => {
+    queryFn: async (): Promise<{ presence: FriendPresence[] }> => {
       if (!isSupabaseConfigured) {
-        return { gyms: mockGyms, presence: mockFriendPresence };
+        return { presence: mockFriendPresence };
       }
-      const [gymsResult, checkinsResult] = await Promise.all([
-        supabase.from("gyms").select("*").order("name"),
-        supabase
-          .from("checkins")
-          .select(
-            "id, user_id, gym_id, checked_in_at, profiles:user_id(id, username, display_name, avatar_url), gyms:gym_id(id, name, latitude, longitude)"
-          )
-          .is("checked_out_at", null)
-      ]);
-      if (gymsResult.error) {
-        throw gymsResult.error;
-      }
+      // NOTE: no gyms-table fetch here — with US-wide coverage that table is
+      // tens of thousands of rows. The checkins join embeds each row's gym.
+      const checkinsResult = await supabase
+        .from("checkins")
+        .select(
+          "id, user_id, gym_id, checked_in_at, profiles:user_id(id, username, display_name, avatar_url), gyms:gym_id(id, name, latitude, longitude)"
+        )
+        .is("checked_out_at", null);
       if (checkinsResult.error) {
         throw checkinsResult.error;
       }
@@ -46,7 +42,28 @@ export function useGymPresence() {
           gym: row.gyms
         });
       }
-      return { gyms: (gymsResult.data ?? []) as Gym[], presence };
+      return { presence };
+    }
+  });
+}
+
+/** One gym by id — for the gym detail screen (never the whole table). */
+export function useGym(gymId?: string | null) {
+  return useQuery({
+    queryKey: ["gym", gymId],
+    enabled: Boolean(gymId),
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<Gym | null> => {
+      if (!isSupabaseConfigured) {
+        return mockGyms.find((g) => g.id === gymId) ?? mockGyms[0] ?? null;
+      }
+      const { data, error } = await supabase
+        .from("gyms")
+        .select("*")
+        .eq("id", gymId as string)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as Gym) ?? null;
     }
   });
 }

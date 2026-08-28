@@ -13,12 +13,15 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AnimatedAuroraBackground } from "@/components/AnimatedAuroraBackground";
 import { GrainOverlay } from "@/components/GrainOverlay";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
+import { usePageFade } from "@/hooks/usePageFade";
 
-const ICON_SIZE = 168;
+// Glowing S-dumbbell mark (transparent PNG, 3:2) — rendered bare, no
+// container/border, so the glow bleeds straight into the video background.
+const MARK_WIDTH = 260;
+const MARK_HEIGHT = MARK_WIDTH * (600 / 900);
 
 function BreathingIcon() {
   const breath = useSharedValue(0);
@@ -37,65 +40,19 @@ function BreathingIcon() {
     opacity: reveal.value
   }));
 
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: 0.4 + breath.value * 0.5,
-    transform: [{ scale: 1.0 + breath.value * 0.15 }]
-  }));
-
-  const ring2Style = useAnimatedStyle(() => ({
-    opacity: 0.2 + breath.value * 0.35,
-    transform: [{ scale: 1.0 + breath.value * 0.28 }]
-  }));
-
   return (
-    <Animated.View style={[{ alignItems: "center", justifyContent: "center" }, containerStyle]}>
-      <Animated.View
-        style={[
-          {
-            position: "absolute",
-            width: ICON_SIZE * 1.4,
-            height: ICON_SIZE * 1.4,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: "#FFFFFF"
-          },
-          ring2Style
-        ]}
+    <Animated.View
+      // Decorative mark — hide from screen readers (the "SPOTTED" wordmark
+      // below carries the name).
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[{ alignItems: "center", justifyContent: "center" }, containerStyle]}
+    >
+      <Image
+        source={require("@/assets/images/welcome-mark.png")}
+        contentFit="contain"
+        style={{ width: MARK_WIDTH, height: MARK_HEIGHT }}
       />
-      <Animated.View
-        style={[
-          {
-            position: "absolute",
-            width: ICON_SIZE * 1.2,
-            height: ICON_SIZE * 1.2,
-            borderRadius: 999,
-            borderWidth: 1.2,
-            borderColor: "#FFFFFF"
-          },
-          ringStyle
-        ]}
-      />
-      <View
-        // Decorative app icon — hide from screen readers (the "SPOTTED" wordmark
-        // below carries the name).
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          width: ICON_SIZE,
-          height: ICON_SIZE,
-          borderRadius: 36,
-          overflow: "hidden",
-          borderWidth: 2,
-          borderColor: "#FFFFFF",
-          backgroundColor: "#000000"
-        }}
-      >
-        <Image
-          source={require("@/assets/images/icon.png")}
-          contentFit="cover"
-          style={{ width: "100%", height: "100%" }}
-        />
-      </View>
     </Animated.View>
   );
 }
@@ -141,15 +98,17 @@ function SpottedReveal() {
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
+  const { fadeStyle, fadeNavigate } = usePageFade();
 
   return (
-    <View className="flex-1 bg-black">
-      <AnimatedAuroraBackground />
+    // Transparent — the looping gym video lives in the (auth) layout below
+    // this screen and keeps playing across welcome → sign-in.
+    <View className="flex-1">
       <GrainOverlay opacity={0.07} />
 
-      <View
+      <Animated.View
         className="flex-1 px-6"
-        style={{ paddingTop: insets.top + 32, paddingBottom: insets.bottom + 28 }}
+        style={[{ paddingTop: insets.top + 32, paddingBottom: insets.bottom + 28 }, fadeStyle]}
       >
         <View className="flex-1 items-center justify-center">
           <Animated.View entering={FadeInDown.duration(700)}>
@@ -175,13 +134,13 @@ export default function WelcomeScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInDown.duration(600).delay(1100)} className="mt-2 gap-3">
-            <Button onPress={() => router.push("/sign-in")}>Start</Button>
+            <Button onPress={() => fadeNavigate(() => router.push("/sign-in"))}>Start</Button>
             <Text variant="micro" className="text-fog">
               ALREADY ON IT? TAP START — IT'LL FIND YOUR ACCOUNT.
             </Text>
           </Animated.View>
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 }

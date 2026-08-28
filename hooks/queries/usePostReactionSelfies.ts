@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { uploadMediaObject } from "@/lib/r2";
+import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { compressReactionSelfie } from "@/lib/posts";
@@ -51,14 +53,7 @@ export function usePostReactionSelfies(postId: string) {
         rows.map(async (row) => {
           let mediaUrl: string | null = row.media_url;
           if (mediaUrl && !mediaUrl.startsWith("http")) {
-            try {
-              const { data: signed } = await supabase.storage
-                .from("reactions")
-                .createSignedUrl(mediaUrl, 60 * 60);
-              mediaUrl = signed?.signedUrl ?? null;
-            } catch {
-              mediaUrl = null;
-            }
+            mediaUrl = await signedPostUrl(mediaUrl).catch(() => null);
           }
           return {
             userId: row.user_id,
@@ -90,14 +85,7 @@ export function useAddReactionSelfie() {
         const response = await fetch(uploadUri);
         const body = await response.arrayBuffer();
         if (body.byteLength > 0) {
-          const path = `${userId}/${postId}.jpg`;
-          const upload = await supabase.storage.from("reactions").upload(path, body, {
-            contentType: "image/jpeg",
-            upsert: true
-          });
-          if (!upload.error) {
-            mediaPath = path;
-          }
+          mediaPath = await uploadMediaObject(`${userId}/reaction-${postId}-${Date.now()}.jpg`, body, "image/jpeg");
         }
       }
       // `reaction` is intentionally omitted: on a fresh insert it stays null
@@ -108,6 +96,7 @@ export function useAddReactionSelfie() {
       if (error) {
         throw error;
       }
+      trackAnalyticsEvent("post_reacted", { selfie: Boolean(mediaPath) });
     },
     // Optimistic: your selfie shows in the rail immediately with the LOCAL
     // image uri (no wait for compression + upload). Reconciled on settle.

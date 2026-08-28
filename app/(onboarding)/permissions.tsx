@@ -4,10 +4,13 @@ import { Bell, MapPin } from "lucide-react-native";
 import { useState } from "react";
 import { View } from "react-native";
 
+import Animated from "react-native-reanimated";
+
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
+import { usePageFade } from "@/hooks/usePageFade";
 import { logger } from "@/lib/logger";
 import { registerDeviceToken } from "@/lib/notifications";
 import { advanceOnboarding } from "@/lib/onboarding";
@@ -18,6 +21,7 @@ import { colors } from "@/theme/colors";
 type Status = "idle" | "granted" | "denied";
 
 export default function PermissionsScreen() {
+  const { fadeStyle, fadeNavigate } = usePageFade();
   const [locationStatus, setLocationStatus] = useState<Status>("idle");
   const [notifStatus, setNotifStatus] = useState<Status>("idle");
   const [busy, setBusy] = useState(false);
@@ -67,10 +71,11 @@ export default function PermissionsScreen() {
   }
 
   return (
-    <Screen>
+    <Animated.View style={[{ flex: 1 }, fadeStyle]}>
+    <Screen transparent>
       <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
         <Text variant="micro" className="text-mist">
-          STEP 4 OF 6
+          STEP 5 OF 7
         </Text>
       </View>
       <Text variant="display-md" className="mt-6">
@@ -127,7 +132,7 @@ export default function PermissionsScreen() {
         loading={busy}
         onPress={() => {
           void advanceOnboarding(userId, "home-gym");
-          router.push("/privacy");
+          fadeNavigate(() => router.push("/privacy"));
         }}
       >
         Continue
@@ -136,7 +141,7 @@ export default function PermissionsScreen() {
         className="mt-4 self-center"
         onPress={() => {
           void advanceOnboarding(userId, "home-gym");
-          router.push("/privacy");
+          fadeNavigate(() => router.push("/privacy"));
         }}
       >
         <Text variant="micro" className="text-mist">
@@ -144,5 +149,6 @@ export default function PermissionsScreen() {
         </Text>
       </Pressable>
     </Screen>
+    </Animated.View>
   );
 }

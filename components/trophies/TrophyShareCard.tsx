@@ -11,6 +11,10 @@ export type TrophyShareData = {
   familyName?: string | null;
   earnedAt?: string | null;
   rarityPct: number;
+  /** Tier medal (spec): drives the celebration colors; null for non-tiered. */
+  medal?: "bronze" | "silver" | "gold" | "diamond" | null;
+  /** Instance context for repeatable trophies (gym, month, run start). */
+  context?: Record<string, unknown> | null;
 };
 
 /**

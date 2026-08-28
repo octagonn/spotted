@@ -1,9 +1,8 @@
 import { Redirect } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
 
+import { AppSplash } from "@/components/ui/AppSplash";
 import { useAuthStore } from "@/stores/auth";
-import { colors } from "@/theme/colors";
 
 export default function Index() {
   const status = useAuthStore((state) => state.status);
@@ -16,11 +15,7 @@ export default function Index() {
   }, [hydrate]);
 
   if (status === "loading") {
-    return (
-      <View className="flex-1 items-center justify-center bg-black">
-        <ActivityIndicator color={colors.white} />
-      </View>
-    );
+    return <AppSplash />;
   }
   if (status === "signed-out") {
     return <Redirect href="/welcome" />;

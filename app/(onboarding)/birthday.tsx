@@ -1,10 +1,14 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
+import { appAlert } from "@/components/ui/AppDialog";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import Animated from "react-native-reanimated";
 
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
+import { usePageFade } from "@/hooks/usePageFade";
 import { colors } from "@/theme/colors";
 import { getDeviceId } from "@/lib/deviceId";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -16,6 +20,10 @@ const VISIBLE_ROWS = 5;
 const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS;
 const WHEEL_PADDING = ITEM_HEIGHT * Math.floor(VISIBLE_ROWS / 2);
 const MIN_AGE = 13;
+/** Remembered so a user who declined is never re-prompted on this device. */
+const AGE_RANGE_DECLINED_KEY = "age-range-declined";
+/** A sheet that never presents must not freeze onboarding. */
+const AGE_RANGE_TIMEOUT_MS = 8000;
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -116,6 +124,7 @@ function Wheel({
 }
 
 export default function BirthdayScreen() {
+  const { fadeStyle, fadeNavigate } = usePageFade();
   const today = useMemo(() => new Date(), []);
   const years = useMemo(() => {
     const current = today.getFullYear();
@@ -127,6 +136,9 @@ export default function BirthdayScreen() {
   const [yearListIndex, setYearListIndex] = useState(18);
   const [submitting, setSubmitting] = useState(false);
   const [appleAgeConfirmed, setAppleAgeConfirmed] = useState(false);
+  // What Apple's age-range sheet returned — recorded with the birthday so
+  // there is an audit trail of how age was assured.
+  const [ageAssurance, setAgeAssurance] = useState<"shared" | "declined" | "unavailable">("unavailable");
   // Apple's age-range sheet takes a beat to present. Show a loading state until
   // it resolves so the screen doesn't read as frozen.
   const [ageChecking, setAgeChecking] = useState(true);
@@ -142,23 +154,50 @@ export default function BirthdayScreen() {
     askedAgeRange.current = true;
     void (async () => {
       try {
-        const result = await requestDeclaredAgeRange();
+        // Once someone taps "Don't Share" we remember it and never ask again on
+        // this device. Apple's guidance is explicit that declining must not be
+        // punished, and re-prompting every time the screen mounts is a form of
+        // nagging. A SHARED answer is deliberately not remembered, so the
+        // under-13 hard block below can't be dodged by relaunching the app.
+        const previouslyDeclined = await AsyncStorage.getItem(AGE_RANGE_DECLINED_KEY).catch(() => null);
+        if (previouslyDeclined === "1") {
+          setAgeAssurance("declined");
+          setAgeChecking(false);
+          return;
+        }
+
+        // Never let a sheet that fails to present strand onboarding: if the OS
+        // doesn't answer in time we fall through to the manual DOB gate.
+        const result = await Promise.race([
+          requestDeclaredAgeRange(),
+          new Promise<{ status: "unavailable" }>((resolve) =>
+            setTimeout(() => resolve({ status: "unavailable" }), AGE_RANGE_TIMEOUT_MS)
+          )
+        ]);
+
         if (result.status === "shared") {
+          setAgeAssurance("shared");
           if (typeof result.upperBound === "number" && result.upperBound < MIN_AGE) {
             // Under-13 (parent-declared): hard block. Leave the loading state up
             // while we navigate so the DOB form never flashes into view.
-            router.replace("/blocked");
+            fadeNavigate(() => router.replace("/blocked"));
             return;
           }
           if (typeof result.lowerBound === "number" && result.lowerBound >= MIN_AGE) {
             setAppleAgeConfirmed(true);
           }
+        } else if (result.status === "declined") {
+          // Declining is a valid choice: fall back to the DOB gate, exactly as
+          // if the API weren't available at all.
+          setAgeAssurance("declined");
+          void AsyncStorage.setItem(AGE_RANGE_DECLINED_KEY, "1").catch(() => {});
         }
       } catch {
         // Any failure just falls back to the manual DOB gate below.
       }
       setAgeChecking(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const year = Number(years[yearListIndex]);
@@ -174,7 +213,7 @@ export default function BirthdayScreen() {
       return;
     }
     if (!isSupabaseConfigured) {
-      router.push("/create-profile");
+      fadeNavigate(() => router.push("/create-profile"));
       return;
     }
     setSubmitting(true);
@@ -192,10 +231,12 @@ export default function BirthdayScreen() {
       if (gateError) throw gateError;
       if (gate !== "ok") {
         // Hard block: no account, no explanation of the threshold, no retry.
-        router.replace("/blocked");
+        fadeNavigate(() => router.replace("/blocked"));
         return;
       }
-      const { error } = await supabase.auth.updateUser({ data: { birth_date: birthDate } });
+      const { error } = await supabase.auth.updateUser({
+        data: { birth_date: birthDate, age_assurance: ageAssurance }
+      });
       if (error) {
         throw error;
       }
@@ -205,20 +246,21 @@ export default function BirthdayScreen() {
         await supabase.from("profiles").update({ birth_date: birthDate }).eq("id", uid);
       }
       useAuthStore.setState({ needsBirthdate: false });
-      router.push("/create-profile");
+      fadeNavigate(() => router.push("/create-profile"));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save your birthday.";
-      Alert.alert("Couldn't save", message);
+      appAlert("Couldn't save", message);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Screen>
+    <Animated.View style={[{ flex: 1 }, fadeStyle]}>
+    <Screen transparent>
       <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
         <Text variant="micro" className="text-mist">
-          STEP 2 OF 6
+          STEP 2 OF 7
         </Text>
       </View>
       <Text variant="display-md" className="mt-6">
@@ -276,5 +318,6 @@ export default function BirthdayScreen() {
         </>
       )}
     </Screen>
+    </Animated.View>
   );
 }

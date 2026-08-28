@@ -1,0 +1,38 @@
+-- Trophies v2 engine (applied 2026-08-28 via MCP as "trophy_engine_v3").
+-- Mirror of the applied migration. Objects:
+--
+--   trophy_checkin_times(p_user)      gym days as LOCAL timestamps (post time
+--                                     → profiles.timezone) + gym checked into
+--   trophy_comeback_runs(p_user)      consecutive-day runs (gym or rest days);
+--                                     every run after the first with ≥7 days
+--   trophy_metric(p_user, metric, params)
+--       streak_best, streak_current, total_checkins, comeback_count,
+--       communities, gym_communities, account_age_days, max_gym_checkins,
+--       taunts_received, max_weight/max_reps (params.exercise)
+--   trophy_calendar_rule(p_user, params)
+--       kinds: hour_before, hour_from, hour_between(+weekday),
+--       hour_before_count, weekend_pair, consecutive_weekday, perfect_week,
+--       date, months_count, holiday, birthday
+--   evaluate_user_trophies(p_user)    → (r_key, r_name, r_tier, r_instance)
+--       threshold → metric >= value; calendar → rule; event: comeback
+--       (one row per run, instance_key = run start), day_one (profile
+--       created before 2026-09-01). Inserts user_trophies ON CONFLICT DO
+--       NOTHING and returns only fresh rows.
+--   evaluate_trophies(p_user)         compat wrapper (PR rows only, old shape)
+--   record_trophies(text[])           now just re-evaluates (server decides)
+--   trophy_progress(p_user)           → (key, current, target) per threshold
+--   trophy_rarity_stats + refresh_trophy_rarity()   % of active members
+--   community_messages.kind           'user' | 'system'
+--   trophy_earned_side_effects()      AFTER INSERT user_trophies:
+--       notifications(trophy_unlocked, push pending); Diamond → system
+--       message in each of the user's gym community chats
+--   gym_days / user_lifts / community_members AFTER INSERT → evaluate
+--   award_top_of_gym(p_month)         top verified check-ins per gym
+--       community in the month (≥8), instance_key 'YYYY-MM:<community>';
+--       3 consecutive months → three_peat
+--   cron: trophy-rarity-daily (03:05 UTC), trophy-top-of-gym-monthly
+--         (1st 06:00 UTC)
+--
+-- The full function bodies live in the applied migration (Supabase →
+-- Database → Migrations → trophy_engine_v3). Re-apply from there if this
+-- project is ever re-created from files.

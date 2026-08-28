@@ -56,8 +56,8 @@ export function MessageBubble({ text, mine, senderFirst, senderName }: MessageBu
         <Text
           style={{
             fontFamily: "Geist_600SemiBold",
-            fontSize: 10.5,
-            color: colors.fog,
+            fontSize: 12.5,
+            color: colors.silver,
             paddingLeft: 12,
             marginTop: 6
           }}

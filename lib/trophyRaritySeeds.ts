@@ -125,16 +125,20 @@ export function rarityKey(trophyId: string, tierValue?: number): string {
 }
 
 /**
- * Percent of users who earned the exact trophy/tier, live data preferred over
- * seed. Falls back to a conservative 25% only if a key is genuinely unseeded.
+ * Percent of users who earned the exact trophy/tier. Once the live map has
+ * loaded (`__loaded` sentinel from useTrophyRarity), it is the ONLY source of
+ * truth: a key with no live row means zero users hold it — never a modeled
+ * estimate. The seeds only cover the brief pre-load / offline window so cards
+ * don't flash 0% on a cold open.
  */
 export function rarityPctFor(key: string, live?: Record<string, number>): number {
-  const pct = live?.[key] ?? TROPHY_RARITY_SEEDS[key] ?? 25;
+  const pct = live?.__loaded ? live[key] ?? 0 : live?.[key] ?? TROPHY_RARITY_SEEDS[key] ?? 25;
   return Math.max(0, Math.min(100, pct));
 }
 
 /** "30.0% of users" — the canonical rarity string used everywhere in the UI. */
 export function formatRarity(pct: number): string {
+  if (pct <= 0) return "No one has this yet";
   const rounded = pct < 10 ? Math.round(pct * 10) / 10 : Math.round(pct);
   return `${rounded}% of users`;
 }

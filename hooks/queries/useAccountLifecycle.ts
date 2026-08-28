@@ -46,26 +46,22 @@ export function useLatestExportRequest() {
   });
 }
 
-/** File a data-export request (§8) — one per 30 days, enforced client + here. */
+/**
+ * Run the data export (§8): the export-data edge function gathers everything
+ * belonging to this user, zips it, and emails it via Resend. Rate limiting
+ * (1 per 30 days) is enforced SERVER-side; the client just maps the 429.
+ */
 export function useRequestDataExport() {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.userId);
   return useMutation({
     mutationFn: async () => {
       if (!isSupabaseConfigured || !userId) return;
-      // Rate limit: reject if a request was filed in the last 30 days.
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: recent } = await supabase
-        .from("data_export_requests")
-        .select("id")
-        .eq("user_id", userId)
-        .gte("requested_at", cutoff)
-        .limit(1);
-      if (recent && recent.length > 0) throw new Error("rate_limited");
-      const { error } = await supabase
-        .from("data_export_requests")
-        .insert({ user_id: userId });
-      if (error) throw error;
+      const { error } = await supabase.functions.invoke("export-data", { method: "POST" });
+      if (error) {
+        const status = (error as { context?: { status?: number } }).context?.status;
+        throw new Error(status === 429 ? "rate_limited" : "export_failed");
+      }
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["data-export-latest", userId] })
   });

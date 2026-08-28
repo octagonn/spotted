@@ -1,15 +1,17 @@
 import { Image } from "expo-image";
 import { Check, X } from "lucide-react-native";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Text, View, type LayoutRectangle } from "react-native";
+import { Platform, Text, useWindowDimensions, View, type LayoutRectangle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { ChoiceRow } from "@/components/ui/ChoiceRow";
 import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { useFriends } from "@/hooks/queries/useFriends";
+import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
 
@@ -33,6 +35,13 @@ export function PhotoTagOverlay({
   onClose: () => void;
 }) {
   const friends = useFriends();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  // Explicit keyboard tracking: KAV "padding" on this absolutely-positioned
+  // panel double-lifted it (panel floating far above the keyboard with the
+  // photo showing through the gap). Pinning bottom to the keyboard top is
+  // exact — the same pattern the story reply bar uses.
+  const keyboardHeight = useKeyboardHeight();
   const [frame, setFrame] = useState<LayoutRectangle | null>(null);
   const [tags, setTags] = useState<PhotoTag[]>(initial);
   const [pending, setPending] = useState<{ x: number; y: number } | null>(null);
@@ -62,7 +71,9 @@ export function PhotoTagOverlay({
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <View
           onLayout={(e) => setFrame(e.nativeEvent.layout)}
-          style={{ width: "100%", aspectRatio: 4 / 5, overflow: "hidden" }}
+          // Same ratio as PostMedia's feed frame (and the capture crop) so the
+          // normalized tag coords land on the same spot the feed shows.
+          style={{ width: "100%", aspectRatio: 3 / 3.6, overflow: "hidden" }}
         >
           <GestureDetector gesture={tapPhoto}>
             <View style={{ flex: 1 }}>
@@ -107,21 +118,34 @@ export function PhotoTagOverlay({
       {/* Friend picker — appears after tapping a point on the photo. */}
       {pending ? (
         <Pressable onPress={() => setPending(null)} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)" }}>
-          {/* KAV lifts the picker above the keyboard: search on top, results
-              visible between the field and the keyboard. */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              // Flush with the keyboard when it's up (iOS; Android resizes the
+              // window itself), flush with the screen edge otherwise.
+              bottom: Platform.OS === "ios" ? keyboardHeight : 0,
+              // Never taller than the space above the keyboard.
+              maxHeight: keyboardHeight > 0 ? windowHeight - keyboardHeight - insets.top - 56 : windowHeight * 0.7,
+              backgroundColor: tokens.bg.raised,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingTop: 12,
+              // Home-indicator inset when the keyboard is closed — without it
+              // the panel ended flush at the screen edge over a black strip.
+              paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 8
+            }}
           >
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ maxHeight: "70%", backgroundColor: tokens.bg.raised, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12 }}>
             <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.border.strong, marginBottom: 8 }} />
             <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white, paddingBottom: 8 }}>Tag a friend</Text>
               <SearchBar value={query} onChangeText={setQuery} placeholder="Search friends" />
             </View>
-            <View style={{ maxHeight: 320 }}>
+            <View style={{ maxHeight: keyboardHeight > 0 ? 220 : 320 }}>
               {rows.length === 0 ? (
-                <Text style={{ paddingTop: 24, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
+                <Text style={{ paddingTop: 24, paddingBottom: 16, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
                   {q ? "No friends match." : "No more friends to tag."}
                 </Text>
               ) : (
@@ -139,7 +163,6 @@ export function PhotoTagOverlay({
               )}
             </View>
           </Pressable>
-          </KeyboardAvoidingView>
         </Pressable>
       ) : null}
     </View>

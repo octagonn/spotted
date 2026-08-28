@@ -8,6 +8,21 @@ const compat = new FlatCompat({
 module.exports = [
   ...compat.extends("expo"),
   {
+    // Node seed/maintenance scripts — not app code; give them Node globals.
+    files: ["scripts/**/*.mjs", "scripts/**/*.js"],
+    languageOptions: {
+      globals: {
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        AbortController: "readonly",
+        URLSearchParams: "readonly",
+        fetch: "readonly",
+        process: "readonly",
+        console: "readonly"
+      }
+    }
+  },
+  {
     ignores: [
       "dist/*",
       "supabase/functions/**",

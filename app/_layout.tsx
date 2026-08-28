@@ -14,27 +14,40 @@ import {
 import { GeistMono_400Regular, GeistMono_500Medium } from "@expo-google-fonts/geist-mono";
 import { setAudioModeAsync } from "expo-audio";
 import { useFonts } from "expo-font";
-import { Stack, usePathname, useRouter } from "expo-router";
+import { Stack, usePathname, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { AppState, View } from "react-native";
 
+import { AppDialogHost } from "@/components/ui/AppDialog";
 import { DismissKeyboard } from "@/components/ui/DismissKeyboard";
+import { useActivityHeartbeat } from "@/lib/analytics";
 import { persistOptions, queryClient, wipeQueryCaches } from "@/lib/queryClient";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
+import { AmbientVideoBackground } from "@/components/AmbientVideoBackground";
+import { ZoomPreviewHost } from "@/components/post/ZoomPreviewHost";
 import { GrainOverlay } from "@/components/GrainOverlay";
 import { AnalyticsConsentHost } from "@/components/AnalyticsConsentHost";
+import { PolicyUpdateNotice } from "@/components/PolicyUpdateNotice";
+import { JoinGymCommunityPrompt } from "@/components/communities/JoinGymCommunityPrompt";
 import { PushPrimingHost } from "@/components/PushPrimingHost";
 import { FlashOverlay } from "@/components/ui/Flash";
+import { PostCelebration } from "@/components/ui/PostCelebration";
 import { SheetProvider } from "@/components/ui/Sheet";
 import { ToastHost } from "@/components/ui/Toast";
 import { usePresenceSync } from "@/hooks/useGeofence";
+import { useInAppBanners } from "@/hooks/useInAppBanners";
+import { NotificationBanner } from "@/components/NotificationBanner";
+import { TrophyEarnHost } from "@/components/trophies/TrophyEarnHost";
 import { useRealtime } from "@/hooks/useRealtime";
 import { useNotificationObserver, usePushTokenSync } from "@/lib/notifications";
 import { useRestoreOnLogin } from "@/hooks/useRestoreOnLogin";
+import { usePendingPostUploader } from "@/hooks/usePendingPostUploader";
+import { useTimezoneSync } from "@/hooks/useTimezoneSync";
+import { clearPendingPosts } from "@/lib/offlineQueue";
 import { clearSignedUrlCache, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { useRelationshipsStore } from "@/stores/relationships";
@@ -81,6 +94,8 @@ function useResetOnAccountChange() {
       // the previous user's data (or signed media URLs) from disk next launch.
       void wipeQueryCaches();
       void clearSignedUrlCache();
+      // The old account's queued offline posts must not upload as the new one.
+      void clearPendingPosts();
       useRelationshipsStore.getState().reset();
       useUiStore.getState().resetForAccount();
     }
@@ -96,18 +111,48 @@ function AppServices() {
   const activeUserId = isSupabaseConfigured && status === "ready" ? userId : null;
 
   useResetOnAccountChange();
+  // Backend-only activity ledger (DAU / retention for every user, no consent
+  // needed — same class of data as last login).
+  useActivityHeartbeat(activeUserId);
   useRealtime(activeUserId);
+  // Foreground DM/taunt banners — instant in-app notification of new messages.
+  useInAppBanners(activeUserId);
   usePushTokenSync(activeUserId);
   useNotificationObserver(activeUserId);
   useRestoreOnLogin(activeUserId);
   usePresenceSync();
+  // Offline post queue: uploads gym-dead-zone posts once a connection returns.
+  usePendingPostUploader(activeUserId);
+  // Server-side daily windows (taunt limits, quiet hours) key off
+  // profiles.timezone — keep it matched to the device.
+  useTimezoneSync(activeUserId);
   // (useProfileCache retired — the persisted query cache in lib/queryClient
   // now restores EVERY query at launch, not just the own-profile snapshot.)
-  return <AnalyticsConsentHost userId={activeUserId} pathname={pathname} />;
+  return (
+    <>
+      <AnalyticsConsentHost userId={activeUserId} pathname={pathname} />
+      <PolicyUpdateNotice userId={activeUserId} />
+      {/* Opt-in prompt after a check-in at a gym with a community (spec). */}
+      <JoinGymCommunityPrompt userId={activeUserId} />
+    </>
+  );
 }
 
 /** Routes without an authenticated session; the signed-out guard leaves these alone. */
 const AUTH_PATHS = new Set(["/", "/welcome", "/sign-in", "/email"]);
+
+/**
+ * The looping gym video behind the entire auth + onboarding flow. Mounted once
+ * HERE (above both route groups) so it plays continuously across every screen
+ * and even the (auth) → (onboarding) boundary — screens in those groups render
+ * transparent and sequence their own content fades via usePageFade.
+ */
+function AmbientFlowBackground() {
+  const segments = useSegments();
+  const inFlow = segments[0] === "(auth)" || segments[0] === "(onboarding)";
+  if (!inFlow) return null;
+  return <AmbientVideoBackground />;
+}
 
 /**
  * Server-truth session enforcement. Revalidates the cached session against the
@@ -191,6 +236,7 @@ export default function RootLayout() {
             {/* App-wide: tapping dead space closes the keyboard. */}
             <DismissKeyboard>
             <View className="flex-1 bg-black">
+              <AmbientFlowBackground />
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -199,21 +245,55 @@ export default function RootLayout() {
                 }}
               >
                 <Stack.Screen name="index" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(onboarding)" />
+                {/* Transparent + instant: the ambient video shows through and
+                    keeps playing across the auth ↔ onboarding boundary while
+                    each screen sequences its own fade. */}
+                <Stack.Screen
+                  name="(auth)"
+                  options={{ contentStyle: { backgroundColor: "transparent" }, animation: "none" }}
+                />
+                <Stack.Screen
+                  name="(onboarding)"
+                  options={{ contentStyle: { backgroundColor: "transparent" }, animation: "none" }}
+                />
                 <Stack.Screen name="(tabs)" />
                 {/* Regular card (not a native modal): a native fullScreenModal renders
                     above the root-level sheet/toast hosts, hiding compose sheets. */}
                 <Stack.Screen
                   name="camera"
-                  options={{ animation: "slide_from_bottom", gestureEnabled: false }}
+                  // Fast open: the camera should feel instant, not slide up on
+                  // the stack's leisurely default (~400ms).
+                  options={{ animation: "slide_from_bottom", animationDuration: 160, gestureEnabled: false }}
                 />
-                <Stack.Screen name="workout" options={{ animation: "slide_from_bottom" }} />
+                {/* Slides up like a modal, so it dismisses like one: swipe down
+                    anywhere (matches the settings/menu swipe behavior). */}
+                <Stack.Screen
+                  name="workout"
+                  options={{
+                    animation: "slide_from_bottom",
+                    gestureEnabled: true,
+                    gestureDirection: "vertical",
+                    animationMatchesGesture: true
+                  }}
+                />
                 <Stack.Screen name="workout/[id]" />
-                <Stack.Screen name="post/[id]" options={{ presentation: "modal" }} />
+                {/* Regular card, not a native modal: native modals render above
+                    the root-level sheet host, so the report sheet opened from a
+                    post's ⋯ menu was hidden behind the post itself. */}
+                <Stack.Screen
+                  name="post/[id]"
+                  options={{
+                    animation: "slide_from_bottom",
+                    gestureEnabled: true,
+                    gestureDirection: "vertical",
+                    animationMatchesGesture: true
+                  }}
+                />
                 <Stack.Screen name="gym/[id]" options={{ presentation: "modal" }} />
                 <Stack.Screen name="user/[username]" />
                 <Stack.Screen name="chat/[id]" />
+                <Stack.Screen name="chat-details/[id]" />
+                <Stack.Screen name="drafts" options={{ animation: "slide_from_bottom" }} />
                 <Stack.Screen name="inbox" />
                 <Stack.Screen name="message-requests" />
                 <Stack.Screen name="edit-profile" />
@@ -229,10 +309,18 @@ export default function RootLayout() {
                   options={{ presentation: "fullScreenModal", animation: "fade" }}
                 />
               </Stack>
+              {/* IG-style pinch-zoom preview: rendered above navigation so a
+                  zoomed post photo covers the whole screen. */}
+              <ZoomPreviewHost />
+              {/* Spotted-themed dialogs (replaces the native Alert app-wide). */}
+              <AppDialogHost />
               <ToastHost />
+              <NotificationBanner />
+              <TrophyEarnHost />
               <PushPrimingHost />
               <GrainOverlay />
               <FlashOverlay />
+              <PostCelebration />
               <StatusBar style="light" />
             </View>
             </DismissKeyboard>

@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { View } from "react-native";
+import Animated from "react-native-reanimated";
 
 import { Screen } from "@/components/Screen";
 import { Text } from "@/components/ui/Text";
+import { usePageFade } from "@/hooks/usePageFade";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 
@@ -12,6 +14,7 @@ import { useAuthStore } from "@/stores/auth";
  * usable account survives the attempt.
  */
 export default function BlockedScreen() {
+  const { fadeStyle } = usePageFade();
   useEffect(() => {
     void (async () => {
       try {
@@ -24,7 +27,8 @@ export default function BlockedScreen() {
   }, []);
 
   return (
-    <Screen>
+    <Animated.View style={[{ flex: 1 }, fadeStyle]}>
+    <Screen transparent>
       <View className="flex-1 items-center justify-center px-6">
         <Text variant="display-sm" accessibilityRole="header" className="text-center">
           ACCOUNT NOT AVAILABLE
@@ -34,5 +38,6 @@ export default function BlockedScreen() {
         </Text>
       </View>
     </Screen>
+    </Animated.View>
   );
 }

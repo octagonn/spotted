@@ -2,7 +2,7 @@ import { Dumbbell } from "lucide-react-native";
 import { ScrollView, Text, View } from "react-native";
 
 import { Pressable } from "@/components/ui/Pressable";
-import type { MapGym } from "@/hooks/queries/useMapGyms";
+import type { MapBounds, MapGym } from "@/hooks/queries/useMapGyms";
 import { colors } from "@/theme/colors";
 
 /**
@@ -13,12 +13,14 @@ export function MapCanvas({
   gyms,
   coords,
   onGym,
-  onCluster: _onCluster
+  onCluster: _onCluster,
+  onRegion: _onRegion
 }: {
   gyms: MapGym[];
   coords: { latitude: number; longitude: number } | null;
   onGym: (gym: MapGym) => void;
   onCluster: (gyms: MapGym[]) => void;
+  onRegion?: (bounds: MapBounds) => void;
 }) {
   const sorted = coords
     ? [...gyms].sort(

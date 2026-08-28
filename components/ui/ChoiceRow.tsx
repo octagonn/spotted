@@ -9,6 +9,8 @@ import { colors } from "@/theme/colors";
 type ChoiceRowProps = {
   title: string;
   sub?: string;
+  /** Small badge rendered before the sub text (e.g. explicit "E"). */
+  subBadge?: ReactNode;
   selected?: boolean;
   disabled?: boolean;
   /** Leading slot (avatar / icon tile). */
@@ -21,7 +23,7 @@ type ChoiceRowProps = {
  * charcoal; disabled 0.38 opacity; trailing 22px check-ring (white fill + black
  * check when selected).
  */
-export function ChoiceRow({ title, sub, selected, disabled, left, onPress }: ChoiceRowProps) {
+export function ChoiceRow({ title, sub, subBadge, selected, disabled, left, onPress }: ChoiceRowProps) {
   const [pressed, setPressed] = useState(false);
   return (
     <Pressable
@@ -56,7 +58,12 @@ export function ChoiceRow({ title, sub, selected, disabled, left, onPress }: Cho
           >
             {title}
           </Text>
-          {sub ? <Text style={{ marginTop: 2, fontSize: 12, color: colors.fog }}>{sub}</Text> : null}
+          {sub ? (
+            <View style={{ marginTop: 2, flexDirection: "row", alignItems: "center", gap: 5 }}>
+              {subBadge}
+              <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 12, color: colors.fog }}>{sub}</Text>
+            </View>
+          ) : null}
         </View>
         <View
           style={{

@@ -26,14 +26,16 @@ const ALL_TYPES: NotificationType[] = [
   "claim_rejected",
   "second_workout",
   "daily_nudge",
-  "arrival_buzz"
+  "arrival_buzz",
+  "post_comment",
+  "system_notice"
 ];
 
 describe("push payload formatting", () => {
   it("formats post views", () => {
     expect(formatPushPayload("post_view", { actorName: "Mia" })).toEqual({
-      title: "Eyes on you",
-      body: "Mia viewed your post"
+      title: "Mia saw your post",
+      body: "Eyes on you."
     });
   });
 
@@ -41,8 +43,8 @@ describe("push payload formatting", () => {
     expect(
       formatPushPayload("streak_break_friend", { actorName: "Octavio", muscleGroup: "leg", streakCount: 14 })
     ).toEqual({
-      title: "Streak broken",
-      body: "Octavio skipped leg day. Streak ended at 14."
+      title: "Octavio's streak ended",
+      body: "14 days. Send a taunt to get them back in."
     });
   });
 
@@ -69,8 +71,8 @@ describe("push payload formatting", () => {
         communityName: "Iron Club"
       })
     ).toEqual({
-      title: "Community invite",
-      body: "Mia invited you to Iron Club"
+      title: "Mia invited you to Iron Club",
+      body: "Join the crew."
     });
     expect(formatPushPayload("dm", { actorName: "Mia" })).toEqual({
       title: "Mia",

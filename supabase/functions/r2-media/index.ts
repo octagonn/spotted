@@ -68,12 +68,18 @@ serve(async (request) => {
 
     if (body.action === "download") {
       const keys = Array.isArray(body.keys) ? body.keys.slice(0, MAX_BATCH) : [];
-      const urls: Record<string, string> = {};
-      for (const key of keys) {
-        if (!validKey(key)) continue;
-        urls[key] = await presign(r2, "GET", key, DOWNLOAD_TTL_SECONDS);
-      }
-      return jsonResponse({ urls });
+      // Presign in PARALLEL. Each presign awaits crypto.subtle HMACs, so doing
+      // this in a serial for-await loop made a feed page (~40-60 keys between
+      // media, insets, thumbnails and carousels) wait for every signature in
+      // turn before ANY image could start downloading — the "images take
+      // forever to load" report — and it burned the function's ~2s CPU budget
+      // on batches near the 200-key cap. These are independent pure-crypto
+      // operations, so there is nothing to serialize.
+      const valid = keys.filter(validKey);
+      const signed = await Promise.all(
+        valid.map(async (key) => [key, await presign(r2, "GET", key, DOWNLOAD_TTL_SECONDS)] as const)
+      );
+      return jsonResponse({ urls: Object.fromEntries(signed) });
     }
 
     if (body.action === "delete") {

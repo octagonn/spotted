@@ -14,7 +14,8 @@ export class AppleSignInError extends Error {
   }
 }
 
-export async function signInWithApple() {
+/** Run the native Apple sheet and return a credential with an identity token. */
+async function getAppleCredential(): Promise<AppleAuthentication.AppleAuthenticationCredential> {
   const available = await AppleAuthentication.isAvailableAsync();
   if (!available) {
     throw new AppleSignInError("Sign in with Apple isn't available on this device.");
@@ -32,33 +33,87 @@ export async function signInWithApple() {
     if (code === "ERR_REQUEST_CANCELED") {
       throw new AppleSignInError("Cancelled.", code);
     }
-    throw new AppleSignInError(
-      err instanceof Error ? err.message : "Apple sign-in failed.",
-      code
-    );
+    throw new AppleSignInError(err instanceof Error ? err.message : "Apple sign-in failed.", code);
   }
   if (!credential.identityToken) {
     throw new AppleSignInError("Apple did not return an identity token.");
   }
+  return credential;
+}
+
+export async function signInWithApple() {
+  const credential = await getAppleCredential();
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: "apple",
-    token: credential.identityToken
+    token: credential.identityToken as string
   });
   if (error) {
     const message = error.message ?? "Sign in failed.";
+    const lower = message.toLowerCase();
     let hint: string | undefined;
-    if (
-      message.toLowerCase().includes("provider is not enabled") ||
-      message.toLowerCase().includes("apple sign-in") ||
-      message.toLowerCase().includes("validation_failed") ||
-      message.toLowerCase().includes("audience")
-    ) {
-      hint =
-        "Enable Apple in Supabase: Authentication → Providers → Apple. Set Services ID = com.octavio.spotted (or your Services ID), Team ID, Key ID, and the .p8 secret. Save, then retry.";
+    if (lower.includes("audience")) {
+      // Native flow: Supabase checks the token audience against the provider's
+      // Client IDs list. "host.exp.Exponent" = you're testing in Expo Go.
+      hint = `Apple rejected the app identity (${message}). In Supabase → Authentication → Providers → Apple, the Client IDs list must contain this build's bundle ID: com.octavio.spotted — or host.exp.Exponent when testing in Expo Go.`;
+    } else if (lower.includes("provider is not enabled") || lower.includes("validation_failed")) {
+      hint = `Apple sign-in isn't configured (${message}). Enable the Apple provider in Supabase → Authentication → Providers and add com.octavio.spotted to Client IDs.`;
     }
     throw new AppleSignInError(message, error.code ?? undefined, hint);
   }
   return data;
+}
+
+export type AppleLinkResult = "linked" | "already-linked" | "in-use" | "already-has-apple";
+
+/**
+ * Connect Sign in with Apple to the CURRENTLY signed-in account.
+ *
+ * The old approach signed in with the Apple token and hoped Supabase's
+ * automatic linking matched on email. With Hide My Email it never matched —
+ * it created a junk @privaterelay account and bounced the user into it — and
+ * the browser fallback died at Apple ("Sign Up Not Completed") because the web
+ * flow needs a Services ID, not this app's bundle ID.
+ *
+ * Now the native Apple sheet's identity token goes straight to the
+ * link-apple-identity edge function, which verifies it against Apple's public
+ * keys and attaches the identity server-side. Email is never part of the
+ * decision, so Hide My Email works, and no stray account is ever created.
+ */
+export async function linkAppleToCurrentAccount(): Promise<AppleLinkResult> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    throw new AppleSignInError("You need to be signed in to connect Apple.");
+  }
+  const credential = await getAppleCredential();
+  const { data, error } = await supabase.functions.invoke<{ status?: string; error?: string }>(
+    "link-apple-identity",
+    { body: { identityToken: credential.identityToken } }
+  );
+  if (error) {
+    const status = (error as { context?: { status?: number } }).context?.status;
+    if (status === 409) {
+      // Body carries which conflict it was.
+      const body = await readInvokeError(error);
+      if (body === "already_has_apple") return "already-has-apple";
+      return "in-use";
+    }
+    throw new AppleSignInError("Couldn't connect Apple sign-in. Try again in a moment.");
+  }
+  if (data?.status === "already_linked") return "already-linked";
+  if (data?.status === "linked") return "linked";
+  throw new AppleSignInError("Couldn't connect Apple sign-in. Try again in a moment.");
+}
+
+/** Pull the `error` field out of a non-2xx functions.invoke response. */
+async function readInvokeError(error: unknown): Promise<string | null> {
+  try {
+    const response = (error as { context?: Response }).context;
+    if (!response || typeof response.json !== "function") return null;
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export type EmailAuthMethod = "password" | "otp";

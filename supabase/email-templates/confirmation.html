@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Spotted — verification code</title>
+    <style>
+      /* Gmail only: its dark mode inverts near-white text to dark but
+         brightens mid-grays — so feed Gmail a mid-gray for the hero text.
+         Every other client keeps the inline #fafafa. */
+      u + .body .g-white { color: #52525b !important; }
+    </style>
+  </head>
+  <body class="body" style="margin:0; padding:0; background-color:#000000;">
+    <!-- Hidden preheader (inbox preview text) -->
+    <div style="display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#000000;">
+      Your Spotted verification code — one step from your first post.
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#000000" style="background-color:#000000; background-image:linear-gradient(#000000,#000000);">
+      <tr>
+        <td align="center" style="padding:48px 16px;">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="max-width:480px; width:100%;">
+
+            <!-- Brand -->
+            <tr>
+              <td style="padding:0 8px 36px 8px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td>
+                      <img src="https://raw.githubusercontent.com/octagonn/spottedtermsandprivacy/main/assets/spotted-icon.png" width="44" height="44" alt="S" style="display:block; border:0; width:44px; height:44px; border-radius:12px;" />
+                    </td>
+                    <td style="padding-left:12px;">
+                      <span class="g-white" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:15px; font-weight:800; letter-spacing:5px; color:#fafafa;">SPOTTED</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Micro label -->
+            <tr>
+              <td style="padding:0 8px 16px 8px;">
+                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:#71717a;">CREATE ACCOUNT &middot; ONE-TIME CODE</span>
+              </td>
+            </tr>
+
+            <!-- Heading -->
+            <tr>
+              <td style="padding:0 8px 16px 8px;">
+                <h1 class="g-white" style="margin:0; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:40px; line-height:42px; font-weight:900; letter-spacing:-1px; color:#fafafa;">WELCOME.</h1>
+              </td>
+            </tr>
+
+            <!-- Body copy -->
+            <tr>
+              <td style="padding:0 8px 28px 8px;">
+                <p style="margin:0; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:15px; line-height:23px; color:#a1a1aa;">
+                  You're one code away. Enter it in the Spotted app to verify your email and finish creating your account.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Code -->
+            <tr>
+              <td align="center" bgcolor="#101013" style="background-color:#101013; background-image:linear-gradient(#101013,#101013); border:1px solid #26262a; border-radius:18px; padding:24px 12px;">
+                <span class="g-white" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:32px; line-height:36px; font-weight:800; letter-spacing:8px; margin-left:8px; color:#fafafa;">{{ .Token }}</span>
+              </td>
+            </tr>
+
+            <!-- Meta -->
+            <tr>
+              <td style="padding:20px 8px 0 8px;">
+                <p style="margin:0; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:13px; line-height:19px; color:#71717a;">
+                  This code expires in 60 minutes. If you didn't sign up for Spotted, you can ignore this email — no account is created without the code.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Hairline -->
+            <tr>
+              <td style="padding:36px 8px 0 8px;">
+                <div style="border-top:1px solid #1f1f23; font-size:0; line-height:0;">&nbsp;</div>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:16px 8px 0 8px;">
+                <p style="margin:0 0 8px 0; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:#52525b;">THE GYM, BUT EVERYONE'S WATCHING.</p>
+                <p style="margin:0; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:12px; line-height:18px; color:#52525b;">
+                  You're receiving this because someone used this email address to sign up for Spotted. &copy; Spotted
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

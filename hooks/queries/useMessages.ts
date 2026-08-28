@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { MOCK_CONVERSATION_ID, mockMessages } from "@/lib/mockData";
 import { compressStoryPhoto } from "@/lib/posts";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { removePostObjects, uploadMediaObject } from "@/lib/r2";
+import { isSupabaseConfigured, signedMessageUrl, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import type { Database } from "@/types/database";
@@ -83,6 +85,9 @@ export function useMessages(conversationId?: string | null) {
   return useQuery({
     queryKey: ["messages", conversationId],
     enabled: Boolean(conversationId),
+    // Open-thread fallback when a realtime event is dropped: a visible chat
+    // should never sit stale for more than a few seconds.
+    refetchInterval: 15_000,
     queryFn: async (): Promise<ChatMessage[]> => {
       if (!conversationId) {
         return [];
@@ -90,12 +95,26 @@ export function useMessages(conversationId?: string | null) {
       if (!isSupabaseConfigured) {
         return [...mockMessages];
       }
-      const { data, error } = await supabase
+      // Deleted-for-me: my participant row's cleared_at hides everything at or
+      // before that moment (the other participant still sees full history).
+      const { data: me } = await supabase.auth.getUser();
+      const { data: part } = me.user
+        ? await supabase
+            .from("conversation_participants")
+            .select("cleared_at")
+            .eq("conversation_id", conversationId)
+            .eq("user_id", me.user.id)
+            .maybeSingle()
+        : { data: null };
+      let query = supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
         .order("sent_at", { ascending: true })
         .limit(200);
+      const clearedAt = (part as { cleared_at?: string | null } | null)?.cleared_at;
+      if (clearedAt) query = query.gt("sent_at", clearedAt);
+      const { data, error } = await query;
       if (error) {
         throw error;
       }
@@ -153,6 +172,7 @@ export function useSendMessage(conversationId?: string | null) {
       if (error) {
         throw error;
       }
+      trackAnalyticsEvent("message_sent", { reply: Boolean(replyToId) });
     },
     // Optimistic echo (real path only — the mock path inserts inside mutationFn):
     // append a temp row instantly; the realtime/invalidate flow reconciles it
@@ -214,7 +234,11 @@ export type MediaMessageInput = {
 
 const MEDIA_CFG: Record<MediaMessageInput["kind"], { ext: string; type: string; label: string }> = {
   image: { ext: "jpg", type: "image/jpeg", label: "Photo" },
-  audio: { ext: "m4a", type: "audio/m4a", label: "Voice message" },
+  // "audio/m4a" is NOT a real MIME type — an .m4a file is MPEG-4 audio. Storage
+  // matches the bucket's allow-list on this exact string, so the bogus value
+  // (combined with the bucket having no audio type at all) rejected every voice
+  // note before it left the device.
+  audio: { ext: "m4a", type: "audio/mp4", label: "Voice message" },
   video: { ext: "mp4", type: "video/mp4", label: "Video" }
 };
 
@@ -234,14 +258,7 @@ export function useSendMediaMessage(conversationId?: string | null) {
       if (!body || body.byteLength === 0) {
         throw new Error("The file could not be read.");
       }
-      const path = `${userId}/${conversationId}-${Date.now()}.${cfg.ext}`;
-      const upload = await supabase.storage.from("messages").upload(path, body, {
-        contentType: cfg.type,
-        upsert: false
-      });
-      if (upload.error) {
-        throw upload.error;
-      }
+      const path = await uploadMediaObject(`${userId}/${conversationId}-${Date.now()}.${cfg.ext}`, body, cfg.type);
       const { error } = await supabase.from("messages").insert({
         conversation_id: conversationId,
         sender_id: userId,
@@ -251,7 +268,7 @@ export function useSendMediaMessage(conversationId?: string | null) {
         view_once: Boolean(viewOnce)
       });
       if (error) {
-        await supabase.storage.from("messages").remove([path]).catch(() => {});
+        await removePostObjects([path]).catch(() => {});
         throw error;
       }
     },
@@ -313,7 +330,17 @@ export function useMessagesRealtime(conversationId?: string | null) {
           table: "messages",
           filter: `conversation_id=eq.${conversationId}`
         },
-        () => {
+        (payload) => {
+          // INSERT: append straight into the cache so the bubble lands without
+          // a refetch round-trip. Anything else (edits, unsends) refetches.
+          if (payload.eventType === "INSERT" && payload.new) {
+            const incoming = payload.new as ChatMessage;
+            queryClient.setQueryData<ChatMessage[]>(["messages", conversationId], (current) => {
+              if (!current) return current;
+              if (current.some((m) => m.id === incoming.id)) return current;
+              return [...current, incoming];
+            });
+          }
           void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
         }
       )
@@ -325,10 +352,26 @@ export function useMessagesRealtime(conversationId?: string | null) {
 }
 
 /** Mark the other participant's messages as read when the thread is open. */
-export function useMarkConversationRead(conversationId?: string | null, messageCount?: number) {
+export function useMarkConversationRead(conversationId?: string | null, messageCount?: number, isGroup = false) {
   const userId = useAuthStore((state) => state.userId);
   useEffect(() => {
     if (!isSupabaseConfigured || !conversationId || !userId || !messageCount) {
+      return;
+    }
+    if (isGroup) {
+      // Groups track read state PER MEMBER (last_read_at on my participant
+      // row) — the shared messages.read_at stamp would clear everyone's
+      // unread the moment one member opened the thread.
+      void supabase
+        .from("conversation_participants")
+        .update({ last_read_at: new Date().toISOString() })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId)
+        .then(({ error }) => {
+          if (error) {
+            console.warn("Failed to mark group read", error.message);
+          }
+        });
       return;
     }
     void supabase
@@ -342,7 +385,178 @@ export function useMarkConversationRead(conversationId?: string | null, messageC
           console.warn("Failed to mark conversation read", error.message);
         }
       });
-  }, [conversationId, userId, messageCount]);
+  }, [conversationId, userId, messageCount, isGroup]);
+}
+
+export type ChatMediaItem = {
+  id: string;
+  kind: "image" | "video";
+  uri: string;
+  sentAt: string;
+};
+
+/**
+ * Every photo and video sent in a conversation, newest first — the
+ * details-screen media gallery (iMessage/IG-style). View-once photos, unsent
+ * messages, voice notes, and anything before my "delete for me" point never
+ * appear.
+ */
+export function useChatMedia(conversationId?: string | null, enabled = true) {
+  const userId = useAuthStore((state) => state.userId);
+  return useQuery({
+    queryKey: ["chat-media", conversationId],
+    enabled: isSupabaseConfigured && Boolean(conversationId) && enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<ChatMediaItem[]> => {
+      const { data: part } = userId
+        ? await supabase
+            .from("conversation_participants")
+            .select("cleared_at")
+            .eq("conversation_id", conversationId as string)
+            .eq("user_id", userId)
+            .maybeSingle()
+        : { data: null };
+      let query = supabase
+        .from("messages")
+        .select("id, media_url, sent_at")
+        .eq("conversation_id", conversationId as string)
+        .not("media_url", "is", null)
+        .is("deleted_at", null)
+        .eq("view_once", false)
+        .order("sent_at", { ascending: false })
+        .limit(90);
+      const clearedAt = (part as { cleared_at?: string | null } | null)?.cleared_at;
+      if (clearedAt) query = query.gt("sent_at", clearedAt);
+      const { data, error } = await query;
+      if (error) throw error;
+      const rows = (data ?? []) as { id: string; media_url: string; sent_at: string }[];
+      const media = rows.flatMap((r) => {
+        // Chat uploads are keyed by extension: .jpg photo, .mp4 video, .m4a
+        // voice note (never in the gallery).
+        const kind = r.media_url.endsWith(".mp4") ? ("video" as const) : r.media_url.endsWith(".m4a") ? null : ("image" as const);
+        return kind ? [{ id: r.id, kind, path: r.media_url, sentAt: r.sent_at }] : [];
+      });
+      const signed = await Promise.all(
+        media.map(async (m) => {
+          const uri = await signedMessageUrl(m.path).catch(() => null);
+          return uri ? { id: m.id, kind: m.kind, uri, sentAt: m.sentAt } : null;
+        })
+      );
+      return signed.filter((m): m is ChatMediaItem => Boolean(m));
+    }
+  });
+}
+
+/* ------------------------------ group chats ------------------------------ */
+
+export type GroupMember = { id: string; name: string; username: string; avatarUrl: string | null };
+/** title is the RAW custom title — null for unnamed groups; render sites
+ *  derive the per-viewer display name via lib/groupName. */
+export type GroupInfo = { id: string; title: string | null; createdBy: string | null; members: GroupMember[] };
+
+/** Group thread metadata: title + full member list (drives the header and
+ *  per-bubble sender names). Null for 1:1 conversations. */
+export function useGroupInfo(conversationId?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["group-info", conversationId],
+    enabled: isSupabaseConfigured && Boolean(conversationId) && enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<GroupInfo | null> => {
+      const { data: conv, error } = await supabase
+        .from("conversations")
+        .select("id, is_group, title, created_by")
+        .eq("id", conversationId as string)
+        .maybeSingle();
+      if (error) throw error;
+      if (!conv?.is_group) return null;
+      const { data: parts, error: partsError } = await supabase
+        .from("conversation_participants")
+        .select("user_id, profile:user_id(id, display_name, username, avatar_url)")
+        .eq("conversation_id", conversationId as string);
+      if (partsError) throw partsError;
+      type PartRow = { user_id: string; profile: { id: string; display_name: string; username: string; avatar_url: string | null } | null };
+      const members: GroupMember[] = ((parts ?? []) as unknown as PartRow[])
+        .filter((p): p is PartRow & { profile: NonNullable<PartRow["profile"]> } => Boolean(p.profile))
+        .map((p) => ({
+          id: p.profile.id,
+          name: p.profile.display_name,
+          username: p.profile.username,
+          avatarUrl: p.profile.avatar_url
+        }));
+      return { id: conv.id, title: conv.title, createdBy: conv.created_by, members };
+    }
+  });
+}
+
+/** Create a group chat (creator + friends, server-validated). Returns the
+ *  conversation id to route into. */
+export function useCreateGroupConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ title, memberIds }: { title: string; memberIds: string[] }): Promise<string> => {
+      const { data, error } = await supabase.rpc("create_group_conversation", {
+        p_title: title,
+        p_member_ids: memberIds
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
+  });
+}
+
+/** Rename a group — any member may (conversations_update_member policy). */
+export function useRenameGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, title }: { conversationId: string; title: string }) => {
+      const trimmed = title.trim().slice(0, 40);
+      if (!trimmed) throw new Error("empty_title");
+      const { error } = await supabase.from("conversations").update({ title: trimmed }).eq("id", conversationId);
+      if (error) throw error;
+      return trimmed;
+    },
+    onSuccess: (_title, { conversationId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["group-info", conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] });
+    }
+  });
+}
+
+/** Add friends to an existing group (any member may add their own friends). */
+export function useAddGroupMembers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, memberIds }: { conversationId: string; memberIds: string[] }) => {
+      const { error } = await supabase.rpc("add_group_members", {
+        p_conversation: conversationId,
+        p_member_ids: memberIds
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, { conversationId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["group-info", conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] });
+    }
+  });
+}
+
+/** Leave a group — deletes my membership row; the thread vanishes for me. */
+export function useLeaveGroup() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!isSupabaseConfigured || !userId) return;
+      const { error } = await supabase
+        .from("conversation_participants")
+        .delete()
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
+  });
 }
 
 /** Recipient opens a view-once photo — burn it (RPC guards participant/sender). */

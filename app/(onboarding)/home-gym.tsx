@@ -1,10 +1,12 @@
 import { FlashList } from "@shopify/flash-list";
+import { appAlert } from "@/components/ui/AppDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { MapPin } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Platform, View } from "react-native";
+import { Platform, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/Button";
@@ -18,6 +20,7 @@ import {
   type GymSearchCoords,
   type GymSearchResult
 } from "@/hooks/queries/useGymSearch";
+import { usePageFade } from "@/hooks/usePageFade";
 import { logger } from "@/lib/logger";
 import { advanceOnboarding } from "@/lib/onboarding";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -33,6 +36,7 @@ function roundCoord(value: number): number {
 
 export default function HomeGymScreen() {
   const insets = useSafeAreaInsets();
+  const { fadeStyle, fadeNavigate } = usePageFade();
   const userId = useAuthStore((state) => state.userId);
   const queryClient = useQueryClient();
 
@@ -97,7 +101,7 @@ export default function HomeGymScreen() {
     }
     if (!isSupabaseConfigured || !userId) {
       await advanceOnboarding(userId, "complete");
-      router.replace("/feed");
+      fadeNavigate(() => router.replace("/feed"));
       return;
     }
     setSubmitting(true);
@@ -111,10 +115,10 @@ export default function HomeGymScreen() {
       }
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
       useAuthStore.getState().setOnboardingStage("complete");
-      router.replace("/feed");
+      fadeNavigate(() => router.replace("/feed"));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save gym.";
-      Alert.alert("Couldn't save", message);
+      appAlert("Couldn't save", message);
     } finally {
       setSubmitting(false);
     }
@@ -128,10 +132,10 @@ export default function HomeGymScreen() {
   );
 
   return (
-    <View className="flex-1 bg-black px-4" style={{ paddingTop: insets.top + 16 }}>
+    <Animated.View className="flex-1 px-4" style={[{ paddingTop: insets.top + 16 }, fadeStyle]}>
       <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
         <Text variant="micro" className="text-mist">
-          STEP 6 OF 6
+          STEP 7 OF 7
         </Text>
       </View>
       <Text variant="display-md" className="mt-6">
@@ -200,7 +204,7 @@ export default function HomeGymScreen() {
           className="mt-4 self-center"
           onPress={() => {
             void advanceOnboarding(userId, "complete");
-            router.replace("/feed");
+            fadeNavigate(() => router.replace("/feed"));
           }}
         >
           <Text variant="micro" className="text-mist">
@@ -208,7 +212,7 @@ export default function HomeGymScreen() {
           </Text>
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

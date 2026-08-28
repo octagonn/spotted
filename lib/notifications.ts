@@ -9,6 +9,7 @@ import { AppState, Platform } from "react-native";
 import { logger } from "@/lib/logger";
 import { routeForNotification } from "@/lib/notificationRouting";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 
 const TOKEN_STORAGE_KEY = "spotted:expo-push-token";
 const ANDROID_CHANNELS = {
@@ -144,6 +145,7 @@ export async function registerDeviceToken(
       ? "not_asked"
       : "denied";
   await recordPermissionStatus(userId, status, shouldPrompt);
+  if (shouldPrompt) trackAnalyticsEvent("push_permission", { status, prompted: true });
   if (status !== "granted") return null;
 
   const expoPushToken = (
@@ -240,6 +242,7 @@ export function useNotificationObserver(userId: string | null) {
         }
       }
 
+      trackAnalyticsEvent("notification_opened", { type: typeof data.type === "string" ? data.type : "unknown" });
       const route = routeForNotification({
         type: typeof data.type === "string" ? data.type : null,
         actorId: typeof data.actor_id === "string" ? data.actor_id : null,

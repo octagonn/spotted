@@ -2,11 +2,12 @@ import { useRouter, type Href } from "expo-router";
 import { Dumbbell } from "lucide-react-native";
 import { Text, View } from "react-native";
 
+import { GymLogo } from "@/components/GymLogo";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
-import { useJoinGymCommunity } from "@/hooks/queries/useCommunities";
 import { useGymPresence } from "@/hooks/queries/useGymPresence";
+import { useSetHomeGym } from "@/hooks/queries/useProfileExtras";
 import type { MapGym } from "@/hooks/queries/useMapGyms";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -15,27 +16,38 @@ import { colors } from "@/theme/colors";
 export function GymPreviewSheet({ gym, close }: { gym: MapGym; close: () => void }) {
   const router = useRouter();
   const presence = useGymPresence();
-  const joinGym = useJoinGymCommunity();
 
   const hereNow = (presence.data?.presence ?? []).filter((row) => row.gym.id === gym.id);
 
-  const openCommunity = () => {
-    joinGym.mutate(gym.id, {
-      onSuccess: (communityId) => {
-        showToast(`Joined ${gym.name}`);
+  // The pin sheet used to push people straight into Communities (join + route
+  // to /community/:id) — a surface that still says "coming soon". Tapping a gym
+  // now does gym things: make it your home gym, or open the gym page.
+  const setHomeGym = useSetHomeGym();
+  const makeHomeGym = () => {
+    setHomeGym.mutate(gym.id, {
+      onSuccess: () => {
+        showToast(`${gym.name} is now your home gym`);
         close();
-        router.push(`/community/${communityId}` as Href);
-      },
-      onError: () => showToast("Couldn't join right now — try again")
+      }
     });
+  };
+  const openGym = () => {
+    close();
+    router.push(`/gym/${gym.id}` as Href);
   };
 
   return (
     <View style={{ paddingHorizontal: 20 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 8 }}>
-        <View style={{ width: 50, height: 50, borderRadius: 25, borderWidth: 1.5, borderColor: colors.mist, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center" }}>
-          <Dumbbell size={20} color={colors.white} />
-        </View>
+        <GymLogo
+          gym={gym}
+          size={50}
+          fallback={
+            <View style={{ width: 50, height: 50, borderRadius: 25, borderWidth: 1.5, borderColor: colors.mist, backgroundColor: colors.ink, alignItems: "center", justifyContent: "center" }}>
+              <Dumbbell size={20} color={colors.white} />
+            </View>
+          }
+        />
         <View style={{ flex: 1 }}>
           <Text accessibilityRole="header" style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white }}>{gym.name}</Text>
           {gym.address ? (
@@ -75,10 +87,15 @@ export function GymPreviewSheet({ gym, close }: { gym: MapGym; close: () => void
         </View>
       )}
 
-      <View style={{ paddingTop: 16 }}>
-        <Button onPress={openCommunity} loading={joinGym.isPending}>
-          Join gym community
+      <View style={{ paddingTop: 16, gap: 10 }}>
+        <Button onPress={makeHomeGym} loading={setHomeGym.isPending}>
+          Set as home gym
         </Button>
+        <Pressable onPress={openGym} accessibilityLabel={`Open ${gym.name}`}>
+          <Text style={{ textAlign: "center", paddingVertical: 8, fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.mist }}>
+            View gym
+          </Text>
+        </Pressable>
       </View>
     </View>
   );

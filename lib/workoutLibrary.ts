@@ -18,13 +18,16 @@ export const MUSCLES = [
   "Glutes",
   "Core",
   "Full Body",
-  "Cardio"
+  "Cardio",
+  "Sports"
 ] as const;
 
 export type Muscle = (typeof MUSCLES)[number];
-export type LiftMuscle = Exclude<Muscle, "Cardio">;
+export type LiftMuscle = Exclude<Muscle, "Cardio" | "Sports">;
 
-export const LIFT_MUSCLES = MUSCLES.filter((m): m is LiftMuscle => m !== "Cardio");
+export const LIFT_MUSCLES = MUSCLES.filter((m): m is LiftMuscle => m !== "Cardio" && m !== "Sports");
+
+export const isSportsItem = (item: { muscle: Muscle }): boolean => item.muscle === "Sports";
 
 export type LibraryItem = {
   name: string;
@@ -39,7 +42,10 @@ export type LibraryItem = {
   custom?: boolean;
 };
 
-export const isCardioItem = (item: { muscle: Muscle }): boolean => item.muscle === "Cardio";
+/** Activity-kind items (logged in minutes/miles): cardio AND sports — sports
+ *  ride the same interval pipeline, so saved data needs no new shape. */
+export const isCardioItem = (item: { muscle: Muscle }): boolean =>
+  item.muscle === "Cardio" || item.muscle === "Sports";
 
 export const BASE_LIBRARY: LibraryItem[] = [
   // Chest
@@ -196,7 +202,29 @@ export const BASE_LIBRARY: LibraryItem[] = [
   { name: "Jump Rope", muscle: "Cardio", min: 10, mi: 0 },
   { name: "HIIT Circuit", muscle: "Cardio", min: 20, mi: 0 },
   { name: "Battle Ropes", muscle: "Cardio", min: 5, mi: 0 },
-  { name: "Boxing", muscle: "Cardio", min: 15, mi: 0 }
+  { name: "Boxing", muscle: "Cardio", min: 15, mi: 0 },
+  // Sports — a game is a workout. Logged like cardio: minutes + miles.
+  { name: "Soccer", muscle: "Sports", min: 90, mi: 4 },
+  { name: "Basketball", muscle: "Sports", min: 60, mi: 2 },
+  { name: "Tennis", muscle: "Sports", min: 60, mi: 2 },
+  { name: "Pickleball", muscle: "Sports", min: 60, mi: 1 },
+  { name: "Volleyball", muscle: "Sports", min: 60, mi: 0 },
+  { name: "Flag Football", muscle: "Sports", min: 60, mi: 2 },
+  { name: "Baseball", muscle: "Sports", min: 90, mi: 0 },
+  { name: "Golf", muscle: "Sports", min: 120, mi: 4 },
+  { name: "Hockey", muscle: "Sports", min: 60, mi: 2 },
+  { name: "Lacrosse", muscle: "Sports", min: 60, mi: 2 },
+  { name: "Rugby", muscle: "Sports", min: 60, mi: 2 },
+  { name: "Ultimate Frisbee", muscle: "Sports", min: 60, mi: 3 },
+  { name: "Badminton", muscle: "Sports", min: 45, mi: 0 },
+  { name: "Table Tennis", muscle: "Sports", min: 45, mi: 0 },
+  { name: "Martial Arts", muscle: "Sports", min: 60, mi: 0 },
+  { name: "Wrestling", muscle: "Sports", min: 60, mi: 0 },
+  { name: "Rock Climbing", muscle: "Sports", min: 60, mi: 0 },
+  { name: "Skiing", muscle: "Sports", min: 120, mi: 5 },
+  { name: "Snowboarding", muscle: "Sports", min: 120, mi: 5 },
+  { name: "Surfing", muscle: "Sports", min: 90, mi: 0 },
+  { name: "Skateboarding", muscle: "Sports", min: 60, mi: 0 }
 ];
 
 export type FieldKey = "w" | "r" | "min" | "mi" | "inc";

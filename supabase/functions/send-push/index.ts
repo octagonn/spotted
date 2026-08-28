@@ -100,9 +100,14 @@ function contextFromNotification(notification: NotificationRow, gymName?: string
       stringValue(payload.trophy_id),
     workoutName: stringValue(payload.workout_name),
     reason: stringValue(payload.reason),
-    kind: stringValue(payload.kind)
+    kind: stringValue(payload.kind),
+    title: stringValue(payload.title),
+    body: stringValue(payload.body),
+    seed: notification.id
   };
 }
+
+const SYSTEM_NOTICE_ROUTES = new Set(["/settings/privacy", "/settings/legal/privacy", "/settings/legal/terms", "/inbox"]);
 
 function uuidValue(value: unknown) {
   const result = stringValue(value);
@@ -118,10 +123,16 @@ function routeForNotification(notification: NotificationRow) {
       ? notification.actor.username
       : undefined;
   switch (notification.type) {
-    case "dm":
+    case "dm": {
+      // Group messages deep-link to the GROUP thread — the sender route would
+      // open a 1:1 with them instead.
+      const conversationId = uuidValue(payload.conversation_id);
+      if (payload.is_group === true && conversationId) return `/chat/${conversationId}?group=1`;
       return notification.actor_id ? `/chat/${notification.actor_id}` : "/inbox";
+    }
     case "post_view":
     case "post_reaction":
+    case "post_comment":
     case "taunt_answered":
     case "second_workout":
       return postId ? `/post/${postId}` : "/inbox";
@@ -131,6 +142,8 @@ function routeForNotification(notification: NotificationRow) {
     case "community_invite":
     case "community_nudge":
       return communityId ? `/community/${communityId}` : "/inbox";
+    case "community_message":
+      return communityId ? `/community/${communityId}?tab=Chat` : "/inbox";
     case "streak_milestone":
     case "trophy_unlocked":
     case "claim_approved":
@@ -139,6 +152,10 @@ function routeForNotification(notification: NotificationRow) {
     case "daily_nudge":
     case "arrival_buzz":
       return "/(tabs)/feed";
+    case "system_notice": {
+      const route = stringValue(payload.route);
+      return route && SYSTEM_NOTICE_ROUTES.has(route) ? route : "/inbox";
+    }
     default:
       return actorUsername ? `/user/${actorUsername}` : "/inbox";
   }
@@ -178,6 +195,10 @@ function preferenceAllows(type: NotificationType, preferences: PreferenceRow) {
   if (!preferences.push_enabled) return "push_disabled";
   if (isQuietHours(preferences)) return "quiet_hours";
   switch (type) {
+    // Account/legal notices bypass category toggles (push on/off + quiet
+    // hours still apply).
+    case "system_notice":
+      return null;
     case "daily_nudge":
     case "arrival_buzz":
       return preferences.gym_reminders_enabled ? null : "gym_reminders_disabled";
@@ -187,11 +208,15 @@ function preferenceAllows(type: NotificationType, preferences: PreferenceRow) {
     case "taunt_answered":
       return preferences.taunts_enabled ? null : "taunts_disabled";
     case "dm":
+    case "community_message":
+      // Group chat follows the DM rules (spec); mute-per-group is checked
+      // separately in processNotification.
       return preferences.messages_enabled ? null : "messages_disabled";
     case "friend_request":
     case "friend_accepted":
       return preferences.friend_requests_enabled ? null : "friend_requests_disabled";
     case "post_reaction":
+    case "post_comment":
       return preferences.reactions_enabled ? null : "reactions_disabled";
     case "post_view":
       return preferences.post_views_enabled ? null : "post_views_disabled";
@@ -218,6 +243,7 @@ function notificationTtl(type: NotificationType) {
   if (type === "daily_nudge" || type === "arrival_buzz") return 4 * 60 * 60;
   if (type === "gym_arrival_friend" || type === "wave") return 2 * 60 * 60;
   if (type === "dm") return 7 * 24 * 60 * 60;
+  if (type === "community_message") return 24 * 60 * 60;
   return 24 * 60 * 60;
 }
 
@@ -301,7 +327,20 @@ async function processNotification(
   }
   if (!preferences) throw new Error("notification_preferences_unavailable");
 
-  const suppressionReason = preferenceAllows(notification.type, preferences as PreferenceRow);
+  let suppressionReason = preferenceAllows(notification.type, preferences as PreferenceRow);
+  // Mute-per-group: any push tied to a community the recipient muted.
+  if (!suppressionReason && ["community_message", "community_nudge", "community_invite"].includes(notification.type)) {
+    const communityId = uuidValue((notification.payload ?? {}).community_id);
+    if (communityId) {
+      const { data: membership } = await supabase
+        .from("community_members")
+        .select("muted")
+        .eq("community_id", communityId)
+        .eq("user_id", notification.recipient_id)
+        .maybeSingle();
+      if (membership?.muted) suppressionReason = "community_muted";
+    }
+  }
   if (suppressionReason) {
     await updateNotification(supabase, notification.id, {
       push_status: "suppressed",
@@ -341,7 +380,7 @@ async function processNotification(
       .select("id", { count: "exact", head: true })
       .eq("recipient_id", notification.recipient_id)
       .eq("read", false)
-      .not("type", "in", "(post_view,daily_nudge,arrival_buzz)"),
+      .not("type", "in", "(post_view,daily_nudge,arrival_buzz,community_message)"),
     supabase
       .from("push_deliveries")
       .select("device_token, status")

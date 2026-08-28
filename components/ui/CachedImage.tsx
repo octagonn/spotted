@@ -1,5 +1,7 @@
 import { Image, type ImageProps } from "expo-image";
 
+import { isStoredMediaRef, useResolvedUri } from "@/lib/media";
+
 /**
  * expo-image with the app's caching defaults baked in: memory+disk cache and a
  * soft fade-in. Use for ALL remote media (posts, thumbs, chat, avatars) —
@@ -12,10 +14,16 @@ import { Image, type ImageProps } from "expo-image";
  * decorative and hidden from screen readers — never announced as an unlabeled
  * "image" node. Override with `accessible`/`alt` as needed.
  */
-export function CachedImage({ accessibilityLabel, accessible, ...props }: ImageProps) {
+export function CachedImage({ accessibilityLabel, accessible, source, ...props }: ImageProps) {
   const meaningful = Boolean(accessibilityLabel);
+  // "r2:<key>" references (avatars, community photos, chat media…) are signed
+  // on the fly; anything else is passed straight through.
+  const rawUri = source && typeof source === "object" && !Array.isArray(source) && "uri" in source ? (source.uri as string | undefined) : undefined;
+  const resolved = useResolvedUri(rawUri);
+  const finalSource = isStoredMediaRef(rawUri) ? (resolved ? { ...(source as object), uri: resolved } : undefined) : source;
   return (
     <Image
+      source={finalSource}
       cachePolicy="memory-disk"
       transition={140}
       accessible={accessible ?? meaningful}

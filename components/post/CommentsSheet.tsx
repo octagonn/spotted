@@ -1,7 +1,7 @@
+import { useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { Send, X } from "lucide-react-native";
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { SkeletonCommentRow } from "@/components/ui/Skeleton";
+import { useFriends } from "@/hooks/queries/useFriends";
+import { splitMentions } from "@/lib/mentions";
 import { colors } from "@/theme/colors";
 
 export type CommentRow = {
@@ -35,8 +37,8 @@ export type CommentRow = {
 
 export type ReplyTarget = { id: string; handle: string };
 
-function mono(size: number, color: string) {
-  return { fontFamily: "GeistMono_400Regular", fontSize: size, color };
+function metaText(size: number, color: string) {
+  return { fontFamily: "Geist_400Regular" as const, fontSize: size, color };
 }
 
 /** One comment (or reply) — sized to read comfortably, with a Reply action. */
@@ -56,19 +58,37 @@ function CommentLine({
   canDelete?: boolean;
   onDelete?: (commentId: string) => void;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
     <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
       <Pressable onPress={() => onOpenProfile(comment.handle)} accessibilityLabel={`Open ${comment.handle}`}>
-        <Avatar name={comment.name} uri={comment.avatarUrl} size={replyParent ? 30 : 38} />
+        <Avatar name={comment.name} uri={comment.avatarUrl} size={replyParent ? 32 : 40} />
       </Pressable>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text onPress={() => onOpenProfile(comment.handle)} style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white }}>
+          <Text onPress={() => onOpenProfile(comment.handle)} style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}>
             {comment.handle}
           </Text>
-          <Text style={mono(11, colors.ash)}>{comment.time}</Text>
+          <Text style={metaText(12.5, colors.ash)}>{comment.time}</Text>
         </View>
-        <Text style={{ marginTop: 3, fontSize: 15.5, lineHeight: 22, color: colors.bone }}>{comment.text}</Text>
+        {/* @mentions inside a comment are live profile links. */}
+        <Text style={{ marginTop: 3, fontFamily: "Geist_400Regular", fontSize: 16, lineHeight: 23, color: colors.bone }}>
+          {splitMentions(comment.text).map((seg, i) =>
+            seg.handle ? (
+              <Text
+                key={`${seg.text}-${i}`}
+                suppressHighlighting
+                onPress={() => onOpenProfile(seg.handle as string)}
+                accessibilityRole="link"
+                style={{ fontFamily: "Geist_600SemiBold", color: colors.white }}
+              >
+                {seg.text}
+              </Text>
+            ) : (
+              <Text key={`${seg.text}-${i}`}>{seg.text}</Text>
+            )
+          )}
+        </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 4 }}>
           {onReply ? (
             <Pressable
@@ -76,22 +96,41 @@ function CommentLine({
               accessibilityLabel={`Reply to ${comment.handle}`}
               hitSlop={6}
             >
-              <Text style={{ fontSize: 12.5, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Reply</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Reply</Text>
             </Pressable>
           ) : null}
           {canDelete && onDelete ? (
-            <Pressable
-              onPress={() =>
-                Alert.alert("Delete comment?", "This removes it for everyone.", [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Delete", style: "destructive", onPress: () => onDelete(comment.id) }
-                ])
-              }
-              accessibilityLabel="Delete comment"
-              hitSlop={6}
-            >
-              <Text style={{ fontSize: 12.5, fontFamily: "Geist_600SemiBold", color: "#E5484D" }}>Delete</Text>
-            </Pressable>
+            /* Inline confirm, NOT appAlert. This row lives inside the comments
+               <Modal>; presenting the dialog host's Modal on top of it left an
+               invisible touch-blocking layer and froze the app (reported as
+               "clicking delete bricks the app"). Confirming inside the sheet's
+               own tree avoids stacking modals entirely. */
+            confirmingDelete ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Geist_400Regular", color: colors.fog }}>Delete?</Text>
+                <Pressable
+                  onPress={() => {
+                    setConfirmingDelete(false);
+                    onDelete(comment.id);
+                  }}
+                  accessibilityLabel="Confirm delete comment"
+                  hitSlop={6}
+                >
+                  <Text style={{ fontSize: 13, fontFamily: "Geist_700Bold", color: "#E5484D" }}>Delete</Text>
+                </Pressable>
+                <Pressable onPress={() => setConfirmingDelete(false)} accessibilityLabel="Cancel delete" hitSlop={6}>
+                  <Text style={{ fontSize: 13, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => setConfirmingDelete(true)}
+                accessibilityLabel="Delete comment"
+                hitSlop={6}
+              >
+                <Text style={{ fontSize: 13, fontFamily: "Geist_600SemiBold", color: "#E5484D" }}>Delete</Text>
+              </Pressable>
+            )
           ) : null}
         </View>
       </View>
@@ -150,6 +189,25 @@ export function CommentsSheet({
   const openProfile = (handle: string) => {
     dismissAndClose();
     router.push(`/user/${handle.replace(/^@/, "")}`);
+  };
+
+  // "@" autocomplete: while the draft ends in an @handle-in-progress, offer
+  // matching friends; picking one completes the token. Sends land as plain
+  // "@username" text — the server notifies the mentioned user, and every
+  // render site already links handles via splitMentions.
+  const friends = useFriends();
+  const mentionQuery = useMemo(() => {
+    const m = /(^|[^A-Za-z0-9_.])@([A-Za-z0-9_.]*)$/.exec(draft);
+    return m ? m[2].toLowerCase() : null;
+  }, [draft]);
+  const mentionCandidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return (friends.data ?? [])
+      .filter((f) => !mentionQuery || `${f.username} ${f.display_name}`.toLowerCase().includes(mentionQuery))
+      .slice(0, 5);
+  }, [friends.data, mentionQuery]);
+  const completeMention = (username: string) => {
+    onChangeDraft(draft.replace(/@([A-Za-z0-9_.]*)$/, `@${username} `));
   };
 
   return (
@@ -215,6 +273,26 @@ export function CommentsSheet({
             </ScrollView>
 
             {/* Replying-to bar */}
+            {mentionCandidates.length > 0 ? (
+              <View style={{ borderTopWidth: 1, borderTopColor: colors.graphite }}>
+                {mentionCandidates.map((f) => (
+                  <Pressable
+                    key={f.id}
+                    onPress={() => completeMention(f.username)}
+                    accessibilityLabel={`Mention ${f.username}`}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 8 }}
+                  >
+                    <Avatar name={f.display_name} uri={f.avatar_url} size={28} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
+                        {f.display_name}
+                      </Text>
+                      <Text numberOfLines={1} style={{ fontSize: 12, color: colors.fog }}>@{f.username}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             {replyTo ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 8 }}>
                 <Text style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
@@ -237,7 +315,7 @@ export function CommentsSheet({
                 borderTopColor: colors.graphite
               }}
             >
-              <Avatar name={myName} uri={myAvatarUri} size={30} />
+              <Avatar name={myName} uri={myAvatarUri} size={32} />
               <TextInput
                 value={draft}
                 onChangeText={onChangeDraft}
@@ -255,9 +333,9 @@ export function CommentsSheet({
                   borderWidth: 1,
                   borderColor: colors.iron,
                   borderRadius: 999,
-                  paddingVertical: 9,
+                  paddingVertical: 10,
                   paddingHorizontal: 16,
-                  fontSize: 13,
+                  fontSize: 15,
                   color: colors.bone,
                   fontFamily: "Geist_400Regular"
                 }}
@@ -265,7 +343,15 @@ export function CommentsSheet({
               <Pressable
                 // onPressIn: fires on touch-down, BEFORE the keyboard-dismiss
                 // can swallow the tap — kills the press-twice bug.
-                onPressIn={onSubmit}
+                onPressIn={() => {
+                  onSubmit();
+                  // Tapping the explicit Post button ends the composing
+                  // session, so collapse the keyboard and hand the thread
+                  // back. The return-key path above deliberately does NOT
+                  // dismiss — that one is for firing off several comments in
+                  // a row, IG-style.
+                  Keyboard.dismiss();
+                }}
                 accessibilityLabel="Post comment"
                 style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}
               >

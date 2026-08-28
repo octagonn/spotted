@@ -1,30 +1,36 @@
-import { Image } from "expo-image";
 import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { ChevronDown, Flame, Grid3x3, Lock, MapPin, Send, Share2, Tag, UserPlus, type LucideIcon } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
-import { LayoutAnimation, Modal, Linking, ScrollView, Share, Text, View , useWindowDimensions } from "react-native";
+import { ChevronDown, Flame, Grid3x3, Lock, MapPin, MoreHorizontal, Send, Share2, Tag, UserPlus, type LucideIcon } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import { LayoutAnimation, Modal, ScrollView, Text, View , useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ContentMenu } from "@/components/ContentMenu";
+import { PostGridCell } from "@/components/profile/PostGridCell";
+import { SocialLinksRow } from "@/components/profile/SocialLinksRow";
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
 import { StreakPopup } from "@/components/profile/StreakPopup";
 import { Avatar } from "@/components/ui/Avatar";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
-import { SkeletonGrid } from "@/components/ui/Skeleton";
+import { useSheet } from "@/components/ui/Sheet";
+import { Skeleton, SkeletonGrid } from "@/components/ui/Skeleton";
+import { Stat } from "@/components/ui/Stat";
 import { useMutualFriends } from "@/hooks/queries/useFollowing";
-import { useRespondToRequest, useSendFriendRequest } from "@/hooks/queries/useFriends";
-import { useFriendshipStatus, useProfileByUsername, useUserStreak } from "@/hooks/queries/useProfile";
+import { useCancelFriendRequest, useRemoveFriend, useRespondToRequest, useSendFriendRequest } from "@/hooks/queries/useFriends";
+import { useFriendshipStatus, useProfileByUsername, useRecordProfileView, useUserStreak } from "@/hooks/queries/useProfile";
 import { useSendTaunt } from "@/hooks/queries/useTaunts";
 import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
 import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
 import { useTrophies } from "@/hooks/useTrophies";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
+import { useGymStreak } from "@/hooks/useGymStreak";
 import { useStories } from "@/hooks/queries/useStories";
 import { usePostedState } from "@/hooks/queries/usePostedState";
 import { useUserCounts } from "@/hooks/queries/useUserCounts";
-import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
-import { computeGymStreak } from "@/lib/streak";
+import { shareProfile as shareProfileLink } from "@/lib/share";
 import { randomTauntLine } from "@/lib/tauntLines";
 import { useAuthStore } from "@/stores/auth";
 import { relationshipButton, useRelationships } from "@/stores/relationships";
@@ -93,12 +99,16 @@ export default function UserProfileScreen() {
   const { username = "" } = useLocalSearchParams<{ username: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const sheet = useSheet();
   const { width: winW } = useWindowDimensions();
   // Exact one-third so the grid is ALWAYS 3 columns on any device (percentages
   // + a gap were rounding up and wrapping to 2).
   const cellW = Math.floor(winW / 3);
   const profileQuery = useProfileByUsername(username);
   const profile = profileQuery.data;
+  // Backend-only capture: who viewed this profile, when. Server dedupes
+  // within the hour and ignores self/blocked. No UI reads this yet.
+  useRecordProfileView(profile?.id);
   const ownUserId = useAuthStore((state) => state.userId);
   const friendship = useFriendshipStatus(profile?.id);
   const posts = useSignedUserPosts(profile?.id);
@@ -111,19 +121,25 @@ export default function UserProfileScreen() {
   const stories = useStories();
   const sendRequest = useSendFriendRequest();
   const sendTaunt = useSendTaunt();
+  // Taunts only exist to call out friends who HAVEN'T gone yet — once they've
+  // posted today's daily, the button flips to a "Went today" pill (same
+  // pattern as the friends tab). streakDays already holds their daily-drop
+  // days, so this costs no extra query.
+  const targetWentToday = streakDays.data instanceof Map && streakDays.data.has(localDateKey());
   // One-button taunt: random line from the 20-line rotation, no picker.
   const fireTaunt = () => {
-    if (!profile || sendTaunt.isPending) return;
+    if (!profile || sendTaunt.isPending || targetWentToday) return;
     const line = randomTauntLine();
     sendTaunt.mutate(
       { targetId: profile.id, lineId: line.id, lineText: line.text },
-      {
-        onSuccess: () => showToast("Taunt sent"),
-        onError: (error) => showToast(error.message)
-      }
+      // Errors already toast inside useSendTaunt — a second toast here
+      // showed every rejection twice.
+      { onSuccess: () => showToast("Taunt sent") }
     );
   };
   const respondRequest = useRespondToRequest();
+  const cancelRequest = useCancelFriendRequest();
+  const removeFriend = useRemoveFriend();
   const relationships = useRelationships();
   const [streakOpen, setStreakOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false); // streak calendar — collapsed by default
@@ -153,20 +169,22 @@ export default function UserProfileScreen() {
   const handle = profile?.username ?? username;
   const bio = profile?.bio ?? null;
   const gym = profile?.gym?.name ?? null;
-  const socials = useMemo(() => socialEntries(parseSocialLinks(profile?.social_links)), [profile?.social_links]);
   const hasActiveStory = Boolean(profile && stories.data?.some((g) => g.userId === profile.id));
 
   // Public accounts are viewable by anyone; private ones unlock only for
   // friends. is_private is the content gate — discoverable only governs
   // search visibility and must not unlock profiles.
   const isPublic = profile?.is_private === false;
-  const canView = isFriend || isPublic;
+  // "Private posts": public, findable account whose content is friends-only.
+  const postsPrivate = profile?.posts_private === true;
+  const canView = isFriend || (isPublic && !postsPrivate);
+  // Identity still loading: painting the "This account is private" branch
+  // (with zeroed counts and no avatar) for a friend's PUBLIC profile during
+  // this window was the reported private-profile flash. While resolving,
+  // show a quiet loading state instead of any verdict.
+  const resolving = profileQuery.isLoading || (Boolean(profile) && !(isPublic && !postsPrivate) && friendship.isLoading);
 
-  const gymStreak = useMemo(
-    // instanceof Map guard — same defensive parity as the own-profile screen.
-    () => computeGymStreak(streakDays.data instanceof Map ? streakDays.data.keys() : []),
-    [streakDays.data]
-  );
+  const gymStreak = useGymStreak(streakDays.data);
   const currentStreak = gymStreak.count;
   const longestStreak = Math.max(userStreak.data?.longest_streak ?? 0, currentStreak);
   const friendTrophies = useTrophies(profile?.id);
@@ -182,14 +200,71 @@ export default function UserProfileScreen() {
     if (from === "incoming" && transition.to === "friend") {
       respondRequest.mutate({ requesterId: profile.id, accept: true });
     }
+    // "Added" → tap again withdraws. The store flipped and toasted, but the
+    // pending row never left the server, so the request came back on reload
+    // ("unadding people doesn't work").
+    if (from === "requested" && transition.to === "none") cancelRequest.mutate(profile.id);
+  };
+
+  const unfriend = () => {
+    if (!profile) return;
+    removeFriend.mutate(profile.id, {
+      onSuccess: () => {
+        relationships.setRelationship(key, "none");
+        showToast(`Removed ${name.split(" ")[0]}`);
+      }
+    });
   };
 
   const shareProfile = () => {
-    void Share.share({ message: `Check out @${handle} on Spotted` });
+    shareProfileLink(handle);
+  };
+
+  // Report / Block from the profile itself — blocking used to be reachable
+  // only from an open DM thread.
+  const openOptions = () => {
+    if (!profile) return;
+    sheet.open(
+      <ContentMenu
+        contentType="user"
+        contentId={profile.id}
+        reportLabel="account"
+        reportedUserId={profile.id}
+        onRemoveFriend={isFriend ? unfriend : undefined}
+      />
+    );
   };
 
   if (profile && ownUserId && profile.id === ownUserId) {
     return <Redirect href="/(tabs)/profile" />;
+  }
+
+  // Identity still loading — a shaped skeleton instead of the blank header
+  // (zeroed counts + no avatar) testers saw for a few seconds.
+  if (profileQuery.isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.black }}>
+        <PanelHeader title={username} />
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingTop: 8, gap: 18 }}>
+          <Skeleton width={88} height={88} radius={44} />
+          <View style={{ flex: 1, flexDirection: "row", justifyContent: "space-around" }}>
+            <Skeleton width={52} height={34} radius={8} />
+            <Skeleton width={52} height={34} radius={8} />
+          </View>
+        </View>
+        <View style={{ paddingHorizontal: 18, paddingTop: 16, gap: 8 }}>
+          <Skeleton width="45%" height={14} />
+          <Skeleton width="70%" height={11} />
+        </View>
+        <View style={{ paddingHorizontal: 18, paddingTop: 18, flexDirection: "row", gap: 8 }}>
+          <Skeleton height={40} radius={10} style={{ flex: 1, width: "auto" }} />
+          <Skeleton height={40} radius={10} style={{ flex: 1, width: "auto" }} />
+        </View>
+        <View style={{ paddingTop: 24 }}>
+          <SkeletonGrid count={6} />
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -224,11 +299,19 @@ export default function UserProfileScreen() {
             </View>
           </Pressable>
           <View style={{ flex: 1, flexDirection: "row", paddingLeft: 6 }}>
-            <StatCell value={postCount} label="posts" />
-            <StatCell
+            <Stat size="sm" value={postCount} label="posts" />
+            <Stat size="sm"
               value={counts.data?.friends ?? 0}
               label="friends"
-              onPress={() => profile && router.push(`/people/friends?user=${profile.id}` as Href)}
+              // The COUNT is always visible (IG model), but the list only
+              // opens when their content is viewable (public, or you're
+              // friends) AND they haven't hidden their friends list. The
+              // server enforces the same rules in user_friends().
+              onPress={
+                profile && canView && !profile.friends_list_hidden
+                  ? () => router.push(`/people/friends?user=${profile.id}` as Href)
+                  : undefined
+              }
             />
           </View>
         </View>
@@ -247,27 +330,7 @@ export default function UserProfileScreen() {
               <Text style={{ fontFamily: "Geist_400Regular", fontSize: 12, color: colors.fog }}>{gym}</Text>
             </View>
           ) : null}
-          {socials.length ? (
-            <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {socials.map(({ meta, url }) => (
-                <Pressable key={meta.key} onPress={() => void Linking.openURL(url)} accessibilityRole="link" accessibilityLabel={meta.label} hitSlop={6}>
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      borderWidth: 1,
-                      borderColor: colors.iron,
-                      alignItems: "center",
-                      justifyContent: "center"
-                    }}
-                  >
-                    <meta.icon size={17} color={colors.silver} strokeWidth={2} />
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+          <SocialLinksRow links={profile?.social_links} />
         </View>
 
         {/* Action row — even, icon-labelled buttons. Friends: Message (primary)
@@ -276,8 +339,18 @@ export default function UserProfileScreen() {
           {isFriend && profile ? (
             <>
               <ActionButton primary label="Message" icon={Send} onPress={() => router.push(`/chat/${profile.id}`)} />
-              <ActionButton label={sendTaunt.isPending ? "Sending…" : "Taunt"} icon={Flame} onPress={fireTaunt} disabled={sendTaunt.isPending} />
+              {/* Taunts only exist to call out no-shows — once they've posted
+                  today, the button disappears entirely. */}
+              {!targetWentToday ? (
+                <ActionButton
+                  label={sendTaunt.isPending ? "Sending…" : "Taunt"}
+                  icon={Flame}
+                  onPress={fireTaunt}
+                  disabled={sendTaunt.isPending}
+                />
+              ) : null}
               <ActionButton label="Share" icon={Share2} onPress={shareProfile} compact />
+              <ActionButton label="More options" icon={MoreHorizontal} onPress={openOptions} compact />
             </>
           ) : (
             <>
@@ -289,6 +362,7 @@ export default function UserProfileScreen() {
                 disabled={button.disabled}
               />
               <ActionButton label="Share" icon={Share2} onPress={shareProfile} />
+              <ActionButton label="More options" icon={MoreHorizontal} onPress={openOptions} compact />
             </>
           )}
         </View>
@@ -319,18 +393,16 @@ export default function UserProfileScreen() {
           <>
             {/* Inline stats */}
             <View style={{ paddingHorizontal: 18, paddingTop: 24, flexDirection: "row" }}>
-              <Pressable style={{ flex: 1, alignItems: "center" }} haptic={false} onPress={() => setStreakOpen(true)} accessibilityLabel={`${currentStreak} Gym streak`}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Flame size={13} color={colors.gold} strokeWidth={2.2} />
-                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
-                    <Text style={{ fontFamily: "Geist_700Bold", fontSize: 18, color: colors.white }}>{currentStreak}</Text>
-                    <Text style={{ fontFamily: "Geist_400Regular", fontSize: 10.5, color: colors.fog }}>days</Text>
-                  </View>
-                </View>
-                <Text style={{ marginTop: 5, fontFamily: "Geist_400Regular", fontSize: 11.5, color: colors.fog }}>Gym streak</Text>
-              </Pressable>
-              <StatCell value={longestStreak} unit="days" label="Longest" />
-              <StatCell
+              <Stat
+                size="sm"
+                value={currentStreak}
+                unit="days"
+                label="Gym streak"
+                icon={<Flame size={13} color={colors.gold} strokeWidth={2.2} />}
+                onPress={() => setStreakOpen(true)}
+              />
+              <Stat size="sm" value={longestStreak} unit="days" label="Longest" />
+              <Stat size="sm"
                 value={trophyCount}
                 label="Trophies"
                 onPress={() =>
@@ -379,13 +451,18 @@ export default function UserProfileScreen() {
                       accessibilityLabel="Open post"
                       onPress={() => profile && router.push(`/profile-posts/${post.id}?user=${profile.id}` as Href)}
                     >
-                      <View style={{ flex: 1, backgroundColor: colors.graphite }}>
-                        {post.media_url ? (
-                          <Image source={{ uri: post.media_url }} accessible={false} contentFit="cover" style={{ flex: 1 }} />
-                        ) : null}
-                      </View>
+                      <PostGridCell
+                        mediaUrl={post.media_url}
+                        thumbnailUrl={post.thumbnailUrl}
+                        insetUrl={post.inset_url}
+                        isVideo={post.mediaType === "video"}
+                      />
                     </Pressable>
                   ))}
+                </View>
+              ) : posts.isLoading ? (
+                <View style={{ paddingTop: 2 }}>
+                  <SkeletonGrid count={6} />
                 </View>
               ) : (
                 <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
@@ -399,17 +476,15 @@ export default function UserProfileScreen() {
                     key={post.id}
                     style={{ width: cellW, aspectRatio: 4 / 5, padding: 1 }}
                     accessibilityLabel="Open post"
-                    onPress={() =>
-                      router.push(
-                        `/daily/${localDateKey(new Date(post.created_at))}?user=${post.user_id}&post=${post.id}` as Href
-                      )
-                    }
+                    // One swipeable feed over their tagged posts — see
+                    // /tagged-posts/[postId].
+                    onPress={() => profile && router.push(`/tagged-posts/${post.id}?user=${profile.id}` as Href)}
                   >
-                    <View style={{ flex: 1, backgroundColor: colors.graphite }}>
-                      {post.media_url ? (
-                        <Image source={{ uri: post.media_url }} accessible={false} contentFit="cover" style={{ flex: 1 }} />
-                      ) : null}
-                    </View>
+                    <PostGridCell
+                      mediaUrl={post.media_url}
+                      thumbnailUrl={post.thumbnail_url}
+                      isVideo={post.media_type === "video"}
+                    />
                   </Pressable>
                 ))}
               </View>
@@ -428,48 +503,31 @@ export default function UserProfileScreen() {
         ) : canView ? (
           // You haven't posted your daily — their content is locked (feed-lock
           // philosophy: post to see others).
-          <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
-            <View style={{ width: 58, height: 58, borderRadius: 29, borderWidth: 1.5, borderColor: colors.gold, backgroundColor: "rgba(232,180,76,0.12)", alignItems: "center", justifyContent: "center" }}>
-              <Lock size={22} color={colors.gold} strokeWidth={2} />
-            </View>
-            <Text style={{ marginTop: 16, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white, textAlign: "center" }}>
-              Post to unlock {name.split(" ")[0]}&apos;s profile
-            </Text>
-            <Text style={{ marginTop: 8, fontSize: 12.5, lineHeight: 18, color: colors.fog, textAlign: "center" }}>
-              Drop today&apos;s SPOTTED to see their streak, posts, and progress.
-            </Text>
-            <View style={{ paddingTop: 18, alignSelf: "stretch", paddingHorizontal: 40 }}>
-              <Button onPress={() => router.push("/camera?mode=daily")}>Post today&apos;s SPOTTED</Button>
-            </View>
+          <EmptyState
+            tone="gold"
+            icon={<Lock size={22} color={colors.gold} strokeWidth={2} />}
+            title={`Post to unlock ${name.split(" ")[0]}'s profile`}
+            body="Drop today's SPOTTED to see their streak, posts, and progress."
+            paddingTop={40}
+          >
+            <Button onPress={() => router.push("/camera?mode=daily")}>Post today&apos;s SPOTTED</Button>
+          </EmptyState>
+        ) : resolving ? (
+          // Don't render a private/locked verdict until profile + friendship
+          // have actually loaded.
+          <View style={{ paddingTop: 24 }}>
+            <SkeletonGrid count={6} />
           </View>
         ) : (
           // Private account — locked state.
-          <View style={{ alignItems: "center", paddingTop: 40, paddingHorizontal: 40 }}>
-            <View
-              style={{
-                width: 58,
-                height: 58,
-                borderRadius: 29,
-                borderWidth: 1.5,
-                borderColor: colors.slate,
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              <Lock size={22} color={colors.silver} strokeWidth={2} />
-            </View>
-            <Text style={{ marginTop: 16, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white, textAlign: "center" }}>
-              This account is private
-            </Text>
-            <Text style={{ marginTop: 8, fontSize: 12.5, lineHeight: 18, color: colors.fog, textAlign: "center" }}>
-              Add {name.split(" ")[0]} to see their posts, streak, and progress.
-            </Text>
-            {state === "none" ? (
-              <View style={{ paddingTop: 18, alignSelf: "stretch", paddingHorizontal: 40 }}>
-                <Button onPress={advance}>Add {name.split(" ")[0]}</Button>
-              </View>
-            ) : null}
-          </View>
+          <EmptyState
+            icon={<Lock size={22} color={colors.silver} strokeWidth={2} />}
+            title={isPublic && postsPrivate ? "Posts are friends-only" : "This account is private"}
+            body={`Add ${name.split(" ")[0]} to see their posts, streak, and progress.`}
+            paddingTop={40}
+          >
+            {state === "none" ? <Button onPress={advance}>Add {name.split(" ")[0]}</Button> : null}
+          </EmptyState>
         )}
       </ScrollView>
 
@@ -480,7 +538,7 @@ export default function UserProfileScreen() {
         <Pressable onPress={() => setAvatarZoom(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", padding: 32 }}>
           <View style={{ width: "100%", aspectRatio: 1, maxWidth: 380, borderRadius: 24, overflow: "hidden", backgroundColor: colors.graphite }}>
             {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} contentFit="cover" style={{ flex: 1 }} transition={120} />
+              <CachedImage source={{ uri: profile.avatar_url }} contentFit="cover" style={{ flex: 1 }} transition={120} />
             ) : null}
           </View>
         </Pressable>
@@ -522,24 +580,4 @@ function UserProfileTab({
   );
 }
 
-function StatCell({ value, unit, label, onPress }: { value: number; unit?: string; label: string; onPress?: () => void }) {
-  const body = (
-    <>
-      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
-        <Text style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white }}>{value}</Text>
-        {unit ? <Text style={{ fontFamily: "Geist_400Regular", fontSize: 10.5, color: colors.fog }}>{unit}</Text> : null}
-      </View>
-      <Text numberOfLines={1} style={{ marginTop: 4, fontFamily: "Geist_400Regular", fontSize: 11, color: colors.silver }}>
-        {label}
-      </Text>
-    </>
-  );
-  if (onPress) {
-    return (
-      <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingHorizontal: 1 }} haptic={false} accessibilityLabel={`${value} ${label}`}>
-        {body}
-      </Pressable>
-    );
-  }
-  return <View style={{ flex: 1, alignItems: "center" }}>{body}</View>;
-}
+

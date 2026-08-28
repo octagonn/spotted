@@ -1,4 +1,4 @@
-import { Check, Lock, Pin, Share2, Video, X } from "lucide-react-native";
+import { Check, Lock, Pin, Share2, X } from "lucide-react-native";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -38,7 +38,6 @@ export function TrophyDetailSheet({
   if (!card) return null;
   const { def } = card;
   const isStacked = def.type === "stacked";
-  const isVideo = def.trackingType === "videoVerification";
   const premium = card.rarityPct < PREMIUM_RARITY_THRESHOLD;
   const earnedDate = formatEarnedDate(card.earnedAt);
 
@@ -102,15 +101,6 @@ export function TrophyDetailSheet({
           <Text style={{ paddingHorizontal: 20, paddingTop: 10, fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.silver }}>
             {def.description}
           </Text>
-
-          {isVideo ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 20, marginTop: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
-              <Video size={14} color={colors.silver} strokeWidth={2} />
-              <Text style={{ flex: 1, fontFamily: "Geist_400Regular", fontSize: 12, color: colors.silver }}>
-                Tiers unlock when a max-lift video is verified.
-              </Text>
-            </View>
-          ) : null}
 
           <ScrollView contentContainerStyle={{ paddingTop: 10 }}>
             {isStacked ? (

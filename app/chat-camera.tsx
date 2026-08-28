@@ -10,6 +10,7 @@ import { Pressable } from "@/components/ui/Pressable";
 import { useInboxThreadActions } from "@/components/friends/useInboxThreads";
 import { useSendMediaMessage } from "@/hooks/queries/useMessages";
 import { showToast } from "@/stores/ui";
+import { cameraSurfaceProps } from "@/components/camera/CameraKit";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
 
@@ -126,7 +127,15 @@ export default function ChatCameraScreen() {
   // ---- Live camera ----
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      <CameraView ref={cameraRef} style={{ flex: 1 }} facing={facing} flash={flash} />
+      <CameraView
+        ref={cameraRef}
+        style={{ flex: 1 }}
+        facing={facing}
+        // Shared rules: hardware flash is back-camera only (iOS front
+        // "flash" is a blinding white screen blast) and the shutter
+        // animation never blinks the screen.
+        {...cameraSurfaceProps({ flashOn: flash === "on", facing })}
+      />
       <Pressable
         onPress={() => router.back()}
         accessibilityLabel="Close camera"

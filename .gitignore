@@ -48,3 +48,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Generated gym-seed SQL (rebuild with scripts/seed-us-gyms-all.mjs)
+scripts/out/
+scripts/out-seed.log

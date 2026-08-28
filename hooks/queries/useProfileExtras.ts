@@ -113,3 +113,27 @@ export function useSetVisibility() {
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ["profile"] })
   });
 }
+
+/**
+ * Set (or clear) the home gym.
+ *
+ * Used by the map's gym sheet: tapping a pin used to offer only "Join gym
+ * community" — which joined a surface that is still "coming soon" and was
+ * reported as "Communities are still prompted from the map". Setting your home
+ * gym is the action that actually belongs on a gym pin.
+ */
+export function useSetHomeGym() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (gymId: string | null) => {
+      if (!userId) return;
+      const { error } = await supabase.from("profiles").update({ home_gym_id: gymId }).eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["profile"] });
+    },
+    onError: () => showToast("Couldn't set your home gym — try again")
+  });
+}

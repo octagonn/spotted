@@ -1,6 +1,8 @@
 import { useRouter } from "expo-router";
+import { useState } from "react";
+import { appAlert } from "@/components/ui/AppDialog";
 import { Camera } from "lucide-react-native";
-import { Alert, Text, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { CachedImage } from "@/components/ui/CachedImage";
@@ -15,10 +17,12 @@ export function ReactionsSheet({ reactors, postId }: { reactors: ReactionSelfie[
   const router = useRouter();
   const sheet = useSheet();
   const removeReaction = useRemoveReaction();
+  // Full-screen reaction photo (IG-style profile-picture zoom).
+  const [zoomed, setZoomed] = useState<string | null>(null);
 
   const confirmRemove = () => {
     if (!postId) return;
-    Alert.alert("Remove reaction", "Remove your reaction from this post?", [
+    appAlert("Remove reaction", "Remove your reaction from this post?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Remove",
@@ -33,6 +37,17 @@ export function ReactionsSheet({ reactors, postId }: { reactors: ReactionSelfie[
   };
   return (
     <View>
+      <Modal visible={Boolean(zoomed)} transparent animationType="fade" onRequestClose={() => setZoomed(null)} statusBarTranslucent>
+        <Pressable
+          onPress={() => setZoomed(null)}
+          accessibilityLabel="Close reaction"
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.94)", alignItems: "center", justifyContent: "center", padding: 28 }}
+        >
+          <View style={{ width: "100%", aspectRatio: 1, maxWidth: 380, borderRadius: 24, overflow: "hidden", backgroundColor: colors.graphite }}>
+            {zoomed ? <CachedImage source={{ uri: zoomed }} style={{ flex: 1 }} contentFit="cover" /> : null}
+          </View>
+        </Pressable>
+      </Modal>
       <SheetTitle>Reactions</SheetTitle>
       <SheetSub>{`${reactors.length} ${reactors.length === 1 ? "person" : "people"} reacted`}</SheetSub>
       {reactors.length === 0 ? (
@@ -48,22 +63,30 @@ export function ReactionsSheet({ reactors, postId }: { reactors: ReactionSelfie[
           const row = (
             <ListRow
               key={r.userId}
-              left={
-                r.mediaUrl ? (
-                  <CachedImage source={{ uri: r.mediaUrl }} style={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" />
-                ) : (
-                  <Avatar name={r.name} uri={r.avatarUrl} size={46} />
-                )
-              }
+              // Left is WHO reacted (their profile picture); right is WHAT they
+              // reacted with. Previously the selfie was rendered in both slots,
+              // so the person's avatar never appeared at all.
+              left={<Avatar name={r.name} uri={r.avatarUrl} size={46} />}
               name={r.mine ? `${r.name} (you)` : r.name}
               sub={r.mine ? "Hold to remove" : `@${r.username}`}
               onLongPress={r.mine ? confirmRemove : undefined}
               right={
-                // Live reactions are selfie-only — show the shot they reacted with.
                 r.mediaUrl ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Camera size={14} color={colors.fog} strokeWidth={2} />
-                    <CachedImage source={{ uri: r.mediaUrl }} style={{ width: 30, height: 30, borderRadius: 8 }} contentFit="cover" />
+                    {/* Tap to enlarge, like opening a profile picture. Stops
+                        propagation so it doesn't also open the profile. */}
+                    <Pressable
+                      onPress={() => setZoomed(r.mediaUrl)}
+                      accessibilityLabel={`View ${r.name}'s reaction`}
+                      hitSlop={6}
+                    >
+                      <CachedImage
+                        source={{ uri: r.mediaUrl }}
+                        style={{ width: 45, height: 45, borderRadius: 10 }}
+                        contentFit="cover"
+                      />
+                    </Pressable>
                   </View>
                 ) : undefined
               }

@@ -12,13 +12,15 @@ type SearchBarProps = {
   /** Container overrides (margins, radius). */
   containerStyle?: StyleProp<ViewStyle>;
   autoFocus?: boolean;
+  /** Fired when the field gains focus — e.g. to scroll it above the keyboard. */
+  onFocus?: () => void;
 };
 
 /**
  * App-wide search field: leading magnifier, and a trailing X that clears the
  * field once there's text.
  */
-export function SearchBar({ value, onChangeText, placeholder, containerStyle, autoFocus }: SearchBarProps) {
+export function SearchBar({ value, onChangeText, placeholder, containerStyle, autoFocus, onFocus }: SearchBarProps) {
   return (
     <View
       style={[
@@ -47,6 +49,7 @@ export function SearchBar({ value, onChangeText, placeholder, containerStyle, au
         autoCapitalize="none"
         autoCorrect={false}
         autoFocus={autoFocus}
+        onFocus={onFocus}
         returnKeyType="search"
         style={{ flex: 1, padding: 0, fontSize: 14, letterSpacing: 0, fontFamily: "Geist_400Regular", color: colors.bone }}
       />

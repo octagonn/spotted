@@ -10,10 +10,12 @@ type AudioState = {
 
 /**
  * One mute switch for the whole feed (Instagram-style): muting any video or
- * music post mutes them all until the user unmutes again.
+ * music post mutes them all until the user unmutes again. Sessions START
+ * muted — sound only plays after the user deliberately unmutes (speaker
+ * button / tap on a video), never by surprise on open.
  */
 export const useAudioStore = create<AudioState>((set) => ({
-  muted: false,
+  muted: true,
   nonce: 0,
   toggleMuted: () => set((s) => ({ muted: !s.muted, nonce: s.nonce + 1 }))
 }));

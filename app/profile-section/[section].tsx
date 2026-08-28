@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DailyCell } from "@/components/profile/cards";
 import { TrophyCase } from "@/components/trophies/TrophyCase";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { useMyProfile, useUserPosts } from "@/hooks/queries/useProfile";
@@ -72,10 +73,11 @@ export default function ProfileSectionScreen() {
         <PanelHeader title={title} sub={sub} />
         {section === "trophies" ? <TrophyCase userId={otherUser} /> : null}
         {section === "videos" ? (
-          <ComingSoon
+          <EmptyState
             icon={<Trophy size={22} color={colors.white} />}
             title="Videos are coming soon"
             body="Record a video from the camera once video posting ships, and your proof reel collects here."
+            paddingTop={48}
           />
         ) : null}
         {section === "posts" ? (
@@ -110,32 +112,6 @@ export default function ProfileSectionScreen() {
           </View>
         ) : null}
       </ScrollView>
-    </View>
-  );
-}
-
-function ComingSoon({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
-  return (
-    <View style={{ alignItems: "center", paddingTop: 48, paddingHorizontal: 40 }}>
-      <View
-        style={{
-          width: 58,
-          height: 58,
-          borderRadius: 29,
-          borderWidth: 1.5,
-          borderColor: colors.slate,
-          alignItems: "center",
-          justifyContent: "center"
-        }}
-      >
-        {icon}
-      </View>
-      <Text style={{ marginTop: 16, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white, textAlign: "center" }}>
-        {title}
-      </Text>
-      <Text style={{ marginTop: 8, fontSize: 12.5, lineHeight: 18, color: colors.fog, textAlign: "center" }}>
-        {body}
-      </Text>
     </View>
   );
 }

@@ -21,6 +21,30 @@ export function useUserFriends(userId?: string | null) {
   });
 }
 
+/**
+ * Batch mutual-friend counts for a page of people rows (find friends, search,
+ * added-me) — ONE round-trip via the mutual_friend_counts RPC. Returns a
+ * userId → count map. Capped server-side at 100 ids.
+ */
+export function useMutualCounts(ids: string[]) {
+  const authedId = useAuthStore((state) => state.userId);
+  const sorted = [...new Set(ids)].sort();
+  return useQuery({
+    queryKey: ["mutual-counts", authedId, sorted.join(",")],
+    enabled: isSupabaseConfigured && Boolean(authedId) && sorted.length > 0,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase.rpc("mutual_friend_counts", { p_ids: sorted.slice(0, 100) });
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      for (const row of (data ?? []) as { user_id: string; mutual_count: number | string }[]) {
+        map[row.user_id] = Number(row.mutual_count) || 0;
+      }
+      return map;
+    }
+  });
+}
+
 /** Friends shared by the current user and `targetId`. */
 export function useMutualFriends(targetId?: string | null) {
   const authedId = useAuthStore((state) => state.userId);

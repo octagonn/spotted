@@ -1,58 +1,53 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, type Href } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
-import { type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SettingNavRow as NavRow, SettingRow as Row, SettingSectionLabel as SectionLabel, SettingToggle as Toggle } from "@/components/ui/SettingRow";
 import { SkeletonToggleRows } from "@/components/ui/Skeleton";
-import { setAnalyticsSession } from "@/lib/analytics";
+import { ANALYTICS_CONSENT_VERSION, setAnalyticsSession } from "@/lib/analytics";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
-import { tokens } from "@/theme/tokens";
 import type { Database } from "@/types/database";
 
 type ScheduleVisibility = Database["public"]["Enums"]["schedule_visibility"];
-type LocationAudience = "friends" | "close_friends" | "nobody";
 
 type AnalyticsSettings = {
   product_analytics_enabled: boolean;
   sale_sharing_opt_out: boolean;
   prompted_at: string | null;
 };
+// NOTE (2026-08-18 privacy audit): ghost_mode, location_audience,
+// quiet_checkin_default, and arrival_notifs_enabled were settings for
+// features that don't exist (no gym-map avatars, no check-in surface, no
+// arrival detection) — nothing enforced them, so their rows were removed.
+// The columns remain in the DB, inert.
 type PrivacySettings = {
   is_private: boolean;
-  location_audience: LocationAudience;
-  quiet_checkin_default: boolean;
-  ghost_mode: boolean;
+  /** Public account, friends-only content (posts, streak, workouts). */
+  posts_private: boolean;
+  friends_list_hidden: boolean;
   discoverable: boolean;
   schedule_visibility: ScheduleVisibility;
-  arrival_notifs_enabled: boolean;
   show_activity: boolean;
   dm_preview_enabled: boolean;
 };
 
 const defaultSettings: PrivacySettings = {
   is_private: true,
-  location_audience: "friends",
-  quiet_checkin_default: false,
-  ghost_mode: false,
+  posts_private: false,
+  friends_list_hidden: false,
   discoverable: true,
   schedule_visibility: "friends",
-  arrival_notifs_enabled: true,
   show_activity: true,
   dm_preview_enabled: true
 };
 
-const AUDIENCE_OPTIONS: { key: LocationAudience; label: string }[] = [
-  { key: "friends", label: "Friends" },
-  { key: "close_friends", label: "Close friends" },
-  { key: "nobody", label: "Nobody" }
-];
 const VISIBILITY_OPTIONS: { key: ScheduleVisibility; label: string }[] = [
   { key: "public", label: "Public" },
   { key: "friends", label: "Friends" },
@@ -61,101 +56,9 @@ const VISIBILITY_OPTIONS: { key: ScheduleVisibility; label: string }[] = [
 
 // --- Shared visual language, matched to the Notifications screen ---------------
 
-function Toggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityState={{ checked: value }}
-      onPress={onToggle}
-      haptic={false}
-      style={{
-        width: 48,
-        height: 28,
-        borderRadius: 14,
-        padding: 3,
-        backgroundColor: value ? tokens.accent.gold : colors.iron,
-        alignItems: value ? "flex-end" : "flex-start"
-      }}
-    >
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          backgroundColor: value ? colors.black : colors.silver
-        }}
-      />
-    </Pressable>
-  );
-}
 
-function Row({ title, sub, right }: { title: string; sub?: string; right?: ReactNode }) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.graphite
-      }}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: colors.white }}>{title}</Text>
-        {sub ? (
-          <Text style={{ marginTop: 3, fontSize: 12.5, lineHeight: 17, color: colors.fog }}>{sub}</Text>
-        ) : null}
-      </View>
-      {right}
-    </View>
-  );
-}
 
-function NavRow({ title, sub, onPress }: { title: string; sub?: string; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      onPress={onPress}
-      haptic={false}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.graphite
-      }}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: colors.white }}>{title}</Text>
-        {sub ? (
-          <Text style={{ marginTop: 3, fontSize: 12.5, lineHeight: 17, color: colors.fog }}>{sub}</Text>
-        ) : null}
-      </View>
-      <ChevronRight size={18} color={colors.fog} />
-    </Pressable>
-  );
-}
 
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <Text
-      style={{
-        marginTop: 26,
-        marginBottom: 4,
-        fontFamily: "GeistMono_400Regular",
-        fontSize: 10.5,
-        letterSpacing: 1.4,
-        textTransform: "uppercase",
-        color: colors.mist
-      }}
-    >
-      {children}
-    </Text>
-  );
-}
 
 function Segmented<T extends string>({
   options,
@@ -224,7 +127,7 @@ export default function PrivacySettingsScreen() {
       }
       const { data, error } = await supabase
         .from("profiles")
-        .select("is_private, location_audience, quiet_checkin_default, ghost_mode, discoverable, schedule_visibility, arrival_notifs_enabled, show_activity, dm_preview_enabled")
+        .select("is_private, posts_private, friends_list_hidden, discoverable, schedule_visibility, show_activity, dm_preview_enabled")
         .eq("id", userId as string)
         .maybeSingle();
       if (error) {
@@ -252,6 +155,11 @@ export default function PrivacySettingsScreen() {
         ...patch
       }));
       return { previous };
+    },
+    onSuccess: (_data, patch) => {
+      for (const [key, value] of Object.entries(patch)) {
+        trackAnalyticsEvent("setting_changed", { key, value: typeof value === "boolean" ? value : String(value) });
+      }
     },
     onError: (_error, _patch, context) => {
       if (context?.previous) {
@@ -292,9 +200,10 @@ export default function PrivacySettingsScreen() {
           user_id: userId,
           product_analytics_enabled: enabled,
           sale_sharing_opt_out: true,
-          consent_version: "2026-07-25",
+          consent_version: ANALYTICS_CONSENT_VERSION,
           prompted_at: analyticsQuery.data?.prompted_at ?? now,
-          consented_at: enabled ? now : null
+          consented_at: enabled ? now : null,
+          basis: enabled ? "consent" : "declined"
         },
         { onConflict: "user_id" }
       );
@@ -331,10 +240,9 @@ export default function PrivacySettingsScreen() {
   const analyticsEnabled = analyticsQuery.data?.product_analytics_enabled ?? false;
 
   type BoolKey =
-    | "quiet_checkin_default"
-    | "ghost_mode"
+    | "posts_private"
+    | "friends_list_hidden"
     | "discoverable"
-    | "arrival_notifs_enabled"
     | "show_activity"
     | "dm_preview_enabled";
   const toggle = (key: BoolKey) => updateSettings.mutate({ [key]: !settings[key] });
@@ -358,14 +266,34 @@ export default function PrivacySettingsScreen() {
             }
           />
           <Row
-            title="Discoverable"
-            sub="Let people at your gym find you."
-            right={<Toggle value={settings.discoverable} onToggle={() => toggle("discoverable")} />}
+            title="Private posts"
+            sub={
+              settings.is_private
+                ? "Already covered by Private account."
+                : "Keep your account public and findable, but only friends can see your posts, streak, and workouts."
+            }
+            right={
+              <Toggle
+                value={settings.is_private || settings.posts_private}
+                disabled={settings.is_private}
+                onToggle={() => toggle("posts_private")}
+              />
+            }
           />
           <Row
-            title="Ghost mode"
-            sub="Hide your avatar from the gym map."
-            right={<Toggle value={settings.ghost_mode} onToggle={() => toggle("ghost_mode")} />}
+            title="Hide friends list"
+            sub="Nobody — not even friends — can open your friends list. Your friend count stays visible."
+            right={<Toggle value={settings.friends_list_hidden} onToggle={() => toggle("friends_list_hidden")} />}
+          />
+          {/* Scoped down (24 Aug): this toggle no longer touches search or
+              friend suggestions — a third of accounts had switched it off
+              under its old copy and silently vanished from Add Friends. It now
+              governs exactly one surface: phone-contact matching, where your
+              email/number is the lookup key. Title + copy say only that. */}
+          <Row
+            title="Contact matching"
+            sub="Let people who have your phone number or email find you when they sync their contacts."
+            right={<Toggle value={settings.discoverable} onToggle={() => toggle("discoverable")} />}
           />
           <Row
             title="Schedule visibility"
@@ -376,33 +304,6 @@ export default function PrivacySettingsScreen() {
                 value={settings.schedule_visibility}
                 onSelect={(option) => updateSettings.mutate({ schedule_visibility: option })}
               />
-            }
-          />
-
-          <SectionLabel>Location & check-ins</SectionLabel>
-          <Row
-            title="Who can see my check-ins"
-            sub="Your gym location is never public — only these people see it."
-            right={
-              <Segmented
-                options={AUDIENCE_OPTIONS}
-                value={settings.location_audience}
-                onSelect={(option) => updateSettings.mutate({ location_audience: option })}
-              />
-            }
-          />
-          <Row
-            title="Quiet check-in by default"
-            sub="Log your streak and unlock the feed without posting or notifying anyone."
-            right={
-              <Toggle value={settings.quiet_checkin_default} onToggle={() => toggle("quiet_checkin_default")} />
-            }
-          />
-          <Row
-            title="Arrival notifications"
-            sub="Tell friends when you get to the gym."
-            right={
-              <Toggle value={settings.arrival_notifs_enabled} onToggle={() => toggle("arrival_notifs_enabled")} />
             }
           />
 
@@ -432,13 +333,13 @@ export default function PrivacySettingsScreen() {
 
           <SectionLabel>Data</SectionLabel>
           <Row
-            title="Product analytics"
-            sub="Share app opens, screens viewed, feature actions, and device platform to help improve Spotted. Never includes photos, messages, contacts, precise location, or advertising IDs. Turning this off deletes your raw analytics."
+            title="Usage analytics"
+            sub="On by default. We use app opens, screens viewed, feature actions, app version, and device platform to improve Spotted. Used only by Spotted, never shared with or sold to third parties. Never includes photos, messages, contacts, precise location, or advertising IDs. Turning this off stops collection and deletes your raw events."
             right={<Toggle value={analyticsEnabled} onToggle={() => updateAnalytics.mutate(!analyticsEnabled)} />}
           />
           <Row
-            title="Sale or sharing of analytics data"
-            sub="Spotted does not sell or share your product analytics data."
+            title="Sharing with third parties"
+            sub="Spotted does not sell or share your analytics data. If that ever changes, we will ask for your explicit permission first."
             right={
               <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 12, color: colors.fog }}>Off</Text>
             }

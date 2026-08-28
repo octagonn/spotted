@@ -318,11 +318,13 @@ export function Privacy() {
       <Bullet>Notifications: an Expo Push Token linked to your account and app installation, device platform, permission and category settings, delivery ticket or receipt status, errors, and the time you open a notification.</Bullet>
       <Bullet>Content safety scans: photos and videos you upload are automatically analyzed by machine-learning moderation models, and captions, messages, and other text may be screened against blocked-term filters, to detect content that violates our Terms (see Automated Content Moderation below).</Bullet>
       <Bullet>Local storage: small amounts of data (sessions, preferences, cached lists) stored on-device via AsyncStorage and MMKV.</Bullet>
+      <Bullet>Activity and views: when you open the App (last active time, days active, app version, platform) and which posts and profiles you view and when. This powers features such as streaks, suggestions, and view counts, and our own usage statistics.</Bullet>
 
-      <SubHeading>OPTIONAL PRODUCT ANALYTICS</SubHeading>
-      <Bullet>If you explicitly opt in, we collect account-linked app opens, screen categories viewed, selected feature actions, and device platform.</Bullet>
-      <Bullet>Optional analytics does not contain photos, messages, contacts, precise location, advertising identifiers, usernames, or free-form text.</Bullet>
-      <Bullet>Product analytics is off by default and can be changed at any time under Settings → Privacy.</Bullet>
+      <SubHeading>USAGE ANALYTICS</SubHeading>
+      <Bullet>We collect account-linked app opens, session length, screens viewed and time on screen, feature actions (for example posting, starting a workout, sending a friend request), app version, operating-system version, and device platform.</Bullet>
+      <Bullet>Usage analytics never contains photos, messages, contacts, precise location, advertising identifiers, search text, or free-form text.</Bullet>
+      <Bullet>Usage analytics is used only by Spotted to understand how the App is used and to improve it. We do not sell it or share it with third parties. If we ever propose to share analytics data with a third party, we will ask for your explicit opt-in first.</Bullet>
+      <Bullet>Usage analytics is on by default. You can turn it off at any time under Settings → Privacy, which stops collection and deletes your retained raw events. If you are in the European Economic Area, the United Kingdom, or Switzerland, we ask for your consent before collecting it.</Bullet>
 
       <SubHeading>FROM THIRD PARTIES</SubHeading>
       <Bullet>Sign-in providers: if you sign in with Apple, Apple provides the identifiers and tokens needed to authenticate you.</Bullet>
@@ -336,7 +338,7 @@ export function Privacy() {
       <Bullet>To suggest friends and gyms and personalize your feed.</Bullet>
       <Bullet>To detect, review, and remove content that violates our Terms, using automated moderation systems supported by human review.</Bullet>
       <Bullet>To enforce these Terms, prevent abuse, and protect the safety of users and the Service.</Bullet>
-      <Bullet>With your consent, to analyze product usage and improve features, performance, and reliability.</Bullet>
+      <Bullet>To analyze how the App is used and improve features, performance, and reliability (with your consent where the law requires it).</Bullet>
       <Bullet>To respond to your support requests and communicate with you about the Service.</Bullet>
       <Bullet>To comply with legal obligations and to enforce or defend our legal rights.</Bullet>
 
@@ -345,14 +347,14 @@ export function Privacy() {
         If you are located in the European Economic Area or the United Kingdom, we process your information
         on the following legal bases: performance of our contract with you (delivering the Service);
         legitimate interests (security, fraud prevention, content moderation, product improvement); consent (push notifications,
-        location, and any optional features that ask for it); and compliance with legal obligations.
+        location, usage analytics, and any optional features that ask for it); and compliance with legal obligations.
       </P>
 
       <Heading>4. How We Share Information</Heading>
       <P>
         We do not sell Personal Information or share Personal Information for cross-context behavioral
-        advertising. We do not sell or share optional product analytics. We disclose information only as
-        described below:
+        advertising. We do not sell or share usage analytics with third parties, and we will ask for your
+        explicit opt-in before ever doing so. We disclose information only as described below:
       </P>
       <Bullet>
         With service providers who process data on our behalf: Supabase (database, authentication, storage,
@@ -413,9 +415,10 @@ export function Privacy() {
         them. Direct messages remain in a conversation according to our messaging controls. In-app
         notifications and linked push-delivery rows are deleted after 7 days; notification deduplication
         logs are deleted after 90 days. Push tokens remain until sign-out, reassignment, invalidation, or
-        account deletion. Optional raw product-analytics events are deleted after 90 days, and turning
-        product analytics off deletes your retained raw events. Legal acceptance and other account-level
-        data remain with your account. An account deletion request hides the account immediately and
+        account deletion. Raw usage-analytics events are deleted after 90 days, and turning usage
+        analytics off deletes your retained raw events; aggregated statistics that no longer identify you
+        may be kept. Activity and view records, legal acceptance, and other account-level data remain
+        with your account until it is deleted. An account deletion request hides the account immediately and
         schedules permanent deletion after 30 days; signing back in during that period restores it. Some
         messages already delivered to another user's thread may remain without being linked to your deleted
         account. Backups and security logs may persist for a limited period after deletion when needed for
@@ -426,7 +429,7 @@ export function Privacy() {
       <Bullet>Access and correction: review or update your profile information at any time in the App.</Bullet>
       <Bullet>Deletion: delete individual posts in the App, or start full account deletion under Settings → Danger Zone. You can choose deletion with a 30-day restore window or immediate permanent deletion.</Bullet>
       <Bullet>Permissions: revoke camera, microphone, photo library, location, and notification permissions in your device settings at any time.</Bullet>
-      <Bullet>Product analytics: optional and off by default. Enable or withdraw consent under Settings → Privacy.</Bullet>
+      <Bullet>Usage analytics: on by default (opt-in in the EEA, UK, and Switzerland). Turn it off at any time under Settings → Privacy.</Bullet>
       <Bullet>Marketing: we do not run marketing-email campaigns by default; transactional emails (sign-in codes, account alerts) cannot be turned off without disabling sign-in.</Bullet>
       <Bullet>California (CCPA/CPRA): you have rights to know, delete, correct, limit use of sensitive info, opt out of sale or sharing, and not be discriminated against for exercising rights. We currently do not sell or share Personal Information. Email us to make a verifiable request.</Bullet>
       <Bullet>EEA / UK (GDPR): you have rights to access, rectify, erase, restrict, port, or object to processing of your information, and to lodge a complaint with your local supervisory authority.</Bullet>

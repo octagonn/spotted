@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { Bell, Camera, Dumbbell, Lock } from "lucide-react-native";
+import { Bell, Camera, Dumbbell, Lock, Moon } from "lucide-react-native";
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, {
@@ -19,10 +19,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Pressable } from "@/components/ui/Pressable";
+import { useActivityUnreadCount } from "@/hooks/queries/useNotifications";
+import { restDayMessage, useMarkRestDay } from "@/hooks/queries/useRestDay";
+import { useStreakDays } from "@/hooks/queries/useStreakDays";
+import { useAuthStore } from "@/stores/auth";
+import { localDateKey, showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 
 export type LockPoster = { id: string; name: string; avatarUrl: string | null };
+
+// The slide-in entrance should play once per locked day, not every time the
+// overlay happens to mount again (feed refetches / re-renders replayed it).
+let enteredForDay: string | null = null;
 
 /** First-name social-proof line: "Marcus, Tori and 3 others went today." */
 function posterLine(posters: LockPoster[], total: number): string {
@@ -51,6 +61,16 @@ export function LockOverlay({
 }) {
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  const markRestDay = useMarkRestDay();
+  // Today's ledger state — logging a rest day used to leave this overlay
+  // completely unchanged (same "Post to unlock" pitch, same rest button), so
+  // it read as if the tap did nothing. Same cache the profile calendar uses.
+  const userId = useAuthStore((state) => state.userId);
+  const streakDays = useStreakDays(userId);
+  // Unseen notifications → red dot on the bell (the feed header's badge is
+  // hidden behind this overlay while locked).
+  const unreadCount = useActivityUnreadCount();
+  const restToday = streakDays.data instanceof Map && streakDays.data.get(localDateKey())?.kind === "rest";
 
   // Gentle breathing pulse on the CTA so it draws the eye.
   const pulse = useSharedValue(1);
@@ -68,6 +88,11 @@ export function LockOverlay({
   const ctaStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
 
   const shown = posters.slice(0, 4);
+  const todayKey = localDateKey();
+  const playEntrance = !reduced && enteredForDay !== todayKey;
+  useEffect(() => {
+    enteredForDay = todayKey;
+  }, [todayKey]);
 
   return (
     <Animated.View
@@ -86,15 +111,20 @@ export function LockOverlay({
       {/* Taunts + notifications stay reachable while locked (spec A). */}
       <Pressable
         onPress={() => router.push("/inbox")}
-        accessibilityLabel="Notifications"
+        accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         hitSlop={10}
         style={{ position: "absolute", top: insets.top + 8, right: 18, width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}
       >
-        <Bell size={24} color={colors.white} strokeWidth={2} />
+        <View>
+          <Bell size={24} color={colors.white} strokeWidth={2} />
+          {unreadCount > 0 ? (
+            <View style={{ position: "absolute", top: -2, right: -3, width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30", borderWidth: 1.5, borderColor: colors.black }} />
+          ) : null}
+        </View>
       </Pressable>
 
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 34, paddingBottom: 40 }}>
-        <Animated.View entering={reduced ? undefined : FadeInDown.duration(420).springify().damping(16)} style={{ alignItems: "center" }}>
+        <Animated.View entering={playEntrance ? FadeInDown.duration(420).springify().damping(16) : undefined} style={{ alignItems: "center" }}>
           {/* Gold-ringed emblem with a soft glow. */}
           <View
             style={{
@@ -112,7 +142,11 @@ export function LockOverlay({
               elevation: 10
             }}
           >
-            <Lock size={28} color={tokens.accent.gold} strokeWidth={2} />
+            {restToday ? (
+              <Moon size={28} color={tokens.accent.gold} strokeWidth={2} />
+            ) : (
+              <Lock size={28} color={tokens.accent.gold} strokeWidth={2} />
+            )}
           </View>
 
           <Text
@@ -127,8 +161,14 @@ export function LockOverlay({
               includeFontPadding: false
             }}
           >
-            Post to unlock.
+            {restToday ? "Rest day logged." : "Post to unlock."}
           </Text>
+
+          {restToday ? (
+            <Text style={{ marginTop: 12, fontSize: 13.5, lineHeight: 19, color: colors.silver, textAlign: "center", maxWidth: 270 }}>
+              Your streak is safe for today. The feed still unlocks with a post — if you end up going, cancel the rest day below.
+            </Text>
+          ) : null}
 
           {/* Social proof — avatar stack + first-name line. FOMO is the point. */}
           {friendsPostedToday > 0 ? (
@@ -152,7 +192,7 @@ export function LockOverlay({
                 {posterLine(posters, friendsPostedToday)}
               </Text>
             </View>
-          ) : (
+          ) : restToday ? null : (
             <Text style={{ marginTop: 12, fontSize: 13.5, lineHeight: 19, color: colors.silver, textAlign: "center", maxWidth: 260 }}>
               Post a photo from your session to see everyone else&apos;s.
             </Text>
@@ -160,14 +200,20 @@ export function LockOverlay({
 
           {/* Drops-waiting teaser. */}
           {lockedCount > 0 ? (
-            <Text style={{ marginTop: 10, fontFamily: "GeistMono_500Medium", fontSize: 11, letterSpacing: 0.5, color: colors.fog }}>
+            <Text style={{ marginTop: 10, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.fog }}>
               {`${lockedCount} ${lockedCount === 1 ? "drop" : "drops"} waiting behind the glass`}
             </Text>
           ) : null}
 
           {/* Animated gold CTA. */}
           <Animated.View style={[{ marginTop: 26, alignSelf: "stretch" }, ctaStyle]}>
-            <Pressable onPress={() => router.push("/camera?mode=daily")} accessibilityLabel="Post today's SPOTTED">
+            <Pressable
+              onPress={() => {
+                trackAnalyticsEvent("lock_cta_tapped", { action: "post" });
+                router.push("/camera?mode=daily");
+              }}
+              accessibilityLabel="Post today's SPOTTED"
+            >
               <LinearGradient
                 colors={["#F2C25A", tokens.accent.gold, "#D89A2E"]}
                 start={{ x: 0, y: 0 }}
@@ -193,13 +239,38 @@ export function LockOverlay({
           {/* Log a workout first — it rides along with your daily photo as a
               feed slide. */}
           <Pressable
-            onPress={() => router.push("/workout?daily=1")}
+            onPress={() => {
+              trackAnalyticsEvent("lock_cta_tapped", { action: "workout" });
+              router.push("/workout?daily=1");
+            }}
             accessibilityLabel="Start a workout for your daily"
             style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, alignSelf: "stretch", paddingVertical: 13, borderRadius: 999, borderWidth: 1, borderColor: colors.slate }}
           >
             <Dumbbell size={16} color={colors.white} strokeWidth={2.2} />
             <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
               Log a workout with it
+            </Text>
+          </Pressable>
+
+          {/* Rest day: protects the streak without faking a workout. It does
+              NOT unlock the feed — seeing friends' drops still costs a drop —
+              and it does not add to the streak number, it only stops it
+              breaking. today-only and the weekly cap are enforced server-side.
+              Once logged, the same slot flips to the change-of-mind path. */}
+          <Pressable
+            onPress={() => {
+              if (markRestDay.isPending) return;
+              markRestDay.mutate(!restToday, {
+                onSuccess: (result) => showToast(restDayMessage(result)),
+                onError: () => showToast("Couldn't update your rest day — try again.")
+              });
+            }}
+            accessibilityLabel={restToday ? "Cancel today's rest day" : "Log today as a rest day"}
+            style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, alignSelf: "stretch", paddingVertical: 13, borderRadius: 999, borderWidth: 1, borderColor: colors.slate }}
+          >
+            <Moon size={16} color={colors.white} strokeWidth={2.2} />
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
+              {markRestDay.isPending ? (restToday ? "Cancelling…" : "Logging…") : restToday ? "Cancel rest day" : "Taking a rest day"}
             </Text>
           </Pressable>
 

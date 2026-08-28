@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Plus } from "lucide-react-native";
+import { Lock, Plus } from "lucide-react-native";
 import { useEffect } from "react";
 import { ScrollView, Text, View } from "react-native";
 
@@ -22,8 +22,10 @@ export function StoriesRail() {
   const myProfile = useMyProfile();
   const groups = stories.data ?? [];
 
-  const me = groups.find((g) => g.isMe) ?? null;
-  const others = groups.filter((g) => !g.isMe);
+  const me = groups.find((g) => g.isMe && !g.privateStoryId) ?? null;
+  // Everything else — friends' stories AND private-story groups (yours and
+  // ones you're a member of) — renders as its own bubble.
+  const others = groups.filter((g) => !g.isMe || Boolean(g.privateStoryId));
 
   // Warm the cache so tapping a ring opens instantly (4a — no blank flash).
   useEffect(() => {
@@ -89,27 +91,61 @@ export function StoriesRail() {
       </View>
 
       {others.map((group) => (
-        <StoryBubble key={group.userId} group={group} onPress={() => router.push(`/story?user=${group.userId}`)} />
+        <StoryBubble
+          key={`${group.userId}:${group.privateStoryId ?? "main"}`}
+          group={group}
+          onPress={() =>
+            router.push(
+              `/story?user=${group.userId}${group.privateStoryId ? `&ps=${group.privateStoryId}` : ""}`
+            )
+          }
+        />
       ))}
     </ScrollView>
   );
 }
 
 function StoryBubble({ group, onPress }: { group: StoryGroup; onPress: () => void }) {
+  const isPrivate = Boolean(group.privateStoryId);
+  // Someone ELSE's private story shows the POSTER's name on the rail (the
+  // lock badge marks it private); your OWN private lists keep their list
+  // names so you can tell them apart.
+  const label = isPrivate && group.isMe ? (group.privateStoryName ?? "Private") : group.name.split(" ")[0];
   return (
     <Pressable
       style={{ width: ITEM, alignItems: "center", gap: 6 }}
       onPress={onPress}
-      accessibilityLabel={`${group.name}'s story, ${group.hasUnseen ? "new" : "seen"}`}
+      accessibilityLabel={`${group.name}'s ${isPrivate ? "private story" : "story"}, ${group.hasUnseen ? "new" : "seen"}`}
     >
-      <Ring active seen={!group.hasUnseen}>
-        <Avatar name={group.name} uri={group.avatarUrl} size={AVATAR} />
-      </Ring>
+      <View>
+        <Ring active seen={group.isMe ? false : !group.hasUnseen}>
+          <Avatar name={group.name} uri={group.avatarUrl} size={AVATAR} />
+        </Ring>
+        {isPrivate ? (
+          <View
+            style={{
+              position: "absolute",
+              right: 2,
+              bottom: 2,
+              width: 24,
+              height: 24,
+              borderRadius: radius.pill,
+              backgroundColor: tokens.bg.subtle,
+              borderWidth: 2,
+              borderColor: tokens.bg.base,
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Lock size={12} color={colors.white} strokeWidth={2.2} />
+          </View>
+        ) : null}
+      </View>
       <Text
         numberOfLines={1}
         style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: tokens.text.secondary, maxWidth: ITEM }}
       >
-        {group.name.split(" ")[0]}
+        {label}
       </Text>
     </Pressable>
   );

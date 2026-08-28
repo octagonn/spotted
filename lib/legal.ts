@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
-export const LEGAL_VERSION = "2026-08-12";
-export const LEGAL_EFFECTIVE_DATE = "August 12, 2026";
+export const LEGAL_VERSION = "2026-08-25";
+export const LEGAL_EFFECTIVE_DATE = "August 25, 2026";
 
 export type LegalAcceptanceSource = "email" | "apple";
 

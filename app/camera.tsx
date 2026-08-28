@@ -1,9 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { appAlert } from "@/components/ui/AppDialog";
 // Gesture-handler ScrollView: scrolls correctly inside the bottom sheet, where
 // BottomSheetScrollView only works as the sheet's direct child and RN's own
 // ScrollView loses the pan gesture to the sheet.
 import { Gesture, GestureDetector, ScrollView as SheetScrollView } from "react-native-gesture-handler";
 import { CameraView, useCameraPermissions, useMicrophonePermissions, type CameraType } from "expo-camera";
+
+import { INSET_RATIO, POST_PHOTO_RATIO, captureCropRect } from "@/lib/captureCrop";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -14,25 +17,25 @@ import {
   Dumbbell,
   Home,
   Image as ImageIcon,
+  Lock,
   MapPin,
   Music,
   Pencil,
   Plus,
   RefreshCw,
-  SquareStack,
   Tag,
+  Timer as TimerIcon,
   Users,
   X,
   Zap,
   ZapOff
 } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useVideoPlayer, VideoView } from "expo-video";
 import {
   ActivityIndicator,
-  Alert,
   InputAccessoryView,
   Keyboard,
   KeyboardAvoidingView,
@@ -49,9 +52,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiftVideoReview, type VideoTrim } from "@/components/camera/LiftVideoReview";
 import { MusicClipScrubber } from "@/components/camera/MusicClipScrubber";
 import { ShutterButton } from "@/components/camera/ShutterButton";
-import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
-import { clearCameraDraft, loadCameraDraft, saveCameraDraft, type CameraDraft } from "@/lib/cameraDraft";
+import {
+  deleteCameraDrafts,
+  loadCameraDrafts,
+  saveCameraDraft,
+  takeDraftResume,
+  type CameraDraft,
+  type CameraDraftInput
+} from "@/lib/cameraDraft";
 import { impactHaptic } from "@/lib/haptics";
 import { LIFT_OPTIONS, LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
 import { useLogLift, useUserLifts } from "@/hooks/queries/useUserLifts";
@@ -82,16 +91,30 @@ import { captureRef } from "react-native-view-shot";
 
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
-import { useSuggestedTracks, useTrackSearch, type MusicTrack } from "@/lib/music";
+import {
+  dedupeTracks,
+  recordMusicPick,
+  songKey,
+  useRecommendedTracks,
+  useTopSongs,
+  useTrackSearch,
+  type MusicTrack
+} from "@/lib/music";
 import { useMyCommunities, type CommunitySummary } from "@/hooks/queries/useCommunities";
+import { usePostedState } from "@/hooks/queries/usePostedState";
 import { usePostStory } from "@/hooks/queries/useStories";
+import { StoryDestinationSheet, type StoryDestination } from "@/components/story/StoryDestinationSheet";
+import { CameraKitCircleButton as CircleButton, cameraSurfaceProps } from "@/components/camera/CameraKit";
+import { FrontFlash } from "@/components/camera/FrontFlash";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import { logger } from "@/lib/logger";
 import { savePhotoToCameraRoll } from "@/lib/mediaLibrary";
-import { publishDailyPost, publishLiftVideo } from "@/lib/posts";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { invalidateAfterPostChange } from "@/lib/queryClient";
+import { attachDailyPostExtras, publishDailyPost, publishLiftVideo } from "@/lib/posts";
+import { enqueueDailyPost, isNetworkError } from "@/lib/offlineQueue";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
-import { markPostedToday, showToast, triggerFlash } from "@/stores/ui";
+import { markPostedToday, showToast, triggerFlash, triggerPostCelebration } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
 
@@ -112,31 +135,65 @@ type SelectedGym =
 let locationAskedThisSession = false;
 
 
+/** Mirror (front camera) and center-crop a capture to `ratio` (w/h) in one
+ *  re-encode. Returns the untouched uri when no transform is needed. */
+async function finalizeCapture(
+  photo: { uri: string; width?: number; height?: number },
+  {
+    mirror,
+    ratio,
+    compress = 0.95,
+    previewRatio = null
+  }: { mirror: boolean; ratio: number | null; compress?: number; previewRatio?: number | null }
+): Promise<string> {
+  const actions: ImageManipulator.Action[] = [];
+  if (mirror) actions.push({ flip: ImageManipulator.FlipType.Horizontal });
+  if (photo.width && photo.height) {
+    const rect = captureCropRect(photo.width, photo.height, previewRatio, ratio);
+    if (rect) actions.push({ crop: rect });
+  }
+  if (actions.length === 0) return photo.uri;
+  const out = await ImageManipulator.manipulateAsync(photo.uri, actions, {
+    compress,
+    format: ImageManipulator.SaveFormat.JPEG
+  });
+  return out.uri;
+}
+
+
 function gymName(gym: SelectedGym | null): string | null {
   if (!gym) return null;
-  if (gym.type === "home") return "Home gym";
+  if (gym.type === "home") return "Custom location";
   if (gym.type === "other") return "Other location";
   return gym.name;
 }
 
-function CircleButton({ label, onPress, children }: { label: string; onPress: () => void; children: ReactNode }) {
+
+/** Dual-camera glyph, Snapchat-style: two overlapping rounded frames offset
+ *  diagonally (front card occludes the back one). */
+function DualCameraIcon({ active }: { active: boolean }) {
+  const color = active ? tokens.accent.gold : colors.white;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+    <View style={{ width: 20, height: 20 }}>
+      {/* back frame — top-right */}
+      <View
+        style={{ position: "absolute", top: 0, right: 0, width: 13, height: 13, borderRadius: 4, borderWidth: 1.8, borderColor: color, opacity: 0.6 }}
+      />
+      {/* front frame — bottom-left, filled with the button bg so it occludes */}
       <View
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          borderWidth: 1,
-          borderColor: colors.slate,
-          alignItems: "center",
-          justifyContent: "center"
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          width: 13,
+          height: 13,
+          borderRadius: 4,
+          borderWidth: 1.8,
+          borderColor: color,
+          backgroundColor: "rgba(0,0,0,0.55)"
         }}
-      >
-        {children}
-      </View>
-    </Pressable>
+      />
+    </View>
   );
 }
 
@@ -235,7 +292,9 @@ function MediaPreview({
       style={{
         width,
         maxWidth: 360,
-        aspectRatio: 3 / 4,
+        // Photos preview at the feed frame ratio (matches the capture crop);
+        // lift videos keep the 3:4 clip frame.
+        aspectRatio: isLift ? 3 / 4 : POST_PHOTO_RATIO,
         alignSelf: "center",
         borderRadius: 18,
         borderWidth: 1,
@@ -312,7 +371,7 @@ function GymSheet({
     <View>
       <SheetTitle>Where was this?</SheetTitle>
       <SheetSub>
-        Mapped gyms show on the post. Home gym and unlisted spots won&apos;t claim a mapped gym.
+        Mapped gyms show on the post. Custom locations and unlisted spots won&apos;t claim a mapped gym.
       </SheetSub>
       <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search gyms" />
@@ -353,8 +412,8 @@ function GymSheet({
       </View>
       <Hairline style={{ marginVertical: 6, marginHorizontal: 20 }} />
       <ChoiceRow
-        title="Home gym"
-        sub="Not a mapped gym"
+        title="Custom location"
+        sub="Home gym or another spot that isn't mapped"
         selected={selected?.type === "home"}
         left={<IconTile round><Home size={15} color={colors.mist} /></IconTile>}
         onPress={() => onSelect({ type: "home" })}
@@ -425,15 +484,99 @@ type SelectedTrack = MusicTrack & { clipStart?: number };
 
 const PREVIEW_SECONDS = 30;
 
-function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; onSelect: (track: SelectedTrack | null) => void }) {
+/** Spotify-style explicit marker: gray rounded square with a dark bold E. */
+function ExplicitBadge() {
+  return (
+    <View
+      accessibilityLabel="Explicit"
+      style={{ width: 15, height: 15, borderRadius: 3, backgroundColor: colors.silver, alignItems: "center", justifyContent: "center" }}
+    >
+      <Text style={{ fontFamily: "Geist_700Bold", fontSize: 9.5, lineHeight: 12, color: colors.black }}>E</Text>
+    </View>
+  );
+}
+
+/** Uppercase divider between picker sections. */
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <Text
+      style={{
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 4,
+        fontFamily: "GeistMono_400Regular",
+        fontSize: 10.5,
+        letterSpacing: 10.5 * 0.14,
+        color: colors.fog
+      }}
+    >
+      {label}
+    </Text>
+  );
+}
+
+function MusicSheet({
+  selected,
+  onSelect,
+  onChange
+}: {
+  selected: SelectedTrack | null;
+  /** Final answer — the caller closes the sheet on this. */
+  onSelect: (track: SelectedTrack | null) => void;
+  /** Live: the pick as it stands, without closing. */
+  onChange: (track: SelectedTrack) => void;
+}) {
   const { height: windowHeight } = useWindowDimensions();
-  const listHeight = Math.min(260, Math.round(windowHeight * 0.28));
   const [query, setQuery] = useState("");
   const results = useTrackSearch(query);
-  const suggested = useSuggestedTracks();
+  // Two feeds: songs matched to this user's taste, then today's chart paged
+  // for infinite scroll.
+  const recommended = useRecommendedTracks();
+  const top = useTopSongs();
+  // Chart pages arrive independently, so the same song can land on more than
+  // one page — and anything already shown under RECOMMENDED would otherwise
+  // appear a second time a few rows further down.
+  const recommendedTracks = useMemo(() => dedupeTracks(recommended.data ?? []), [recommended.data]);
+  const topTracks = useMemo(() => {
+    const shown = new Set(recommendedTracks.map(songKey));
+    return dedupeTracks((top.data?.pages ?? []).flat()).filter((track) => !shown.has(songKey(track)));
+  }, [top.data, recommendedTracks]);
   const rows = results.data ?? [];
+  const searching = query.trim().length >= 2;
+
+  /** Pull the next page in when the list nears its end. */
+  const onListScroll = (e: { nativeEvent: { layoutMeasurement: { height: number }; contentOffset: { y: number }; contentSize: { height: number } } }) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    const nearEnd = contentOffset.y + layoutMeasurement.height >= contentSize.height - 320;
+    if (nearEnd && top.hasNextPage && !top.isFetchingNextPage) void top.fetchNextPage();
+  };
   // Chosen (auditioning) track — plays out loud, with a draggable clip-start.
   const [chosen, setChosen] = useState<SelectedTrack | null>(selected);
+  const sheetApi = useSheet();
+
+  /**
+   * Commit the picker's result exactly once.
+   *
+   * Tapping a song marks the row selected AND starts playing it, which reads as
+   * "chosen" — so dismissing the sheet there (swipe down, or tap the backdrop,
+   * which closes on press) felt like confirming. It silently discarded the
+   * pick instead, the post came back with no music, and the whole selection had
+   * to be done a second time. Now a dismissal commits whatever is chosen.
+   */
+  const committed = useRef(false);
+  const commit = (next: SelectedTrack | null) => {
+    if (next) trackAnalyticsEvent("music_selected", { has_preview: Boolean(next.previewUrl) });
+    if (committed.current) return;
+    committed.current = true;
+    // Feeds the taste profile — the only input the recommender learns from.
+    if (next) void recordMusicPick(next);
+    onSelect(next);
+  };
+  // Tall picker: the old 28% list showed ~4 songs at a time. The sheet host
+  // grows to 78% of the screen, so give the list most of that — but shrink it
+  // once a song is chosen, otherwise the audition card and the Add to post
+  // button get pushed past the sheet's max height and clipped off-screen.
+  const listHeight = Math.round(windowHeight * (chosen ? 0.3 : 0.46));
   const [clipStart, setClipStart] = useState(selected?.clipStart ?? 0);
   const clipStartRef = useRef(clipStart);
   clipStartRef.current = clipStart;
@@ -442,6 +585,8 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
   const status = useAudioPlayerStatus(player);
   const playerRef = useRef(player);
   playerRef.current = player;
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   // All native player calls are wrapped: an unready/torn-down player throws
   // synchronously from .play()/.seekTo(), which crashed the picker (the
@@ -449,8 +594,18 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
   const safeSeekPlay = (seconds: number) => {
     const p = playerRef.current;
     if (!p) return;
+    // Seeking a player that has not finished loading is the other way this
+    // crashed: the native side asserts rather than throwing something JS can
+    // catch. The load effect re-issues the seek once isLoaded flips true, so
+    // bailing here loses nothing.
+    const current = statusRef.current;
+    if (!current?.isLoaded) return;
+    // Never seek past the end of the actual preview — the 30s length is an
+    // assumption, and a short preview would otherwise get an out-of-range seek.
+    const duration = typeof current.duration === "number" && current.duration > 0 ? current.duration : null;
+    const target = duration ? Math.min(Math.max(0, seconds), Math.max(0, duration - 0.25)) : Math.max(0, seconds);
     try {
-      p.seekTo(Math.max(0, seconds)).catch(() => {});
+      void Promise.resolve(p.seekTo(target)).catch(() => {});
       p.play();
     } catch {
       // Player not ready yet — the load effect will start it.
@@ -460,6 +615,16 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
   const auditTrack = (track: MusicTrack) => {
     setChosen(track);
     setClipStart(0);
+    // Hand it to the post immediately. The row already renders as selected and
+    // starts playing, so the choice has visibly been made — it must not depend
+    // on landing a second tap on "Add to post". With the search keyboard up,
+    // that second tap is genuinely easy to miss: the sheet floats above the
+    // keyboard (keyboardBehavior="interactive"), so the tap that dismisses the
+    // keyboard also re-lays-out the sheet and slides the button out from under
+    // your finger. That was "it makes me select a song again".
+    onChange({ ...track, clipStart: 0 });
+    // Settle the layout now rather than on the way to the button.
+    Keyboard.dismiss();
   };
 
   // Auto-play the audition from the clip start whenever the track loads.
@@ -469,6 +634,22 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
     // Replay only on track change / initial load, not every status tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosen?.id, status.isLoaded]);
+
+  // Commit on dismissal. Reads through refs so it never re-subscribes on every
+  // scrub, and `seenOpen` avoids firing before the sheet has actually opened.
+  const latestPick = useRef({ chosen, clipStart });
+  latestPick.current = { chosen, clipStart };
+  const seenOpen = useRef(false);
+  useEffect(() => {
+    if (sheetApi.isOpen) {
+      seenOpen.current = true;
+      return;
+    }
+    if (!seenOpen.current || committed.current) return;
+    const { chosen: pick, clipStart: start } = latestPick.current;
+    if (pick) commit({ ...pick, clipStart: start });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetApi.isOpen]);
 
   const dismissKeyboard = () => Keyboard.dismiss();
 
@@ -482,30 +663,58 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search songs or artists" />
       </View>
       <View style={{ height: listHeight }}>
-        {query.trim().length < 2 ? (
-          // Suggested / trending gym songs for the empty picker.
-          suggested.isLoading ? (
+        {!searching ? (
+          recommended.isLoading && top.isLoading ? (
             <View style={{ paddingTop: 6 }}>
+              <SkeletonTrackRow />
+              <SkeletonTrackRow />
               <SkeletonTrackRow />
               <SkeletonTrackRow />
               <SkeletonTrackRow />
               <SkeletonTrackRow />
             </View>
           ) : (
-            <SheetScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-              <Text style={{ paddingHorizontal: 20, paddingBottom: 4, fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.14, color: colors.fog }}>
-                SUGGESTED
-              </Text>
-              {(suggested.data ?? []).map((track) => (
+            <SheetScrollView
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              onScroll={onListScroll}
+              scrollEventThrottle={64}
+            >
+              {/* Matched to what this user actually picks — sharpens over time. */}
+              {recommendedTracks.length > 0 ? (
+                <>
+                  <SectionHeader label="RECOMMENDED FOR YOU" />
+                  {recommendedTracks.map((track) => (
+                    <ChoiceRow
+                      key={`rec-${track.id}`}
+                      title={track.title}
+                      sub={track.artist}
+                      subBadge={track.explicit ? <ExplicitBadge /> : undefined}
+                      selected={chosen?.id === track.id}
+                      left={<TrackArt uri={track.artworkUrl} />}
+                      onPress={() => auditTrack(track)}
+                    />
+                  ))}
+                </>
+              ) : null}
+
+              <SectionHeader label="TOP SONGS TODAY" />
+              {topTracks.map((track: MusicTrack, i: number) => (
                 <ChoiceRow
-                  key={track.id}
+                  key={`top-${track.id}-${i}`}
                   title={track.title}
-                  sub={`${track.explicit ? "E · " : ""}${track.artist}`}
+                  sub={track.artist}
+                  subBadge={track.explicit ? <ExplicitBadge /> : undefined}
                   selected={chosen?.id === track.id}
                   left={<TrackArt uri={track.artworkUrl} />}
                   onPress={() => auditTrack(track)}
                 />
               ))}
+              {top.isFetchingNextPage ? (
+                <View style={{ paddingVertical: 14, alignItems: "center" }}>
+                  <ActivityIndicator color={colors.fog} />
+                </View>
+              ) : null}
             </SheetScrollView>
           )
         ) : results.isLoading ? (
@@ -529,7 +738,8 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
               <ChoiceRow
                 key={track.id}
                 title={track.title}
-                sub={`${track.explicit ? "E · " : ""}${track.artist}`}
+                sub={track.artist}
+                subBadge={track.explicit ? <ExplicitBadge /> : undefined}
                 selected={chosen?.id === track.id}
                 left={<TrackArt uri={track.artworkUrl} />}
                 onPress={() => auditTrack(track)}
@@ -548,9 +758,12 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
               <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>
                 {chosen.title}
               </Text>
-              <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12.5, color: colors.silver }}>
-                {chosen.explicit ? "E · " : ""}{chosen.artist}
-              </Text>
+              <View style={{ marginTop: 2, flexDirection: "row", alignItems: "center", gap: 5 }}>
+                {chosen.explicit ? <ExplicitBadge /> : null}
+                <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 12.5, color: colors.silver }}>
+                  {chosen.artist}
+                </Text>
+              </View>
             </View>
             <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 12, color: colors.silver }}>
               {`0:${String(clipStart).padStart(2, "0")}`}
@@ -565,6 +778,9 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
               onCommit={(sec) => {
                 setClipStart(sec);
                 safeSeekPlay(sec);
+                // Keep the post in step with the scrubber on release, so the
+                // clip start survives a dismissal too.
+                if (chosen) onChange({ ...chosen, clipStart: sec });
               }}
             />
           ) : (
@@ -583,14 +799,17 @@ function MusicSheet({ selected, onSelect }: { selected: SelectedTrack | null; on
           variant="ghost"
           style={{ flex: 1 }}
           icon={<X size={14} color={colors.bone} />}
-          onPress={() => onSelect(null)}
+          onPress={() => commit(null)}
         >
           No music
         </Button>
         <Button
           style={{ flex: 1 }}
           disabled={!chosen}
-          onPress={() => chosen && onSelect({ ...chosen, clipStart })}
+          onPress={() => {
+            if (!chosen) return;
+            commit({ ...chosen, clipStart });
+          }}
         >
           Add to post
         </Button>
@@ -671,6 +890,7 @@ export default function CameraScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string; community?: string; workout?: string }>();
   const insets = useSafeAreaInsets();
+  const { width: winW, height: winH } = useWindowDimensions();
   const sheet = useSheet();
   const queryClient = useQueryClient();
   const keyboardVisible = useKeyboardVisible();
@@ -703,6 +923,19 @@ export default function CameraScreen() {
   // home-feed lock overlay) — there's no in-camera Daily/Story selector.
   const [mode, setMode] = useState<Mode>(() => (params.mode === "daily" ? "daily" : "story"));
   const [dailyStep, setDailyStep] = useState<DailyStep>("capture");
+  // Stories are locked until today's SPOTTED is posted (feed-lock philosophy):
+  // offer to switch into the daily flow instead of letting a story compose.
+  const { postedToday, resolved: postedResolved } = usePostedState();
+  const storyGateShown = useRef(false);
+  useEffect(() => {
+    if (mode === "story" && postedResolved && !postedToday && !storyGateShown.current) {
+      storyGateShown.current = true;
+      appAlert("Post your SPOTTED first", "Stories unlock after you post today's SPOTTED.", [
+        { text: "Not now", style: "cancel", onPress: () => router.back() },
+        { text: "Post my SPOTTED", onPress: () => setMode("daily") }
+      ]);
+    }
+  }, [mode, postedResolved, postedToday, router]);
   const [liftStep, setLiftStep] = useState<LiftStep>("record");
   const [videoUri, setVideoUri] = useState<string>();
   const videoTrimRef = useRef<VideoTrim | null>(null);
@@ -759,14 +992,35 @@ export default function CameraScreen() {
     }
     return Math.max(ultraLens ? -ULTRA_RANGE : 0, Math.min(1, next));
   };
-  // Camera session config, DERIVED from the flow (never switched on hold — that
-  // remount + wait was the recording lag). Daily is photo-only → "picture" for
-  // full-sensor quality. Story/lift can record → "video" so holding starts
-  // recording instantly; 1080p stills are fine for ephemeral stories.
-  // Video mode for every flow so hold-to-record works AND tap-to-photo still
-  // captures (takePictureAsync works in video mode). Daily was "picture" before,
-  // which made holding the shutter hang recordAsync forever (infinite "saving").
-  const camMode: "picture" | "video" = "video";
+  /**
+   * Discrete iPhone-style lens jump: crossing below 1× lands squarely on TRUE
+   * 0.5× (ultra-wide at zoom 0) instead of stranding mid-interpolation — one
+   * pinch could never complete the old smooth travel, so "0.5×" was really
+   * ~0.7×. Zooming back past the midpoint snaps home to 1×.
+   */
+  const stepZoom = (prev: number, next: number): number => {
+    if (ultraLens && !recording) {
+      if (prev >= 0 && next < -0.02) return -ULTRA_RANGE; // 1× → full 0.5×
+      if (prev < 0) return next > -ULTRA_RANGE / 2 ? 0 : -ULTRA_RANGE; // 0.5× → 1× or stay parked
+    }
+    return clampVirtual(next);
+  };
+  // Camera session config. This is THE lever on post image quality: in "video"
+  // mode the session preset is 1080p, so takePictureAsync hands back a video
+  // FRAME (1080x1920, video-grade ISP — no Smart HDR / Deep Fusion, poor in the
+  // mixed, dim light of a gym). In "picture" mode the same tap captures the
+  // full sensor (~12 MP) through the photo pipeline. Both end up downscaled to
+  // the same upload width, but one is a downsampled 12 MP photo and the other
+  // is an upscaled-looking video still — that gap is why posts looked soft.
+  //
+  // Everything was pinned to "video" because a picture-mode session made
+  // hold-to-record hang recordAsync forever. So instead of pinning, the mode
+  // follows INTENT: daily sits in picture mode for the tap, and holding the
+  // shutter flips it to video first. startRecording already waits on
+  // videoReadyRef (the same handshake the dual-camera lens flip uses), so the
+  // reconfigure is covered rather than raced.
+  const [recordIntent, setRecordIntent] = useState(false);
+  const camMode: "picture" | "video" = mode === "daily" && !recordIntent ? "picture" : "video";
   const [photoUri, setPhotoUri] = useState<string>();
   /** Earlier shots in a multi-photo daily post (carousel). Max 4 total. */
   const [extraPhotos, setExtraPhotos] = useState<string[]>([]);
@@ -774,7 +1028,6 @@ export default function CameraScreen() {
   // number (weight for barbell lifts, reps for bodyweight) drives the trophy.
   const [liftExercise, setLiftExercise] = useState<LiftExercise>("bench");
   const [liftValue, setLiftValue] = useState("");
-  const [celebrate, setCelebrate] = useState<TrophyShareData | null>(null);
   const userLifts = useUserLifts(userId);
   const logLift = useLogLift();
   const [gym, setGym] = useState<SelectedGym | null>(null);
@@ -798,19 +1051,26 @@ export default function CameraScreen() {
   const [storyTrack, setStoryTrack] = useState<SelectedTrack | null>(null);
   // Friends tagged on the story — rendered as tappable chips in the viewer.
   const [storyTags, setStoryTags] = useState<string[]>([]);
+  // Share destination: My Story (id null) or one of the user's private stories.
+  const [storyDest, setStoryDest] = useState<StoryDestination>({ id: null, name: "My Story" });
 
-  // ---- Draft system (#23) ----
-  // One draft slot. NO modal on open — a saved draft surfaces as a tappable
-  // "Resume draft" chip on the capture screen (tap = resume, long-press =
-  // delete). Closing the camera with unposted media asks Save draft / Discard.
-  const draftCheckedRef = useRef(false);
-  const [pendingDraft, setPendingDraft] = useState<CameraDraft | null>(null);
+  // ---- Draft system (#23, reworked) ----
+  // Multiple drafts, saved ONLY on explicit intent: the "Save as draft" button
+  // on the details page, or the keep-as-draft prompt on close. NO autosave —
+  // it was silently filing already-posted photos as drafts. The capture screen
+  // shows a "Drafts" chip that opens the drafts gallery (/drafts); picking one
+  // there hands its id back via the resume mailbox.
+  const [draftSummary, setDraftSummary] = useState<{ count: number; previewUri: string | null }>({ count: 0, previewUri: null });
+  // The draft currently open in this camera session — posting deletes it.
+  const draftIdRef = useRef<string | null>(null);
   const clearDraft = useCallback(() => {
-    setPendingDraft(null);
-    void clearCameraDraft(userId);
+    if (draftIdRef.current) {
+      void deleteCameraDrafts(userId, [draftIdRef.current]);
+      draftIdRef.current = null;
+    }
   }, [userId]);
   const restoreDraft = useCallback((draft: CameraDraft) => {
-    setPendingDraft(null);
+    draftIdRef.current = draft.id;
     setMode(draft.mode);
     if (draft.mode === "lift") {
       const step = draft.step as LiftStep;
@@ -838,16 +1098,21 @@ export default function CameraScreen() {
       else setTrack(t as MusicTrack & { clipStart?: number });
     }
   }, []);
-  // On open, quietly load any saved draft for the chip. No interruption.
+  // On every focus: consume a pending resume from the drafts page, otherwise
+  // just refresh the chip's count/preview. No interruption on plain opens.
   useEffect(() => {
-    if (draftCheckedRef.current || !userId) return;
-    draftCheckedRef.current = true;
-    void loadCameraDraft(userId).then((draft) => {
-      if (draft) setPendingDraft(draft);
+    if (!isFocused || !userId) return;
+    const resumeId = takeDraftResume();
+    void loadCameraDrafts(userId).then((drafts) => {
+      setDraftSummary({ count: drafts.length, previewUri: drafts[0]?.photoUri ?? null });
+      if (resumeId) {
+        const draft = drafts.find((d) => d.id === resumeId);
+        if (draft) restoreDraft(draft);
+      }
     });
-  }, [userId]);
+  }, [isFocused, userId, restoreDraft]);
   // Everything the draft needs to fully reconstruct this screen.
-  const buildDraft = useCallback((): Omit<CameraDraft, "savedAt"> => {
+  const buildDraft = useCallback((): CameraDraftInput => {
     const step = mode === "lift" ? liftStep : dailyStep;
     const activeTrack = mode === "story" ? storyTrack : track;
     return {
@@ -879,31 +1144,48 @@ export default function CameraScreen() {
     };
   }, [mode, dailyStep, liftStep, photoUri, dualFrontUri, extraPhotos, videoUri, caption, track, storyTrack, liftExercise, liftValue, tags, communities, gym, photoTags, storyTags]);
 
-  // Autosave the in-progress post (media + edits) whenever anything changes,
-  // once media is captured and we're past the capture step (#23) — crash and
-  // interruption protection. Explicit intent is handled at close time.
-  useEffect(() => {
+  // Explicitly save the current post as a draft and exit (details-page button).
+  // Re-saving a resumed draft updates it in place instead of duplicating.
+  const saveAsDraft = useCallback(() => {
     if (!userId) return;
-    const hasMedia = Boolean(photoUri || videoUri);
-    const step = mode === "lift" ? liftStep : dailyStep;
-    if (!hasMedia || step === "capture" || step === "record") return;
-    const t = setTimeout(() => {
-      void saveCameraDraft(userId, buildDraft());
-    }, 700);
-    return () => clearTimeout(t);
-  }, [userId, mode, dailyStep, liftStep, photoUri, videoUri, buildDraft]);
+    trackAnalyticsEvent("draft_saved", { mode });
+    void saveCameraDraft(userId, buildDraft(), draftIdRef.current).then((id) => {
+      draftIdRef.current = id;
+    });
+    showToast("Saved to drafts");
+    router.back();
+  }, [userId, buildDraft, router, mode]);
 
   /**
    * Close the camera. With unposted media in hand, ask once whether to keep it
    * as a draft — so drafts only ever exist on purpose (or via crash autosave).
    */
   const attemptClose = useCallback(() => {
-    const hasMedia = Boolean(photoUri || videoUri || extraPhotos.length);
-    if (!hasMedia || !userId) {
+    const step = mode === "lift" ? liftStep : dailyStep;
+    const hasMedia = Boolean(photoUri || videoUri);
+    // Still on the capture/record screen = nothing worth drafting. (Leftover
+    // extraPhotos/dual state after a retake used to trigger the keep-as-draft
+    // prompt with no visible shot.)
+    if (!hasMedia || step === "capture" || step === "record" || !userId) {
       router.back();
       return;
     }
-    Alert.alert("Keep this as a draft?", "Your shot and edits will be here when you come back.", [
+    if (mode === "story") {
+      // Stories are ephemeral — X asks to delete, not to file image options.
+      appAlert("Discard this story?", "Your shot and edits will be gone.", [
+        { text: "Keep editing", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => {
+            clearDraft();
+            router.back();
+          }
+        }
+      ]);
+      return;
+    }
+    appAlert("Keep this as a draft?", "Your shot and edits will be here when you come back.", [
       {
         text: "Discard",
         style: "destructive",
@@ -915,13 +1197,13 @@ export default function CameraScreen() {
       {
         text: "Save draft",
         onPress: () => {
-          void saveCameraDraft(userId, buildDraft());
+          void saveCameraDraft(userId, buildDraft(), draftIdRef.current);
           router.back();
         }
       },
       { text: "Cancel", style: "cancel" }
     ]);
-  }, [photoUri, videoUri, extraPhotos.length, userId, buildDraft, clearDraft, router]);
+  }, [photoUri, videoUri, dailyStep, liftStep, userId, mode, buildDraft, clearDraft, router]);
 
   // Music preview on the story review screen (2d): loop the chosen ~15s segment
   // so the user hears exactly what viewers will, before posting.
@@ -930,7 +1212,10 @@ export default function CameraScreen() {
   const storyPreviewStatus = useAudioPlayerStatus(storyPreview);
   const storyClipStart = storyTrack?.clipStart ?? 0;
   useEffect(() => {
-    if (!storyReviewActive || !storyTrack?.previewUrl || !storyPreviewStatus.isLoaded) {
+    // A sheet open on top has its own player (the music picker auditions the
+    // song you are about to choose). Pause this one so both are not playing at
+    // once; it resumes automatically when the sheet is dismissed.
+    if (!storyReviewActive || sheet.isOpen || !storyTrack?.previewUrl || !storyPreviewStatus.isLoaded) {
       try {
         storyPreview.pause();
       } catch {
@@ -945,10 +1230,10 @@ export default function CameraScreen() {
       // ignore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storyReviewActive, storyTrack?.previewUrl, storyClipStart, storyPreviewStatus.isLoaded]);
+  }, [storyReviewActive, sheet.isOpen, storyTrack?.previewUrl, storyClipStart, storyPreviewStatus.isLoaded]);
   // Loop just the chosen 15s window.
   useEffect(() => {
-    if (!storyReviewActive || !storyTrack?.previewUrl) return;
+    if (!storyReviewActive || sheet.isOpen || !storyTrack?.previewUrl) return;
     if (storyPreviewStatus.currentTime > storyClipStart + 15) {
       try {
         void storyPreview.seekTo(storyClipStart);
@@ -1075,7 +1360,7 @@ export default function CameraScreen() {
     })
     .runOnJS(true)
     .onUpdate((e) => {
-      setVirtualZoom(clampVirtual(zoomBaseRef.current + (e.scale - 1) * 0.35));
+      setVirtualZoom((prev) => stepZoom(prev, zoomBaseRef.current + (e.scale - 1) * 0.35));
     });
 
   const shareStory = () => {
@@ -1085,7 +1370,12 @@ export default function CameraScreen() {
       return;
     }
     if (!photoUri) {
-      Alert.alert("No photo", "The photo didn't save. Go back and retake it.");
+      appAlert("No photo", "The photo didn't save. Go back and retake it.");
+      return;
+    }
+    // Backstop for the entry gate (e.g. the local day ticked over mid-compose).
+    if (postedResolved && !postedToday) {
+      appAlert("Post your SPOTTED first", "Stories unlock after you post today's SPOTTED.");
       return;
     }
     const input = {
@@ -1100,7 +1390,9 @@ export default function CameraScreen() {
           }
         : null,
       tagUserIds: storyTags,
-      overlayText: storyOverlayText
+      overlayText: storyOverlayText,
+      privateStoryId: storyDest.id,
+      privateStoryName: storyDest.id ? storyDest.name : null
     };
     // #24: post optimistically — the story shows immediately (optimistic cache
     // insert), we navigate to the feed at once, and the upload retries in the
@@ -1116,7 +1408,7 @@ export default function CameraScreen() {
         },
         onError: (error) => {
           logger.warn("story_publish_failed", { message: error instanceof Error ? error.message : String(error) });
-          Alert.alert("Couldn't post your story", "It didn't upload — poor connection?", [
+          appAlert("Couldn't post your story", "It didn't upload — poor connection?", [
             { text: "Discard", style: "destructive", onPress: clearDraft },
             { text: "Retry", onPress: post }
           ]);
@@ -1124,9 +1416,15 @@ export default function CameraScreen() {
       });
     };
     post();
+    // Clear the draft NOW: mutate-level onSuccess is dropped once this screen
+    // unmounts (router.replace below), so the posted story's photo used to
+    // linger as a "Resume draft" chip on the next camera open.
+    clearDraft();
     setStoryTrack(null);
     setStoryTags([]);
     router.replace("/(tabs)/feed");
+    // Optimistic publish burst — the story is already on its way up.
+    triggerPostCelebration();
   };
 
   /** Story mode: pick an existing photo from the library instead of capturing. */
@@ -1172,6 +1470,41 @@ export default function CameraScreen() {
     }
   };
 
+  // Self-timer: one button cycles off → 3s → 5s → 10s → off. With a delay
+  // set, the shutter starts a big on-screen countdown; tapping it cancels.
+  const [timerSecs, setTimerSecs] = useState<0 | 3 | 5 | 10>(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cycleTimer = () => setTimerSecs((t) => (t === 0 ? 3 : t === 3 ? 5 : t === 5 ? 10 : 0));
+  const cancelCountdown = useCallback(() => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = null;
+    setCountdown(null);
+  }, []);
+  useEffect(() => cancelCountdown, [cancelCountdown]);
+  const withTimer = useCallback(
+    (capture: () => void) => {
+      if (timerSecs === 0 || countdown !== null) {
+        capture();
+        return;
+      }
+      let remaining = timerSecs;
+      setCountdown(remaining);
+      countdownRef.current = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          setCountdown(null);
+          capture();
+        } else {
+          setCountdown(remaining);
+        }
+      }, 1000);
+    },
+    [timerSecs, countdown]
+  );
+
   const capturePhoto = useCallback(async () => {
     if (!permission?.granted) {
       // Without camera access there's nothing to capture — re-ask instead of
@@ -1194,20 +1527,27 @@ export default function CameraScreen() {
       // post-processing) so the shutter feels instant; quality stays high (0.95)
       // so photos are still sharp. No automatic crop — the photo keeps its full
       // frame; cropping is user-driven in the editor.
-      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.95, skipProcessing: true });
+      const photo = await cameraRef.current?.takePictureAsync({
+        quality: mode === "story" ? 0.9 : 0.95,
+        skipProcessing: true
+      });
       if (photo?.uri) {
-        // The OS un-mirrors front-camera captures; flip back so the saved photo
-        // matches the mirrored selfie preview. Single near-lossless re-encode.
-        if (facing === "front") {
-          const flipped = await ImageManipulator.manipulateAsync(
-            photo.uri,
-            [{ flip: ImageManipulator.FlipType.Horizontal }],
-            { compress: 0.98, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          uri = flipped.uri;
-        } else {
-          uri = photo.uri;
-        }
+        // Flip: the OS un-mirrors front-camera captures; flip back so the saved
+        // photo matches the mirrored selfie preview. Crop: daily photos keep
+        // only the POST_PHOTO_RATIO band shown between the capture masks, so
+        // the feed displays exactly what was framed (WYSIWYG). Stories keep the
+        // full frame — they display full-screen. One re-encode covers both.
+        // Stories: lighter encode — they're ephemeral and the full-quality
+        // mirror re-encode was the "too much delay" on selfie captures.
+        uri = await finalizeCapture(photo, {
+          mirror: facing === "front",
+          ratio: mode === "story" ? null : POST_PHOTO_RATIO,
+          compress: mode === "story" ? 0.85 : 0.95,
+          // Daily promises WYSIWYG via the crop mask, so drop what the preview
+          // hid off the sides too. Stories display full-screen from the same
+          // aspect-filled preview, so their frame already matches.
+          previewRatio: mode === "story" ? null : winW / winH
+        });
       }
     } catch {
       uri = undefined;
@@ -1220,28 +1560,25 @@ export default function CameraScreen() {
     // Stories land directly in edit mode (2a) — no separate "Edit" step. When
     // the editor is done, the review screen (music/tags/share) shows.
     if (mode === "story" && uri) setEditing(true);
-  }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission]);
+  }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission, winW, winH]);
 
   // Dual capture (BeReal-style): grab the current lens, flip, let the session
   // reconfigure, grab the other lens. expo-camera can't run both at once, so
   // this is a fast sequence (~0.7s) rather than a true simultaneous capture.
-  const shootOnce = useCallback(async (mirror: boolean): Promise<string | undefined> => {
-    try {
-      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.9, skipProcessing: true });
-      if (!photo?.uri) return undefined;
-      if (mirror) {
-        const flipped = await ImageManipulator.manipulateAsync(
-          photo.uri,
-          [{ flip: ImageManipulator.FlipType.Horizontal }],
-          { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
-        );
-        return flipped.uri;
+  const shootOnce = useCallback(
+    async (mirror: boolean, ratio: number | null): Promise<string | undefined> => {
+      try {
+        // 0.95 to match the single-shot path — a dual post's main frame is a
+        // full post photo and was being encoded softer than a normal one.
+        const photo = await cameraRef.current?.takePictureAsync({ quality: 0.95, skipProcessing: true });
+        if (!photo?.uri) return undefined;
+        return await finalizeCapture(photo, { mirror, ratio, previewRatio: ratio ? winW / winH : null });
+      } catch {
+        return undefined;
       }
-      return photo.uri;
-    } catch {
-      return undefined;
-    }
-  }, []);
+    },
+    [winW, winH]
+  );
 
   const toggleDualMode = useCallback(() => {
     if (dualBusy) return;
@@ -1271,7 +1608,8 @@ export default function CameraScreen() {
     triggerFlash();
     try {
       if (dualPhase === "selfie") {
-        const front = await shootOnce(true);
+        // Daily dual: the selfie lands in the 3:4 inset frame — crop to match.
+        const front = await shootOnce(true, mode === "daily" ? INSET_RATIO : null);
         if (!front) {
           showToast("Couldn't capture the selfie — try again");
           return;
@@ -1288,7 +1626,7 @@ export default function CameraScreen() {
         }
         return;
       }
-      const back = await shootOnce(false);
+      const back = await shootOnce(false, mode === "daily" ? POST_PHOTO_RATIO : null);
       if (!back) {
         showToast("Couldn't take the dual shot — try again");
         return;
@@ -1321,9 +1659,15 @@ export default function CameraScreen() {
     // Pin the current lens for the whole take.
     recordUltraRef.current = Boolean(ultraLens) && virtualZoom < 0;
     setRecording(true);
-    // Camera is ALREADY in video mode (camMode derived from the flow) — no mode
-    // switch, no remount, no long wait. Recording starts immediately (#1); a
-    // short readiness guard only matters on the very first hold after mount.
+    // Daily sits in picture mode for image quality, so a hold has to bring a
+    // video session up first. Clear the ready flag BEFORE requesting the flip —
+    // otherwise the wait loop below reads the outgoing session's `true` and
+    // calls recordAsync mid-reconfigure. Story/lift are already in video mode,
+    // so nothing remounts and recording still starts immediately.
+    if (camMode !== "video") {
+      videoReadyRef.current = false;
+      setRecordIntent(true);
+    }
     void impactHaptic(); // #12: haptic on record start
     void (async () => {
       try {
@@ -1353,6 +1697,8 @@ export default function CameraScreen() {
         setRecording(false);
         setRecordLocked(false);
         setFinalizing(false);
+        // Back to the photo pipeline for the next tap.
+        setRecordIntent(false);
       }
     })();
   };
@@ -1383,7 +1729,8 @@ export default function CameraScreen() {
 
   const submitPost = () => {
     if (geofenceBlocked) {
-      showToast("Be at a gym to post — or pick Home gym");
+      trackAnalyticsEvent("gym_geofence_blocked");
+      showToast("Be at a gym to post — or pick Custom location");
       return;
     }
     if (!gym) {
@@ -1403,7 +1750,7 @@ export default function CameraScreen() {
         return;
       }
       if (!videoUri) {
-        Alert.alert("No video", "The clip didn't save. Go back and retake it.");
+        appAlert("No video", "The clip didn't save. Go back and retake it.");
         return;
       }
       const logged = liftNum > 0;
@@ -1441,21 +1788,18 @@ export default function CameraScreen() {
             };
           }
         }
-        await queryClient.invalidateQueries({ queryKey: ["feed"] });
+        await invalidateAfterPostChange(queryClient);
         await queryClient.invalidateQueries({ queryKey: ["user-lifts", userId] });
         clearDraft(); // #23: posted successfully — drop the draft
-        if (unlockedData) {
-          // Celebrate first; navigate to the feed when the modal closes.
-          setCelebrate(unlockedData);
-        } else {
-          showToast("Video posted");
-          router.replace("/(tabs)/feed");
-        }
+        // Trophy celebrations come from TrophyEarnHost (realtime on
+        // user_trophies) — every tier, every time, wherever you are.
+        router.replace("/(tabs)/feed");
+        if (!unlockedData) triggerPostCelebration();
       } catch (error) {
         logger.warn("lift_publish_failed", {
           message: error instanceof Error ? error.message : String(error)
         });
-        Alert.alert("Couldn't post", "Something went wrong uploading your video. Check your connection and try again.");
+        appAlert("Couldn't post", "Something went wrong uploading your video. Check your connection and try again.");
       } finally {
         setPublishing(false);
       }
@@ -1468,91 +1812,103 @@ export default function CameraScreen() {
       return;
     }
     if (!photoUri && !videoUri) {
-      Alert.alert("No media", "The shot didn't save. Go back and retake it.");
+      appAlert("No media", "The shot didn't save. Go back and retake it.");
       return;
     }
     setPublishing(true);
-    try {
-      // Music is stored in its own columns; the caption carries text + friend tags.
-      const captionForPost = [caption.trim(), selectedFriends.map((friend) => friend.handle).join(" ")]
-        .filter(Boolean)
-        .join(" ");
-      const postId = await publishDailyPost({
-        userId,
-        photoUris: photoUri ? [...extraPhotos, photoUri] : [],
-        videoUri: videoUri ?? null,
-        insetUri: dualFrontUri ?? null,
-        caption: captionForPost,
-        gymId: gym?.type === "gym" ? gym.id : null,
-        locationKind: gym?.type ?? "other",
-        musicTitle: track?.title ?? null,
-        musicArtist: track?.artist ?? null,
-        musicPreviewUrl: track?.previewUrl ?? null,
-        musicArtworkUrl: track?.artworkUrl ?? null,
-        musicClipStart: track?.clipStart ?? 0
-      });
-      // Persist tagged friends as rows (best-effort — the post itself is live).
-      if (tags.length) {
-        const { error: tagError } = await supabase
-          .from("post_tags")
-          .insert(tags.map((id) => ({ post_id: postId, user_id: id })));
-        if (tagError) {
-          logger.warn("post_tags_insert_failed", { message: tagError.message });
-        }
-      }
-      // Positional photo tags (M1) — where each friend sits on the photo.
-      if (photoTags.length) {
-        const { error: photoTagError } = await supabase
-          .from("photo_tags")
-          .insert(photoTags.map((t) => ({ post_id: postId, photo_index: 0, user_id: t.userId, x: t.x, y: t.y })));
-        if (photoTagError) {
-          logger.warn("photo_tags_insert_failed", { message: photoTagError.message });
-        }
-      }
-      // Attach the workout logged just before this daily (workout-first flow) so
-      // it rides along as a feed slide.
-      if (typeof params.workout === "string" && params.workout) {
-        const { error: attachError } = await supabase
-          .from("workouts")
-          .update({ post_id: postId })
-          .eq("id", params.workout)
-          .eq("user_id", userId);
-        if (attachError) logger.warn("workout_attach_failed", { message: attachError.message });
-      }
-      // Cross-post to the chosen communities (best-effort — the post itself is live).
-      const crossPosts = selectedCommunities
+    // Music is stored in its own columns; the caption carries text + friend tags.
+    const captionForPost = [caption.trim(), selectedFriends.map((friend) => friend.handle).join(" ")]
+      .filter(Boolean)
+      .join(" ");
+    const publishInput = {
+      userId,
+      photoUris: photoUri ? [...extraPhotos, photoUri] : [],
+      videoUri: videoUri ?? null,
+      insetUri: dualFrontUri ?? null,
+      caption: captionForPost,
+      gymId: gym?.type === "gym" ? gym.id : null,
+      locationKind: gym?.type ?? ("other" as const),
+      musicTitle: track?.title ?? null,
+      musicArtist: track?.artist ?? null,
+      musicPreviewUrl: track?.previewUrl ?? null,
+      musicArtworkUrl: track?.artworkUrl ?? null,
+      musicClipStart: track?.clipStart ?? 0
+    };
+    // Everything that rides along with the post (friend tags, photo tags,
+    // workout attach, community cross-posts) — shared with the offline queue.
+    const publishExtras = {
+      userId,
+      tags,
+      photoTags: photoTags.map((t) => ({ userId: t.userId, x: t.x, y: t.y })),
+      workoutId: typeof params.workout === "string" && params.workout ? params.workout : null,
+      communityIds: selectedCommunities
         .filter((community) => community.type !== "gym" || (gym?.type === "gym" && community.gym_id === gym.id))
-        .map((community) => ({ post_id: postId, community_id: community.id }));
-      if (crossPosts.length) {
-        const { error: crossError } = await supabase.from("post_communities").insert(crossPosts);
-        if (crossError) {
-          logger.warn("post_communities_insert_failed", { message: crossError.message });
-        }
-      }
+        .map((community) => community.id)
+    };
+    try {
+      const postId = await publishDailyPost(publishInput);
+      await attachDailyPostExtras(postId, publishExtras);
       markPostedToday();
-      trackAnalyticsEvent("daily_post_published", { dual: Boolean(dualFrontUri) });
-      await queryClient.invalidateQueries({ queryKey: ["feed"] });
+      trackAnalyticsEvent("daily_post_published", {
+        dual: Boolean(dualFrontUri),
+        photo_count: publishInput.photoUris.length,
+        is_video: Boolean(videoUri),
+        has_music: Boolean(track),
+        has_workout: Boolean(publishExtras.workoutId),
+        tagged_count: tags.length + photoTags.length,
+        location_kind: gym?.type ?? "other"
+      });
+      // Feed AND your own profile (grid, post count, streak calendar) — the
+      // profile used to keep serving its pre-post list.
+      await invalidateAfterPostChange(queryClient);
+      // Tagged friends' TAGGED grids refresh without waiting for pull-to-refresh.
+      if (tags.length) void queryClient.invalidateQueries({ queryKey: ["tagged-posts"] });
       clearDraft(); // #23: posted successfully — drop the draft
-      showToast("Posted. Feed unlocked.");
       router.replace("/(tabs)/feed");
+      // Publish burst plays over the feed as it lands.
+      triggerPostCelebration();
     } catch (error) {
       logger.warn("daily_post_publish_failed", {
         message: error instanceof Error ? error.message : String(error)
       });
-      Alert.alert("Couldn't post", "Something went wrong uploading your photo. Check your connection and try again.");
+      if (isNetworkError(error)) {
+        // No connection (gym dead zone) — park the post in the offline queue.
+        // It uploads automatically when connectivity returns; the feed unlocks
+        // NOW so the app stays usable offline (Instagram/Snapchat behavior).
+        try {
+          await enqueueDailyPost({ input: publishInput, ...publishExtras });
+          markPostedToday();
+          trackAnalyticsEvent("daily_post_queued_offline", { dual: Boolean(dualFrontUri) });
+          clearDraft(); // media was copied to the pending dir before this
+          router.replace("/(tabs)/feed");
+          showToast("No connection — your post will upload automatically");
+        } catch (queueError) {
+          logger.warn("daily_post_queue_failed", {
+            message: queueError instanceof Error ? queueError.message : String(queueError)
+          });
+          appAlert("Couldn't post", "You're offline and the post couldn't be saved. Try again in a moment.");
+        }
+      } else {
+        appAlert("Couldn't post", "Something went wrong uploading your photo. Check your connection and try again.");
+      }
     } finally {
       setPublishing(false);
     }
   };
 
-  // Story/photo editor (never for the raw daily post). The boundary keeps any
-  // editor crash from taking down the app — worst case you're back on preview.
-  if (editing && photoUri && mode !== "daily") {
+  // Photo editor — stories AND daily posts. The boundary keeps any editor crash
+  // from taking down the app: worst case you're back on preview.
+  if (editing && photoUri) {
     return (
       <EditorBoundary onClose={() => setEditing(false)}>
         <PhotoEditor
           uri={photoUri}
-          insetUri={mode === "story" ? dualFrontUri : null}
+          // Both modes SHOW the dual selfie so you can compose around it, but
+          // only a story bakes it into the pixels. A daily post uploads it
+          // separately as inset_url and the feed draws the PIP from there —
+          // baking it here as well would show the same selfie twice.
+          insetUri={dualFrontUri}
+          bakeInset={mode === "story"}
           onDone={(edited, overlayText) => {
             setPhotoUri(edited);
             setStoryOverlayText(overlayText);
@@ -1584,6 +1940,18 @@ export default function CameraScreen() {
 
   if (isCapture) {
     const dualMode = dualPhase !== "off";
+    // WYSIWYG capture band (daily): the 9:16 sensor frame cover-fills the
+    // screen; the post keeps only the central POST_PHOTO_RATIO band of it.
+    // Dim everything outside that band so the framing is honest — what's
+    // bright is exactly what posts.
+    // The preview aspect-fills, so the visible width is always the full screen
+    // width whatever the session preset is — which makes the kept band simply
+    // "screen width at the post ratio", with no sensor-ratio term. (The old
+    // formula hard-coded the 16:9 video session and ignored the hidden sides,
+    // so it under-reported the mask and broke outright in a 4:3 photo session.)
+    const keptH = winW / POST_PHOTO_RATIO;
+    const cropMaskH = Math.max(0, Math.round((winH - keptH) / 2));
+    const showCropMask = mode === "daily" && dualPhase !== "selfie" && cropMaskH > 0;
     const stepLabel =
       dualPhase === "selfie"
         ? "DUAL · SELFIE"
@@ -1613,10 +1981,9 @@ export default function CameraScreen() {
                 selectedLens={ultraActive && ultraLens ? ultraLens : undefined}
                 mute={!micPermission?.granted}
                 videoQuality="1080p"
-                animateShutter={false}
-                // Flash for stills (#9); torch stays on through a video recording.
-                flash={flashOn ? "on" : "off"}
-                enableTorch={flashOn && camMode === "video" && recording}
+                // Flash rules + shutter animation live in the shared kit so the
+                // daily, story, chat and reaction cameras can never drift.
+                {...cameraSurfaceProps({ flashOn, facing, videoMode: camMode === "video", recording })}
                 onCameraReady={() => {
                   videoReadyRef.current = true;
                   // Discover lenses (ultra-wide availability) for this facing.
@@ -1681,6 +2048,21 @@ export default function CameraScreen() {
               >
                 <View style={{ flex: 1 }} />
               </Pressable>
+              {/* Daily crop band — the dimmed strips fall outside the posted frame. */}
+              {showCropMask ? (
+                <>
+                  <View
+                    pointerEvents="none"
+                    style={{ position: "absolute", top: 0, left: 0, right: 0, height: cropMaskH, backgroundColor: "rgba(0,0,0,0.55)", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.28)" }}
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: cropMaskH, backgroundColor: "rgba(0,0,0,0.55)", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.28)" }}
+                  />
+                </>
+              ) : null}
+              {/* Selfie "flash": misty white screen ring + brightness slider. */}
+              {flashOn && facing === "front" ? <FrontFlash /> : null}
             </View>
           </GestureDetector>
         ) : (
@@ -1708,35 +2090,76 @@ export default function CameraScreen() {
             left: 16,
             right: 16,
             flexDirection: "row",
-            alignItems: "center",
+            // Top-aligned so the vertical control stack grows downward while
+            // the close button + step pill hold the top line.
+            alignItems: "flex-start",
             justifyContent: "space-between"
           }}
         >
           <CircleButton label="Close camera" onPress={attemptClose}>
             <X color={colors.white} size={20} strokeWidth={2.2} />
           </CircleButton>
-          <StepPill>{stepLabel}</StepPill>
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ paddingTop: 8 }}>
+            <StepPill>{stepLabel}</StepPill>
+          </View>
+          {/* Camera options — VERTICAL stack down the top-right edge:
+              flip on top, dual at the bottom. */}
+          <View style={{ flexDirection: "column", gap: 12 }}>
+            {!dualMode ? (
+              <CircleButton label="Flip camera" onPress={flipCamera}>
+                <RefreshCw color={colors.white} size={19} strokeWidth={2} />
+              </CircleButton>
+            ) : null}
+            <CircleButton label={flashOn ? "Flash on" : "Flash off"} onPress={() => setFlashOn((v) => !v)}>
+              {flashOn ? <Zap color={tokens.accent.gold} size={19} strokeWidth={2} fill={tokens.accent.gold} /> : <ZapOff color={colors.white} size={19} strokeWidth={2} />}
+            </CircleButton>
+            {/* Self-timer: cycles off → 3s → 5s → 10s → off. */}
+            {!recording ? (
+              <CircleButton
+                label={timerSecs ? `Photo timer, ${timerSecs} seconds` : "Photo timer off"}
+                onPress={cycleTimer}
+              >
+                {timerSecs ? (
+                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: tokens.accent.gold }}>{`${timerSecs}s`}</Text>
+                ) : (
+                  <TimerIcon color={colors.white} size={19} strokeWidth={2} />
+                )}
+              </CircleButton>
+            ) : null}
             {/* Dual (BeReal-style front+back) for daily and story photos. */}
             {!recording && mode !== "lift" ? (
               <CircleButton label={dualMode ? "Exit dual camera" : "Enter dual camera"} onPress={toggleDualMode}>
                 {dualBusy ? (
                   <ActivityIndicator color={colors.white} size="small" />
                 ) : (
-                  <SquareStack color={dualMode ? tokens.accent.gold : colors.white} size={18} strokeWidth={2} />
+                  <DualCameraIcon active={dualMode} />
                 )}
-              </CircleButton>
-            ) : null}
-            <CircleButton label={flashOn ? "Flash on" : "Flash off"} onPress={() => setFlashOn((v) => !v)}>
-              {flashOn ? <Zap color={tokens.accent.gold} size={19} strokeWidth={2} fill={tokens.accent.gold} /> : <ZapOff color={colors.white} size={19} strokeWidth={2} />}
-            </CircleButton>
-            {!dualMode ? (
-              <CircleButton label="Flip camera" onPress={flipCamera}>
-                <RefreshCw color={colors.white} size={19} strokeWidth={2} />
               </CircleButton>
             ) : null}
           </View>
         </View>
+
+        {/* Timer countdown — big center numeral; tap anywhere on it to cancel. */}
+        {countdown !== null ? (
+          <Pressable
+            onPress={cancelCountdown}
+            accessibilityLabel={`Timer: ${countdown}. Tap to cancel`}
+            style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text
+              style={{
+                fontFamily: "Boldonse_400Regular",
+                fontSize: 110,
+                color: colors.white,
+                textShadowColor: "rgba(0,0,0,0.7)",
+                textShadowOffset: { width: 0, height: 2 },
+                textShadowRadius: 12
+              }}
+            >
+              {countdown}
+            </Text>
+          </Pressable>
+        ) : null}
 
         <LinearGradient
           colors={["transparent", "rgba(0,0,0,0.7)"]}
@@ -1753,19 +2176,10 @@ export default function CameraScreen() {
             gap: 16
           }}
         >
-          {/* Saved draft — non-blocking entry point. Tap resumes; long-press
-              deletes (with confirm). Never interrupts a fresh shot. */}
-          {pendingDraft && !photoUri && !videoUri && !recording ? (
-            <Pressable
-              accessibilityLabel="Resume draft"
-              onPress={() => restoreDraft(pendingDraft)}
-              onLongPress={() =>
-                Alert.alert("Delete draft?", "This can't be undone.", [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Delete", style: "destructive", onPress: clearDraft }
-                ])
-              }
-            >
+          {/* Drafts — non-blocking entry point to the drafts gallery. Never
+              interrupts a fresh shot. */}
+          {draftSummary.count > 0 && !photoUri && !videoUri && !recording ? (
+            <Pressable accessibilityLabel="Open drafts" onPress={() => router.push("/drafts")}>
               <View
                 style={{
                   flexDirection: "row",
@@ -1780,9 +2194,9 @@ export default function CameraScreen() {
                   backgroundColor: "rgba(0,0,0,0.6)"
                 }}
               >
-                {pendingDraft.photoUri ? (
+                {draftSummary.previewUri ? (
                   <ExpoImage
-                    source={{ uri: pendingDraft.photoUri }}
+                    source={{ uri: draftSummary.previewUri }}
                     contentFit="cover"
                     style={{ width: 26, height: 26, borderRadius: 13 }}
                   />
@@ -1792,7 +2206,7 @@ export default function CameraScreen() {
                   </View>
                 )}
                 <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}>
-                  Resume draft
+                  {draftSummary.count === 1 ? "Drafts" : `Drafts (${draftSummary.count})`}
                 </Text>
               </View>
             </Pressable>
@@ -1833,7 +2247,7 @@ export default function CameraScreen() {
               disabled={dualBusy || finalizing}
               allowRecording={!dualMode}
               progress={recordSeconds / 60}
-              onTap={() => void (dualMode ? captureDualStep() : capturePhoto())}
+              onTap={() => withTimer(() => void (dualMode ? captureDualStep() : capturePhoto()))}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onLock={() => {
@@ -1841,7 +2255,7 @@ export default function CameraScreen() {
                 void impactHaptic(); // #12: haptic on lock
               }}
               // #6: slide up/down on the button while holding to zoom.
-              onZoomDelta={(dy) => setVirtualZoom((z) => clampVirtual(z - dy / 240))}
+              onZoomDelta={(dy) => setVirtualZoom((z) => stepZoom(z, z - dy / 240))}
             />
             {/* Spacer to keep the shutter centered. */}
             <View style={{ width: 40 }} />
@@ -1894,23 +2308,36 @@ export default function CameraScreen() {
         ) : videoUri ? (
           <LiftVideoThumb uri={videoUri} />
         ) : (
-          <View
-            ref={reviewCaptureRef}
-            collapsable={false}
-            style={{ position: "absolute", inset: 0, overflow: "hidden", backgroundColor: colors.black }}
-          >
-            <ScenePhoto
-              uri={photoUri}
-              scene="s2"
-              legibility={false}
-              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-            />
-            {/* Dual-camera front frame — BeReal-style corner inset. */}
-            {dualFrontUri ? (
-              <View style={{ position: "absolute", top: insets.top + 66, left: 16, width: "30%", aspectRatio: 3 / 4, borderRadius: 14, overflow: "hidden", borderWidth: 2, borderColor: colors.black }}>
-                <ExpoImage source={{ uri: dualFrontUri }} contentFit="cover" style={{ flex: 1 }} />
-              </View>
-            ) : null}
+          /* Daily photo at its posted ratio (the capture crop) — review shows
+             exactly the frame the feed will show, letterboxed on black. */
+          <View style={{ position: "absolute", inset: 0, backgroundColor: colors.black, justifyContent: "center" }}>
+            <View
+              ref={reviewCaptureRef}
+              collapsable={false}
+              style={{ width: "100%", aspectRatio: POST_PHOTO_RATIO, overflow: "hidden", backgroundColor: colors.black }}
+            >
+              {/* Tap to edit, same as a story (2a). Dual posts included: the
+                  editor shows the PIP but does not bake it, so the selfie is
+                  still stored once in inset_url. */}
+              <Pressable
+                onPress={() => setEditing(true)}
+                accessibilityLabel="Tap photo to edit"
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+              >
+                <ScenePhoto
+                  uri={photoUri}
+                  scene="s2"
+                  legibility={false}
+                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                />
+              </Pressable>
+              {/* Dual-camera front frame — placed like the feed inset (12/12, 31%). */}
+              {dualFrontUri ? (
+                <View pointerEvents="none" style={{ position: "absolute", top: 12, left: 12, width: "31%", aspectRatio: 3 / 4, borderRadius: 12, overflow: "hidden", borderWidth: 2, borderColor: colors.black }}>
+                  <ExpoImage source={{ uri: dualFrontUri }} contentFit="cover" style={{ flex: 1 }} />
+                </View>
+              ) : null}
+            </View>
           </View>
         )}
 
@@ -1986,12 +2413,50 @@ export default function CameraScreen() {
         <View style={{ position: "absolute", left: 18, right: 18, bottom: insets.bottom + 22 }}>
           {mode === "story" ? (
             <>
+              {/* Destination pill — My Story vs a private story (create/edit inside). */}
+              <Pressable
+                onPress={() => sheet.open(<StoryDestinationSheet selected={storyDest} onSelect={setStoryDest} />)}
+                accessibilityLabel={`Sharing to ${storyDest.name} — change destination`}
+                style={{ alignSelf: "center", marginBottom: 12 }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: storyDest.id ? tokens.accent.gold : colors.slate,
+                    backgroundColor: "rgba(0,0,0,0.5)"
+                  }}
+                >
+                  {storyDest.id ? (
+                    <Lock size={14} color={tokens.accent.gold} strokeWidth={2} />
+                  ) : (
+                    <Users size={14} color={colors.white} strokeWidth={2} />
+                  )}
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      maxWidth: 220,
+                      fontFamily: "Geist_600SemiBold",
+                      fontSize: 12.5,
+                      color: storyDest.id ? tokens.accent.gold : colors.white
+                    }}
+                  >
+                    {storyDest.id ? `Private · ${storyDest.name}` : "Sharing to My Story"}
+                  </Text>
+                </View>
+              </Pressable>
               {/* Music pill — same catalog picker as daily posts. */}
               <Pressable
                 onPress={() =>
                   sheet.open(
                     <MusicSheet
                       selected={storyTrack}
+                      onChange={setStoryTrack}
                       onSelect={(next) => {
                         setStoryTrack(next);
                         sheet.close();
@@ -2051,7 +2516,7 @@ export default function CameraScreen() {
                 loading={publishing || postStory.isPending}
                 disabled={publishing || postStory.isPending}
               >
-                Share to story
+                {storyDest.id ? `Share to ${storyDest.name}` : "Share to story"}
               </Button>
             </>
           ) : (
@@ -2232,7 +2697,18 @@ export default function CameraScreen() {
           label="Music"
           value={track?.title ?? "None"}
           isSet={Boolean(track)}
-          onPress={() => sheet.open(<MusicSheet selected={track} onSelect={(next) => { setTrack(next); sheet.close(); }} />)}
+          onPress={() =>
+            sheet.open(
+              <MusicSheet
+                selected={track}
+                onChange={setTrack}
+                onSelect={(next) => {
+                  setTrack(next);
+                  sheet.close();
+                }}
+              />
+            )
+          }
         />
         <OptRow
           icon={<Users size={16} color={colors.silver} />}
@@ -2288,26 +2764,36 @@ export default function CameraScreen() {
             >
               <MapPin size={15} color={colors.silver} strokeWidth={2} />
               <Text style={{ flex: 1, fontFamily: "Geist_500Medium", fontSize: 12.5, color: colors.mist }}>
-                You need to be at a gym to post — or choose Home gym as your location.
+                You need to be at a gym to post — or choose Custom location.
               </Text>
             </View>
           ) : null}
           <Button loading={publishing} disabled={publishing || geofenceBlocked} onPress={submitPost}>
             Post
           </Button>
+          {/* Explicit draft save — the ONLY way a draft gets created besides
+              the keep-as-draft prompt on close. */}
+          <Pressable accessibilityLabel="Save as draft" onPress={saveAsDraft} disabled={publishing}>
+            <View
+              style={{
+                marginTop: 10,
+                height: 46,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.iron
+              }}
+            >
+              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.mist }}>Save as draft</Text>
+            </View>
+          </Pressable>
         </View>
       </ScrollView>
 
       {/* Trophy unlock — shown after a lift post crosses a new tier; closing it
           continues to the feed. */}
-      <TrophyUnlockModal
-        data={celebrate}
-        visible={celebrate !== null}
-        onClose={() => {
-          setCelebrate(null);
-          router.replace("/(tabs)/feed");
-        }}
-      />
+
     </KeyboardAvoidingView>
   );
 }

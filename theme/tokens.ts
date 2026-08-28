@@ -60,5 +60,27 @@ export const space = {
   8: 32
 } as const;
 
+/**
+ * Feed typography system — the ONLY text styles feed surfaces may use.
+ * One family (Geist), five sizes, progressively dimmer grays via
+ * tokens.text.*. No monospace for metadata; Boldonse is reserved for brand
+ * display moments (the SPOTTED wordmark, milestone plate numbers).
+ */
+export const typeScale = {
+  /** Usernames / interactive names — 15 Semibold. */
+  username: { fontFamily: "Geist_600SemiBold", fontSize: 15, lineHeight: 20 } as const,
+  /** Primary body (captions) — 15 Regular. */
+  body: { fontFamily: "Geist_400Regular", fontSize: 15, lineHeight: 21 } as const,
+  /** Bold inline within body (caption handle prefix). */
+  bodyStrong: { fontFamily: "Geist_600SemiBold", fontSize: 15, lineHeight: 21 } as const,
+  /** Secondary text — 14 Regular. */
+  secondary: { fontFamily: "Geist_400Regular", fontSize: 14, lineHeight: 19 } as const,
+  /** Metadata (timestamps, counts, song lines) — 13 Regular. */
+  meta: { fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 18 } as const,
+  /** Micro labels (chips, badges, overlays) — 12 Medium. */
+  micro: { fontFamily: "Geist_500Medium", fontSize: 12, lineHeight: 16 } as const
+} as const;
+
 export type RadiusToken = keyof typeof radius;
 export type SpaceToken = keyof typeof space;
+export type TypeToken = keyof typeof typeScale;

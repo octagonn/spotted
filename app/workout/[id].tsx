@@ -1,13 +1,16 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Dumbbell, Flame, Pencil, SquarePen, Trash2, Trophy } from "lucide-react-native";
+import { appAlert } from "@/components/ui/AppDialog";
+import { Bookmark, ChevronLeft, Dumbbell, Flame, Pencil, Repeat, SquarePen, Trash2, Trophy } from "lucide-react-native";
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SkeletonHeaderDetail, SkeletonWorkoutRow } from "@/components/ui/Skeleton";
 import { useDeleteWorkout, useRenameWorkout, useWorkout, type CardioSet, type LiftSet } from "@/hooks/queries/useWorkouts";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
+import { useSaveRoutine } from "@/hooks/queries/useRoutines";
+import { repeatableExercises } from "@/lib/repeatWorkout";
 import { fmtClock } from "@/lib/workoutLibrary";
 import { relDay } from "@/lib/relDay";
 import { colors } from "@/theme/colors";
@@ -49,13 +52,14 @@ export default function WorkoutDetailScreen() {
   const insets = useSafeAreaInsets();
   const workout = useWorkout(id);
   const myId = useAuthStore((state) => state.userId);
+  const saveRoutine = useSaveRoutine();
   const rename = useRenameWorkout();
   const deleteWorkout = useDeleteWorkout();
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
 
   const confirmDelete = (workoutId: string, attachedToPost: boolean) => {
-    Alert.alert(
+    appAlert(
       "Delete workout?",
       attachedToPost
         ? "It leaves your workout history — your daily post keeps it. Trophies you earned from it stay."
@@ -289,6 +293,62 @@ export default function WorkoutDetailScreen() {
             ) : null}
           </View>
         </View>
+
+        {/* Run it again — starts a NEW session with the same exercises and last
+            time's numbers as targets. Your own workouts only; a friend's
+            workout is a record, not a routine you can start. */}
+        {w.userId === myId && w.exercises.length > 0 ? (
+          <Pressable
+            accessibilityLabel={`Do ${w.name} again`}
+            onPress={() => router.push(`/workout?repeat=${w.id}`)}
+            style={{
+              marginTop: 26,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              paddingVertical: 15,
+              borderRadius: radius.md,
+              backgroundColor: tokens.text.primary
+            }}
+          >
+            <Repeat size={17} color={tokens.bg.base} strokeWidth={2.4} />
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: tokens.bg.base }}>
+              Do this workout again
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {/* Keep it as a named routine. Unlike the "do it again" shortcut, a
+            routine is pinned: it stays in your list no matter how many
+            sessions you log after it. Saved with nothing checked off — it's a
+            plan, not a copy of this session. */}
+        {w.userId === myId && w.exercises.length > 0 ? (
+          <Pressable
+            accessibilityLabel={`Save ${w.name} as a routine`}
+            onPress={() =>
+              saveRoutine.mutate({ name: w.name, exercises: repeatableExercises(w.exercises) })
+            }
+            disabled={saveRoutine.isPending}
+            style={{
+              marginTop: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              paddingVertical: 15,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: tokens.border.default,
+              opacity: saveRoutine.isPending ? 0.5 : 1
+            }}
+          >
+            <Bookmark size={16} color={tokens.text.secondary} strokeWidth={2.2} />
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: tokens.text.secondary }}>
+              Save as routine
+            </Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );

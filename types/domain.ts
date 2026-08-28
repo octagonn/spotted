@@ -34,6 +34,9 @@ export type FeedPost = Post & {
 
 export type FriendSuggestion = Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> & {
   mutual_friends_count: number;
+  /** Why this person is suggested ("Trains at your gym", …). Null when the
+   *  mutual count itself is the reason — the client renders the count. */
+  reason?: string | null;
 };
 
 export type FriendPresence = {

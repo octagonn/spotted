@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 
@@ -16,8 +17,10 @@ export const TAUNT_ERRORS: Record<string, string> = {
   not_friends: "You can only taunt friends",
   sender_not_posted: "Post your own SPOTTED first, then talk",
   target_already_posted: "Too late — they already posted today",
-  daily_send_limit: "5 taunts a day is plenty. Save some for tomorrow",
+  daily_send_limit: "15 taunts a day is plenty. Save some for tomorrow",
   already_taunted_target: "You already taunted them today",
+  // Legacy: quiet hours were removed server-side (taunting after 9pm is
+  // allowed) — kept only so an old build's error still reads sensibly.
   target_quiet_hours: "It's past 9pm for them — let them sleep"
 };
 
@@ -37,6 +40,7 @@ export function useSendTaunt() {
         const key = Object.keys(TAUNT_ERRORS).find((k) => error.message.includes(k));
         throw new Error(key ? TAUNT_ERRORS[key] : "Couldn't send the taunt");
       }
+      trackAnalyticsEvent("taunt_sent");
     },
     // Optimistic: the picker row flips to "taunted" + the daily count bumps
     // instantly. Server rejections roll back with the human error as a toast.

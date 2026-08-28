@@ -65,7 +65,12 @@ export function useSignedUserPosts(userId?: string | null) {
     enabled: Boolean(userId) && Boolean(raw),
     queryFn: async (): Promise<SignedPost[]> => {
       const rows = raw ?? [];
-      const signed = await signedPostUrls(rows.flatMap((post) => [post.media_url, post.inset_url, ...(post.media_urls ?? [])]));
+      // thumbnail_url MUST be in the batch: video posts rely on the signed
+      // poster frame for their grid cell — leaving it out made every video a
+      // black tile (the raw storage path resolved to null).
+      const signed = await signedPostUrls(
+        rows.flatMap((post) => [post.media_url, post.inset_url, post.thumbnail_url, ...(post.media_urls ?? [])])
+      );
       const resolve = (path: string | null | undefined): string | null => {
         if (!path) return null;
         if (path.startsWith("http")) return path;

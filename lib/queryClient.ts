@@ -28,12 +28,16 @@ export const queryClient = new QueryClient({
 
 /**
  * Query keys that must never be persisted. Presence/search/viewer lists are
- * ephemeral; "feed" and "stories" are TODAY-only daily-reset content — persisting
- * them would paint yesterday's posts (with long-expired signed media, worst of
- * all offline) on the next day's cold start. They still cache within a session.
+ * ephemeral; "stories" is TODAY-only daily-reset content, so persisting it
+ * would paint yesterday's stories on the next day's cold start.
+ *
+ * "feed" IS persisted (Instagram-style offline support): gyms often have dead
+ * cell service, so the last-seen posts must survive a relaunch and render with
+ * no connection. expo-image's disk cache serves the media by URL string, so
+ * even expired signed URLs still paint offline; the first online refetch
+ * replaces both the rows and the URLs.
  */
 const EPHEMERAL_KEYS = new Set([
-  "feed",
   "stories",
   "live-presence",
   "activity-status",
@@ -105,4 +109,31 @@ export async function wipeQueryCaches(): Promise<void> {
   } catch {
     // best-effort — a failed disk wipe still leaves an empty in-memory cache
   }
+}
+
+/**
+ * Every cache that must refetch when a post is created or removed.
+ *
+ * Publishing only invalidated ["feed"], so a new post showed up in the feed but
+ * NOT on your own profile: the grid, the post count and the streak calendar all
+ * read ["user-posts"] / ["signed-user-posts"] / ["streak-days"], and those kept
+ * serving the pre-post list. Because the cache is persisted to AsyncStorage,
+ * that stale grid survived relaunches too — it only corrected itself when
+ * something unrelated happened to invalidate it (a pull-to-refresh on the
+ * profile, or finishing a workout). Posting is the one moment all of these are
+ * known to be wrong, so they belong in a single list rather than being
+ * remembered at four separate call sites.
+ */
+export const POST_MUTATION_KEYS = [
+  "feed",
+  "user-posts",
+  "signed-user-posts",
+  "my-latest-post",
+  "streak",
+  "streak-days"
+] as const;
+
+/** Invalidate everything a new/removed post affects. */
+export async function invalidateAfterPostChange(client: QueryClient): Promise<void> {
+  await Promise.all(POST_MUTATION_KEYS.map((key) => client.invalidateQueries({ queryKey: [key] })));
 }

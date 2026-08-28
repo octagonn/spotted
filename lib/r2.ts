@@ -31,11 +31,26 @@ type SignBody = {
 };
 
 async function invokeR2<T>(body: SignBody): Promise<T | null> {
+  // Failures here used to be completely silent, which made "some posts won't
+  // load" undiagnosable: a null return is indistinguishable from "no results"
+  // at the call site. Log it — callers still get null and degrade gracefully.
   try {
     const { data, error } = await supabase.functions.invoke<T>("r2-media", { body });
-    if (error || !data) return null;
+    if (error || !data) {
+      logger.warn("r2_invoke_failed", {
+        action: body.action,
+        keys: body.keys?.length ?? (body.key ? 1 : 0),
+        message: error ? error.message : "empty_response"
+      });
+      return null;
+    }
     return data;
-  } catch {
+  } catch (error) {
+    logger.warn("r2_invoke_failed", {
+      action: body.action,
+      keys: body.keys?.length ?? (body.key ? 1 : 0),
+      message: error instanceof Error ? error.message : String(error)
+    });
     return null;
   }
 }
@@ -85,27 +100,22 @@ export async function r2Delete(keys: string[]): Promise<void> {
 }
 
 /**
- * Upload a post-bucket object: R2 first, Supabase Storage as fallback.
- * Returns the DB path to store — "r2:<key>" when it landed in R2, the plain
- * key when it fell back. Throws only when BOTH targets fail.
+ * Upload any user media object (post, avatar, community photo, chat media,
+ * reaction selfie) to R2 under "<userId>/…". Returns the DB path to store
+ * ("r2:<key>"). R2 is the ONLY image store — there is no Supabase Storage
+ * fallback anymore; a failed upload throws so the caller can retry.
  */
 export async function uploadPostObject(key: string, body: ArrayBuffer, contentType: string): Promise<string> {
   const viaR2 = await r2Upload(key, body, contentType);
   if (viaR2) return viaR2;
-  const upload = await supabase.storage.from("posts").upload(key, body, { contentType, upsert: false });
-  if (upload.error) throw upload.error;
-  return key;
+  throw new Error("upload_failed");
 }
 
-/**
- * Remove post-bucket objects on either storage path. Mixed lists are fine:
- * "r2:" keys delete via the edge function, the rest via Supabase Storage.
- */
+/** Same as uploadPostObject — named for non-post media call sites. */
+export const uploadMediaObject = uploadPostObject;
+
+/** Remove stored media objects ("r2:" paths; anything else is ignored). */
 export async function removePostObjects(paths: string[]): Promise<void> {
   const r2Keys = paths.filter(isR2Path).map(r2Key);
-  const legacy = paths.filter((p) => !isR2Path(p));
   if (r2Keys.length) await r2Delete(r2Keys);
-  if (legacy.length) {
-    await supabase.storage.from("posts").remove(legacy).catch(() => {});
-  }
 }

@@ -24,7 +24,6 @@ export type NotificationPrefs = {
   messagesEnabled: boolean;
   friendRequestsEnabled: boolean;
   reactionsEnabled: boolean;
-  postViewsEnabled: boolean;
   followsEnabled: boolean;
   tagsEnabled: boolean;
   communitiesEnabled: boolean;
@@ -48,7 +47,6 @@ type Row = {
   messages_enabled: boolean;
   friend_requests_enabled: boolean;
   reactions_enabled: boolean;
-  post_views_enabled: boolean;
   follows_enabled: boolean;
   tags_enabled: boolean;
   communities_enabled: boolean;
@@ -72,13 +70,13 @@ function rowToPrefs(row: Row): NotificationPrefs {
     messagesEnabled: row.messages_enabled,
     friendRequestsEnabled: row.friend_requests_enabled,
     reactionsEnabled: row.reactions_enabled,
-    postViewsEnabled: row.post_views_enabled ?? false,
     followsEnabled: row.follows_enabled ?? true,
     tagsEnabled: row.tags_enabled ?? true,
     communitiesEnabled: row.communities_enabled ?? true,
     friendActivityEnabled: row.friend_activity_enabled ?? true,
     achievementsEnabled: row.achievements_enabled ?? true,
-    quietHoursEnabled: row.quiet_hours_enabled ?? true,
+    // Opt-in since 2026-08-18: off unless the user turned it on.
+    quietHoursEnabled: row.quiet_hours_enabled ?? false,
     quietHoursStart: (row.quiet_hours_start ?? "21:00").slice(0, 5),
     quietHoursEnd: (row.quiet_hours_end ?? "06:00").slice(0, 5),
     pushPermissionStatus: row.push_permission_status,
@@ -96,7 +94,6 @@ const COLUMN: Record<string, string> = {
   messagesEnabled: "messages_enabled",
   friendRequestsEnabled: "friend_requests_enabled",
   reactionsEnabled: "reactions_enabled",
-  postViewsEnabled: "post_views_enabled",
   followsEnabled: "follows_enabled",
   tagsEnabled: "tags_enabled",
   communitiesEnabled: "communities_enabled",

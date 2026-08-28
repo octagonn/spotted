@@ -19,6 +19,7 @@ import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
+import { usePageFade } from "@/hooks/usePageFade";
 import {
   getEmailAuthMethod,
   requireEmailPasswordSetup,
@@ -56,6 +57,7 @@ function Requirement({ met, label }: { met: boolean; label: string }) {
 
 export default function EmailAuthScreen() {
   const { legal } = useLocalSearchParams<{ legal?: string }>();
+  const { fadeStyle, fadeNavigate } = usePageFade();
   const session = useAuthStore((state) => state.session);
   const needsPasswordSetup = userNeedsPasswordSetup(session?.user);
   const [email, setEmail] = useState("");
@@ -69,6 +71,9 @@ export default function EmailAuthScreen() {
   const [resending, setResending] = useState(false);
   const [resendRemaining, setResendRemaining] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // True while the verify/create-password stages are a password RESET for an
+  // existing account (entered via "Forgot password?") rather than a sign-up.
+  const [isReset, setIsReset] = useState(false);
   const passwordInputRef = useRef<TextInput>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
   const setSession = useAuthStore((state) => state.setSession);
@@ -96,11 +101,12 @@ export default function EmailAuthScreen() {
     setPasswordVisible(false);
     setConfirmPasswordVisible(false);
     setError(null);
+    setIsReset(false);
   }
 
   async function handleBack() {
     if (stage === "email") {
-      router.back();
+      fadeNavigate(() => router.back());
       return;
     }
     if (stage === "create-password") {
@@ -160,9 +166,30 @@ export default function EmailAuthScreen() {
     try {
       const result = await signInWithEmailPassword(cleanEmail, password);
       await setSession(result.session);
-      router.replace("/");
+      fadeNavigate(() => router.replace("/"));
     } catch {
       setError("Email or password is incorrect.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Only reachable from the password stage, i.e. accounts that actually sign
+  // in with a password — Apple-only users never see it. Reuses the sign-up
+  // plumbing: emailed code → verify → set a new password.
+  async function forgotPassword() {
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await sendEmailCode(cleanEmail);
+      setIsReset(true);
+      setPassword("");
+      setPasswordVisible(false);
+      setResendRemaining(RESEND_COOLDOWN_SECONDS);
+      setStage("verify");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Couldn't send a reset code. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -177,7 +204,9 @@ export default function EmailAuthScreen() {
       if (!result.session) {
         throw new Error("The code was accepted, but no session was created. Please request a new code.");
       }
-      await recordLegalAcceptance("email");
+      if (!isReset) {
+        await recordLegalAcceptance("email");
+      }
       await requireEmailPasswordSetup();
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
@@ -207,7 +236,11 @@ export default function EmailAuthScreen() {
       await setEmailPassword(password);
       const { data } = await supabase.auth.getSession();
       await setSession(data.session);
-      router.replace("/birthday");
+      // Sign-ups go STRAIGHT to /birthday (staying inside the video-backed
+      // flow — detouring through the root index unmounts the background and
+      // shows a black loading flash). Password resets leave the flow, so the
+      // index can route them into the app.
+      fadeNavigate(() => router.replace(isReset ? "/" : "/birthday"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn't create password.");
     } finally {
@@ -221,7 +254,7 @@ export default function EmailAuthScreen() {
     setResendRemaining(RESEND_COOLDOWN_SECONDS);
     setResending(true);
     try {
-      await sendEmailCode(cleanEmail, LEGAL_VERSION);
+      await sendEmailCode(cleanEmail, isReset ? undefined : LEGAL_VERSION);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn't resend code.");
     } finally {
@@ -258,7 +291,8 @@ export default function EmailAuthScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-      <Screen>
+      <Animated.View style={[{ flex: 1 }, fadeStyle]}>
+      <Screen transparent>
         <Pressable className="self-start" disabled={submitting} onPress={handleBack}>
           <View className="flex-row items-center gap-2 rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1.5">
             <ArrowLeft color={colors.mist} size={14} />
@@ -271,11 +305,11 @@ export default function EmailAuthScreen() {
         <Animated.View layout={LinearTransition.duration(300)} className="mt-12 gap-6">
           <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
             <Text variant="micro" className="text-mist">
-              {isVerify ? "VERIFY" : isCreatePassword ? "ACCOUNT SETUP" : "STEP 1 OF 5"}
+              {isVerify ? "VERIFY" : isCreatePassword ? (isReset ? "RESET PASSWORD" : "ACCOUNT SETUP") : "STEP 1 OF 5"}
             </Text>
           </View>
           <Text variant={isCreatePassword ? "display-sm" : "display-md"}>
-            {isVerify ? "CHECK EMAIL." : isCreatePassword ? "MAKE A PASSWORD." : "EMAIL."}
+            {isVerify ? "CHECK EMAIL." : isCreatePassword ? (isReset ? "NEW PASSWORD." : "MAKE A PASSWORD.") : "EMAIL."}
           </Text>
           <Text variant="body" className="text-silver">
             {isVerify
@@ -382,6 +416,21 @@ export default function EmailAuthScreen() {
                 </Pressable>
               </View>
             </Animated.View>
+          ) : null}
+
+          {stage === "password" ? (
+            <Pressable
+              haptic={false}
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password"
+              disabled={submitting}
+              onPress={() => void forgotPassword()}
+              className="self-end"
+            >
+              <Text variant="caption" className="text-mist underline">
+                Forgot password?
+              </Text>
+            </Pressable>
           ) : null}
 
           {isCreatePassword ? (
@@ -524,6 +573,7 @@ export default function EmailAuthScreen() {
           ) : null}
         </Animated.View>
       </Screen>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }

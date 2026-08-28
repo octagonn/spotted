@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { AppState } from "react-native";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { showBanner } from "@/stores/banner";
+import { showBanner, useBannerStore } from "@/stores/banner";
 
 type ProfileLite = { id: string; username: string; display_name: string; avatar_url: string | null };
 
@@ -57,24 +57,38 @@ export function useInAppBanners(userId?: string | null) {
           if (AppState.currentState !== "active") return;
           const msg = payload.new as { conversation_id: string; sender_id: string; content: string | null };
           if (msg.sender_id === userId) return;
+          // Thread is open on screen — the message just rendered in it.
+          if (useBannerStore.getState().activeConversationId === msg.conversation_id) return;
           void (async () => {
-            // Confirm I'm a participant of this conversation.
+            // Confirm I'm a participant of this conversation (RLS on the row
+            // itself is the real gate — this select just resolves group flags;
+            // group rows have NULL participant_a/b, so check membership).
             const { data: convo } = await supabase
               .from("conversations")
-              .select("participant_a, participant_b")
+              .select("id, participant_a, participant_b, is_group, title")
               .eq("id", msg.conversation_id)
               .maybeSingle();
-            const parts = convo as { participant_a: string; participant_b: string } | null;
-            if (!parts || (parts.participant_a !== userId && parts.participant_b !== userId)) return;
+            const parts = convo as { participant_a: string | null; participant_b: string | null; is_group: boolean; title: string | null } | null;
+            if (!parts) return;
+            if (!parts.is_group && parts.participant_a !== userId && parts.participant_b !== userId) return;
             const sender = await fetchProfile(msg.sender_id);
             if (!sender) return;
+            // Untitled groups render per-viewer (the other members' names).
+            let groupLabel = parts.title?.trim() ?? "";
+            if (parts.is_group && !groupLabel) {
+              const { data: computed } = await supabase.rpc("group_display_name", {
+                p_conversation: msg.conversation_id,
+                p_viewer: userId
+              });
+              groupLabel = (computed as string | null) ?? "Group";
+            }
             showBanner({
               id: `dm-${Date.now()}`,
-              title: sender.display_name,
+              title: parts.is_group ? `${sender.display_name} · ${groupLabel}` : sender.display_name,
               body: msg.content?.trim() || "Sent you a message",
               avatarName: sender.display_name,
               avatarUrl: sender.avatar_url,
-              route: `/chat/${sender.id}`
+              route: parts.is_group ? `/chat/${msg.conversation_id}?group=1` : `/chat/${sender.id}`
             });
           })();
         }

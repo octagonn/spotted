@@ -6,6 +6,7 @@ import { formatEarnedDate } from "@/components/trophies/trophyFormat";
 import { formatRarity } from "@/lib/trophyRaritySeeds";
 import { type LadderRow } from "@/lib/trophySelectors";
 import { type TrophyDefinition } from "@/lib/trophies";
+import { medalColors, medalLabel } from "@/lib/trophyMedal";
 import { colors } from "@/theme/colors";
 
 /**
@@ -36,15 +37,15 @@ export function TrophyTierRow({
           borderRadius: 13,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: earned ? colors.gold : "transparent",
+          backgroundColor: earned ? medalColors(tier.medal).solid : "transparent",
           borderWidth: earned ? 0 : 1.5,
-          borderColor: isNext ? colors.gold : colors.iron
+          borderColor: isNext ? medalColors(tier.medal).solid : colors.iron
         }}
       >
         {earned ? (
           <Check size={14} color={colors.black} strokeWidth={3} />
         ) : isNext ? (
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.gold }} />
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: medalColors(tier.medal).solid }} />
         ) : (
           <Lock size={11} color={colors.ash} strokeWidth={2} />
         )}
@@ -55,7 +56,7 @@ export function TrophyTierRow({
           {tier.name}
         </Text>
         <Text style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>
-          {tier.requirement} · {formatRarity(tier.rarityPct)}
+          {medalLabel(tier.medal) ? `${medalLabel(tier.medal)} · ` : ""}{tier.requirement} · {formatRarity(tier.rarityPct)}
         </Text>
       </View>
 

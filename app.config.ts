@@ -7,7 +7,7 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   name: "Spotted",
   slug: "spotted",
   scheme: "spotted",
-  version: "1.0.0",
+  version: "1.2.0",
   orientation: "portrait",
   userInterfaceStyle: "dark",
   newArchEnabled: true,
@@ -65,6 +65,7 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
     "expo-font",
     "expo-asset",
     "expo-apple-authentication",
+    "expo-localization",
     [
       "expo-location",
       {

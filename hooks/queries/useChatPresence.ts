@@ -1,9 +1,12 @@
+import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 
 import { useQuery } from "@tanstack/react-query";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { useBannerStore } from "@/stores/banner";
 
 /**
  * Realtime typing indicator (#12) + online presence for a 1:1 thread, over a
@@ -23,29 +26,49 @@ export function useChatPresence(conversationId?: string | null, otherUserId?: st
 
   useEffect(() => {
     if (!isSupabaseConfigured || !conversationId || !userId) return;
-    const channel = supabase.channel(`chat:${conversationId}`, {
-      config: { presence: { key: userId } }
-    });
-    channel
-      .on("broadcast", { event: "typing" }, (payload) => {
-        if (payload.payload?.userId && payload.payload.userId !== userId) {
-          setOtherTyping(true);
-          clearTimeout(typingTimer.current);
-          typingTimer.current = setTimeout(() => setOtherTyping(false), 3500);
-        }
-      })
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        const others = Object.keys(state).filter((k) => k !== userId);
-        setOtherOnline(others.length > 0);
-      })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") void channel.track({ online: true });
+    const topic = `realtime:chat:${conversationId}`;
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    void (async () => {
+      // supabase.channel(name) hands back an EXISTING channel with that topic,
+      // and removeChannel() from the previous mount is async — so a quick
+      // re-mount (tap out and back into a thread, or React re-running effects)
+      // got the old, already-subscribed channel and `.on("presence")` threw
+      // "cannot add presence callbacks … after subscribe()" (the DM crash).
+      // Tear down anything on this topic first, then build a fresh one.
+      for (const stale of supabase.getChannels()) {
+        if (stale.topic === topic) await supabase.removeChannel(stale);
+      }
+      if (cancelled) return;
+
+      const next = supabase.channel(`chat:${conversationId}`, {
+        config: { presence: { key: userId } }
       });
-    channelRef.current = channel;
+      channel = next;
+      next
+        .on("broadcast", { event: "typing" }, (payload) => {
+          if (payload.payload?.userId && payload.payload.userId !== userId) {
+            setOtherTyping(true);
+            clearTimeout(typingTimer.current);
+            typingTimer.current = setTimeout(() => setOtherTyping(false), 3500);
+          }
+        })
+        .on("presence", { event: "sync" }, () => {
+          const state = next.presenceState();
+          const others = Object.keys(state).filter((k) => k !== userId);
+          setOtherOnline(others.length > 0);
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED" && !cancelled) void next.track({ online: true });
+        });
+      channelRef.current = next;
+    })();
+
     return () => {
+      cancelled = true;
       clearTimeout(typingTimer.current);
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
       channelRef.current = null;
     };
   }, [conversationId, userId]);
@@ -85,6 +108,42 @@ export function useActivityStatus(otherUserId?: string | null) {
       return { lastSeenAt: data.last_seen_at, visible: true };
     }
   });
+}
+
+/**
+ * While a thread is open, focused, and the app is active, tell the server
+ * (every 30s; the trigger trusts it for 75s) so notify_dm() skips the push —
+ * the message already appeared live. Cleared on blur/background/unmount.
+ * Also drives the in-app banner suppression for that thread.
+ */
+export function useActiveConversation(conversationId?: string | null) {
+  const userId = useAuthStore((state) => state.userId);
+  const focused = useIsFocused();
+  const setActive = useBannerStore((s) => s.setActiveConversation);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !userId || !conversationId || !focused) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const ping = () => void supabase.rpc("set_active_conversation", { p_conversation: conversationId }).then(() => undefined, () => undefined);
+    const clear = () => void supabase.rpc("set_active_conversation", { p_conversation: null }).then(() => undefined, () => undefined);
+    const start = () => {
+      setActive(conversationId);
+      ping();
+      clearInterval(timer);
+      timer = setInterval(ping, 30_000);
+    };
+    const stop = () => {
+      setActive(null);
+      clearInterval(timer);
+      timer = undefined;
+      clear();
+    };
+    if (AppState.currentState === "active") start();
+    const sub = AppState.addEventListener("change", (state) => (state === "active" ? start() : stop()));
+    return () => {
+      sub.remove();
+      stop();
+    };
+  }, [conversationId, userId, focused, setActive]);
 }
 
 /** Heartbeat the current user's last_seen_at while a screen is focused. */

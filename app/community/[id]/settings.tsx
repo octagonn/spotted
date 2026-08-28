@@ -1,9 +1,10 @@
 import { Image } from "expo-image";
+import { appAlert } from "@/components/ui/AppDialog";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Bell, Check, Copy, Flag, Globe, KeyRound, Lock, LogOut, Pencil, RefreshCw, X } from "lucide-react-native";
+import { Bell, Check, Copy, Flag, Globe, KeyRound, Lock, LogOut, Pencil, RefreshCw, Shield, Users, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
@@ -14,6 +15,7 @@ import { ReportSheet } from "@/components/ReportSheet";
 import { useSheet } from "@/components/ui/Sheet";
 import { Skeleton, SkeletonHeaderDetail, SkeletonRows } from "@/components/ui/Skeleton";
 import {
+  NO_PERMISSIONS,
   useCommunity,
   useCommunityInviteCode,
   useCommunityJoinRequests,
@@ -27,7 +29,7 @@ import {
 } from "@/hooks/queries/useCommunities";
 import { compressReactionSelfie } from "@/lib/posts";
 import { logger } from "@/lib/logger";
-import { publicAvatarUrl, supabase } from "@/lib/supabase";
+import { uploadMediaObject } from "@/lib/r2";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -54,6 +56,7 @@ export default function CommunitySettingsScreen() {
   const isAdmin = community.data?.isAdmin ?? false;
   const isPrivate = community.data?.privacy === "private";
   const isCreator = Boolean(userId) && community.data?.createdBy === userId;
+  const perms = community.data?.perms ?? NO_PERMISSIONS;
 
   // Member prefs + invite code (spec 18/19).
   const muted = useCommunityMuted(isMember ? id : undefined);
@@ -62,7 +65,7 @@ export default function CommunitySettingsScreen() {
   const regenerate = useRegenerateInviteCode(id);
 
   // Admin: pending join requests (spec 17/18).
-  const requests = useCommunityJoinRequests(id, isAdmin && isPrivate);
+  const requests = useCommunityJoinRequests(id, perms.manage_members && isPrivate);
   const respond = useRespondJoinRequest(id);
 
   const [name, setName] = useState("");
@@ -95,10 +98,7 @@ export default function CommunitySettingsScreen() {
       const compressed = await compressReactionSelfie(result.assets[0].uri);
       const body = await (await fetch(compressed)).arrayBuffer();
       if (!body || body.byteLength === 0) throw new Error("empty");
-      const path = `${userId}/community-${Date.now()}.jpg`;
-      const upload = await supabase.storage.from("avatars").upload(path, body, { contentType: "image/jpeg", upsert: false });
-      if (upload.error) throw upload.error;
-      setPhotoUrl(publicAvatarUrl(path) ?? null);
+      setPhotoUrl(await uploadMediaObject(`${userId}/community-${Date.now()}.jpg`, body, "image/jpeg"));
     } catch (error) {
       logger.warn("community_photo_failed", { message: error instanceof Error ? error.message : String(error) });
       showToast("Couldn't upload photo — try again");
@@ -129,7 +129,7 @@ export default function CommunitySettingsScreen() {
       showToast("Creators can't leave their own community yet");
       return;
     }
-    Alert.alert("Leave community", `Leave ${community.data?.name}?`, [
+    appAlert("Leave community", `Leave ${community.data?.name}?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Leave",
@@ -208,7 +208,7 @@ export default function CommunitySettingsScreen() {
                     accessibilityLabel="Regenerate invite code"
                     hitSlop={8}
                     onPress={() =>
-                      Alert.alert("Regenerate code", "The old code stops working immediately.", [
+                      appAlert("Regenerate code", "The old code stops working immediately.", [
                         { text: "Cancel", style: "cancel" },
                         {
                           text: "Regenerate",
@@ -231,6 +231,24 @@ export default function CommunitySettingsScreen() {
           />
         ) : null}
 
+        {/* ---- Managers: roles & members (Discord-style permissions) ---- */}
+        {perms.manage_roles ? (
+          <SettingRow
+            icon={<Shield size={17} color={colors.silver} strokeWidth={2} />}
+            label="Roles"
+            sub="Who can chat, post, invite, and manage"
+            onPress={() => router.push(`/community/${id}/roles` as never)}
+          />
+        ) : null}
+        {perms.manage_members ? (
+          <SettingRow
+            icon={<Users size={17} color={colors.silver} strokeWidth={2} />}
+            label="Members"
+            sub="Assign roles or remove members"
+            onPress={() => router.push(`/community/${id}/members` as never)}
+          />
+        ) : null}
+
         <SettingRow
           icon={<Flag size={17} color={colors.silver} strokeWidth={2} />}
           label="Report community"
@@ -245,8 +263,8 @@ export default function CommunitySettingsScreen() {
           onPress={confirmLeave}
         />
 
-        {/* ---- Admin: pending join requests (private) ---- */}
-        {isAdmin && isPrivate ? (
+        {/* ---- Managers: pending join requests (private) ---- */}
+        {perms.manage_members && isPrivate ? (
           <>
             <SectionTitle>Join requests</SectionTitle>
             {(requests.data ?? []).length === 0 ? (

@@ -19,7 +19,10 @@ export type NotificationType =
   | "claim_rejected"
   | "second_workout"
   | "daily_nudge"
-  | "arrival_buzz";
+  | "arrival_buzz"
+  | "system_notice"
+  | "post_comment"
+  | "community_message";
 
 export type PushContext = {
   actorName?: string;
@@ -34,6 +37,10 @@ export type PushContext = {
   workoutName?: string;
   reason?: string;
   kind?: string;
+  title?: string;
+  body?: string;
+  /** Stable per-notification seed for copy rotation (notification id). */
+  seed?: string;
 };
 
 export type ExpoMessage = {
@@ -60,74 +67,125 @@ export function isExpoPushToken(token: string) {
   return /^(Expo|Exponent)PushToken\[[^\]]+\]$/.test(token);
 }
 export function channelForType(type: NotificationType): ExpoMessage["channelId"] {
-  if (type === "dm") return "messages";
+  if (type === "dm" || type === "community_message") return "messages";
   if (type === "daily_nudge" || type === "arrival_buzz") return "reminders";
   return "social";
 }
 
+/** Deterministic variant picker: same notification -> same line, rotates across notifications. */
+function pick(seed: string | undefined, options: string[]): string {
+  if (!seed) return options[0];
+  let h = 0;
+  for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return options[h % options.length];
+}
+
+/**
+ * Push copy. Rule: the TITLE carries the hook (a name, a number, or a
+ * consequence); the body adds a nudge or social proof. Friendly, second
+ * person, short. Repeat types rotate 4-6 variants via `seed`.
+ */
 export function formatPushPayload(type: NotificationType, context: PushContext) {
   const actorName = context.actorName ?? "Someone";
+  const gym = context.gymName ?? "the gym";
+  const seed = context.seed;
   switch (type) {
     case "friend_request":
-      return { title: "New friend request", body: `${actorName} wants to add you` };
+      return {
+        title: `${actorName} wants to add you`,
+        body: pick(seed, [
+          "Accept and see each other's dailies.",
+          "Gym buddies post more. Say yes?",
+          "One tap to add them back.",
+          "They found you. Add them back?",
+          "Say hi and start a streak together."
+        ])
+      };
     case "friend_accepted":
-      return { title: "Friend added", body: `You and ${actorName} are now friends` };
+      return {
+        title: `You and ${actorName} are friends now`,
+        body: pick(seed, [
+          "Post today and see what they've been up to.",
+          "Their dailies unlock once you post yours.",
+          "Go say hi.",
+          "Send a taunt to break the ice.",
+          "Two more eyes on your posts."
+        ])
+      };
     case "post_view":
-      return { title: "Eyes on you", body: `${actorName} viewed your post` };
+      return { title: `${actorName} saw your post`, body: "Eyes on you." };
     case "post_reaction":
-      return { title: context.reaction ?? "New reaction", body: `${actorName} reacted to your post` };
+      return context.reaction === "🔥"
+        ? {
+            title: `${actorName} liked your post 🔥`,
+            body: pick(seed, [
+              "Your post is getting eyes.",
+              "People are watching. Post again tomorrow.",
+              "Go see who else reacted.",
+              "That one landed.",
+              "Nice. Keep them coming."
+            ])
+          }
+        : { title: `${actorName} reacted to your post`, body: context.reaction ? `${context.reaction} Go see it.` : "Go see it." };
+    case "post_comment":
+      return { title: `${actorName} commented on your post`, body: context.text ?? "Go see what they said." };
     case "streak_break_friend":
       return {
-        title: "Streak broken",
-        body: `${actorName} skipped ${context.muscleGroup ?? "training"} day. Streak ended at ${context.streakCount ?? 0}.`
+        title: `${actorName}'s streak ended`,
+        body: pick(seed, [
+          `${context.streakCount ?? 0} days. Send a taunt to get them back in.`,
+          `${context.streakCount ?? 0} days. Nudge them back to the gym.`,
+          "Everyone slips. A taunt might help."
+        ])
       };
     case "streak_milestone":
-      return { title: `${context.streakCount ?? 0}-day streak`, body: "Don't break it now." };
+      return {
+        title: `${context.streakCount ?? 0}-day streak 🔥`,
+        body: pick(seed, [
+          "Most people stop before this. Keep going.",
+          "You're on a roll.",
+          "That's consistency. Keep stacking.",
+          "Don't stop now.",
+          "Proud of that one."
+        ])
+      };
     case "dm":
       return { title: actorName, body: context.messagePreview ?? "New message" };
     case "gym_arrival_friend":
-      return { title: "At the gym", body: `${actorName} just got to ${context.gymName ?? "the gym"}` };
-    case "new_follower":
-      return { title: "New follower", body: `${actorName} started following you` };
-    case "community_invite":
       return {
-        title: "Community invite",
-        body: `${actorName} invited you to ${context.communityName ?? "a community"}`
+        title: `${actorName} is at ${gym} right now`,
+        body: pick(seed, ["Where are you?", "They showed up. Your turn?", "Go meet them there.", "Wave at them.", "Good time to head over."])
       };
+    case "new_follower":
+      return { title: `${actorName} started following you`, body: "Follow back?" };
+    case "community_invite":
+      return { title: `${actorName} invited you to ${context.communityName ?? "a community"}`, body: "Join the crew." };
     case "taunt":
       return { title: `${actorName} taunted you`, body: context.text ?? "Your move." };
     case "wave":
-      return {
-        title: `${actorName} waved`,
-        body: context.gymName ? `They're at ${context.gymName}` : "Your gym buddy is here"
-      };
+      return { title: `${actorName} waved at you`, body: context.gymName ? `They're at ${context.gymName}. Go say hi.` : "Your gym buddy is here." };
     case "community_nudge":
-      return {
-        title: context.communityName ?? "Your community",
-        body: context.text ?? `${actorName} says the crew is waiting`
-      };
+      return { title: `${context.communityName ?? "Your community"} is waiting`, body: context.text ?? `${actorName} says the crew is waiting on you.` };
+    case "community_message":
+      return { title: context.communityName ?? "Group chat", body: `${actorName}: ${context.text ?? "New message"}` };
     case "tagged":
-      return {
-        title: "You were tagged",
-        body: `${actorName} tagged you in a ${context.kind === "story" ? "story" : "post"}`
-      };
+      return { title: `${actorName} tagged you`, body: `You're in their ${context.kind === "story" ? "story" : "post"}. Go look.` };
     case "taunt_answered":
-      return { title: "Taunt answered", body: `${actorName} posted after your taunt` };
+      return { title: `${actorName} took the bait`, body: pick(seed, ["They posted after your taunt. Respect.", "Your taunt worked. They posted.", "They answered. Go see it."]) };
     case "trophy_unlocked":
-      return { title: "Trophy unlocked", body: context.trophyName ?? "A new trophy is in your case" };
+      return { title: "Trophy unlocked 🏆", body: context.trophyName ? `${context.trophyName} is in your case.` : "A new trophy is in your case." };
     case "claim_approved":
-      return { title: "Claim approved", body: `${context.trophyName ?? "Your trophy"} is unlocked` };
+      return { title: `${context.trophyName ?? "Your lift"}: approved`, body: "Trophy unlocked. Go flex it." };
     case "claim_rejected":
       return { title: "Claim needs attention", body: context.reason ?? "We couldn't verify this claim" };
     case "second_workout":
-      return {
-        title: `${actorName} is back for more`,
-        body: context.workoutName ?? "Second workout of the day"
-      };
+      return { title: `${actorName} is going twice today`, body: `${context.workoutName ?? "Second session"}. Show-off.` };
     case "daily_nudge":
-      return { title: "Spotted", body: context.text ?? "Your daily post is waiting" };
+      return { title: context.title ?? "Your feed's locked", body: context.text ?? "One post unlocks everything." };
     case "arrival_buzz":
-      return { title: "You're at the gym", body: context.text ?? "Check in and start your workout" };
+      return { title: context.title ?? "You made it in", body: context.text ?? "Get after it, then post your SPOTTED before you leave." };
+    case "system_notice":
+      return { title: context.title ?? "Spotted", body: context.body ?? context.text ?? "You have a new update" };
   }
 }
 

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { showToast } from "@/stores/ui";
 import { CANONICAL_IS_REPS, CANONICAL_LIFT, type Muscle } from "@/lib/workoutLibrary";
+import { rarityPctFor } from "@/lib/trophyRaritySeeds";
 import { LIFT_OPTION_BY_ID, type LiftExercise } from "@/lib/liftCatalog";
 import type { TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import type { Json } from "@/types/database";
@@ -319,6 +320,36 @@ export function deriveExerciseBests(
   return bests;
 }
 
+export type LastUsedSet =
+  | { kind: "lift"; w: number; r: number }
+  | { kind: "cardio"; min: number; mi: number; inc?: number };
+
+/**
+ * "Same as last": the final completed set per exercise from the MOST RECENT
+ * workout that included it. Select Exercises seeds a re-added exercise from
+ * this instead of the 75%-of-PR guess, so a lift opens at last session's
+ * working weight/reps. Workouts must be newest-first (useWorkouts order).
+ */
+export function deriveLastUsed(workouts: WorkoutRow[] | undefined): Record<string, LastUsedSet> {
+  const last: Record<string, LastUsedSet> = {};
+  for (const workout of workouts ?? []) {
+    for (const ex of workout.exercises) {
+      if (last[ex.name]) continue;
+      const done = ex.sets.filter((s) => s.done);
+      const final = done[done.length - 1];
+      if (!final) continue;
+      if (ex.kind === "cardio") {
+        const c = final as CardioSet;
+        last[ex.name] = { kind: "cardio", min: c.min, mi: c.mi, ...(c.inc !== undefined ? { inc: c.inc } : {}) };
+      } else {
+        const l = final as LiftSet;
+        if (l.w > 0 || l.r > 0) last[ex.name] = { kind: "lift", w: l.w, r: l.r };
+      }
+    }
+  }
+  return last;
+}
+
 /** Rename a workout (own only — RLS enforces). */
 export function useRenameWorkout() {
   const queryClient = useQueryClient();
@@ -511,10 +542,13 @@ export function useSaveWorkout() {
       // queue. Highest tier per family first.
       const celebrations: TrophyShareData[] = [];
       const { data: unlocked } = await supabase.rpc("evaluate_trophies", { p_user: input.userId });
-      const rows = ((unlocked ?? []) as { out_family_id: string; out_name: string; out_tier: number }[]).sort(
-        (a, b) => b.out_tier - a.out_tier
-      );
+      const rows = (
+        (unlocked ?? []) as { out_unlock_id: string; out_family_id: string; out_name: string; out_tier: number }[]
+      ).sort((a, b) => b.out_tier - a.out_tier);
       const seenFamily = new Set<string>();
+      // Real rarity from the cached trophy_rarity map ("No one has this yet"
+      // when you're the first) — was a hardcoded 50%.
+      const liveRarity = queryClient.getQueryData<Record<string, number>>(["trophy-rarity"]);
       for (const row of rows) {
         if (seenFamily.has(row.out_family_id)) continue; // one animation per family
         seenFamily.add(row.out_family_id);
@@ -524,7 +558,7 @@ export function useSaveWorkout() {
           name: row.out_name,
           familyName: option?.name ?? row.out_family_id,
           earnedAt: new Date().toISOString(),
-          rarityPct: 50
+          rarityPct: rarityPctFor(row.out_unlock_id, liveRarity)
         });
       }
 
@@ -533,6 +567,7 @@ export function useSaveWorkout() {
     onSuccess: (_result, vars) => {
       void queryClient.invalidateQueries({ queryKey: ["workouts", vars.userId] });
       void queryClient.invalidateQueries({ queryKey: ["user-lifts", vars.userId] });
+      void queryClient.invalidateQueries({ queryKey: ["trophy-rarity"] });
     }
   });
 }

@@ -22,6 +22,7 @@ export type Database = {
           consent_version: string
           prompted_at: string | null
           consented_at: string | null
+          basis: string
           updated_at: string
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           consent_version?: string
           prompted_at?: string | null
           consented_at?: string | null
+          basis?: string
           updated_at?: string
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           consent_version?: string
           prompted_at?: string | null
           consented_at?: string | null
+          basis?: string
           updated_at?: string
         }
         Relationships: []
@@ -52,6 +55,10 @@ export type Database = {
           properties: Json
           occurred_at: string
           created_at: string
+          session_id: string | null
+          app_version: string | null
+          platform: string | null
+          os_version: string | null
         }
         Insert: {
           id?: number
@@ -60,6 +67,10 @@ export type Database = {
           properties?: Json
           occurred_at?: string
           created_at?: string
+          session_id?: string | null
+          app_version?: string | null
+          platform?: string | null
+          os_version?: string | null
         }
         Update: {
           id?: number
@@ -68,6 +79,10 @@ export type Database = {
           properties?: Json
           occurred_at?: string
           created_at?: string
+          session_id?: string | null
+          app_version?: string | null
+          platform?: string | null
+          os_version?: string | null
         }
         Relationships: []
       }
@@ -407,21 +422,27 @@ export type Database = {
           user_id: string
           joined_at: string
           role: string
+          role_id: string | null
           last_read_at: string
+          muted: boolean
         }
         Insert: {
           community_id: string
           user_id: string
           joined_at?: string
           role?: string
+          role_id?: string | null
           last_read_at?: string
+          muted?: boolean
         }
         Update: {
           community_id?: string
           user_id?: string
           joined_at?: string
           role?: string
+          role_id?: string | null
           last_read_at?: string
+          muted?: boolean
         }
         Relationships: [
           {
@@ -436,6 +457,171 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_members_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "community_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trophy_definitions: {
+        Row: {
+          id: string
+          key: string
+          category: string
+          tier: string | null
+          name: string
+          description: string
+          icon: string
+          rule_type: string
+          rule_params: Json
+          family: string | null
+          sort: number
+          repeatable: boolean
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          category: string
+          tier?: string | null
+          name: string
+          description?: string
+          icon?: string
+          rule_type: string
+          rule_params?: Json
+          family?: string | null
+          sort?: number
+          repeatable?: boolean
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          category?: string
+          tier?: string | null
+          name?: string
+          description?: string
+          icon?: string
+          rule_type?: string
+          rule_params?: Json
+          family?: string | null
+          sort?: number
+          repeatable?: boolean
+          active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      trophy_rarity_stats: {
+        Row: { key: string; earned_users: number; total_users: number; pct: number; computed_at: string }
+        Insert: { key: string; earned_users?: number; total_users?: number; pct?: number; computed_at?: string }
+        Update: { key?: string; earned_users?: number; total_users?: number; pct?: number; computed_at?: string }
+        Relationships: []
+      }
+      user_trophies: {
+        Row: {
+          user_id: string
+          trophy_id: string
+          tier: number | null
+          earned_at: string
+          family_id: string | null
+          metric_value: number | null
+          definition_id: string | null
+          instance_key: string
+          context: Json
+          celebrated_at: string | null
+        }
+        Insert: {
+          user_id: string
+          trophy_id: string
+          tier?: number | null
+          earned_at?: string
+          family_id?: string | null
+          metric_value?: number | null
+          definition_id?: string | null
+          instance_key?: string
+          context?: Json
+          celebrated_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          trophy_id?: string
+          tier?: number | null
+          earned_at?: string
+          family_id?: string | null
+          metric_value?: number | null
+          definition_id?: string | null
+          instance_key?: string
+          context?: Json
+          celebrated_at?: string | null
+        }
+        Relationships: []
+      }
+      community_roles: {
+        Row: {
+          id: string
+          community_id: string
+          name: string
+          color: string | null
+          position: number
+          is_default: boolean
+          is_admin: boolean
+          can_view_chat: boolean
+          can_send_messages: boolean
+          can_view_posts: boolean
+          can_post: boolean
+          can_invite: boolean
+          can_manage_members: boolean
+          can_manage_roles: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          community_id: string
+          name: string
+          color?: string | null
+          position?: number
+          is_default?: boolean
+          is_admin?: boolean
+          can_view_chat?: boolean
+          can_send_messages?: boolean
+          can_view_posts?: boolean
+          can_post?: boolean
+          can_invite?: boolean
+          can_manage_members?: boolean
+          can_manage_roles?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          community_id?: string
+          name?: string
+          color?: string | null
+          position?: number
+          is_default?: boolean
+          is_admin?: boolean
+          can_view_chat?: boolean
+          can_send_messages?: boolean
+          can_view_posts?: boolean
+          can_post?: boolean
+          can_invite?: boolean
+          can_manage_members?: boolean
+          can_manage_roles?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_roles_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
             referencedColumns: ["id"]
           },
         ]
@@ -546,6 +732,7 @@ export type Database = {
           sender_id: string
           content: string
           sent_at: string
+          kind: string
         }
         Insert: {
           id?: string
@@ -553,6 +740,7 @@ export type Database = {
           sender_id: string
           content: string
           sent_at?: string
+          kind?: string
         }
         Update: {
           id?: string
@@ -560,6 +748,7 @@ export type Database = {
           sender_id?: string
           content?: string
           sent_at?: string
+          kind?: string
         }
         Relationships: [
           {
@@ -612,29 +801,39 @@ export type Database = {
         Row: {
           id: string
           last_message_at: string | null
-          participant_a: string
-          participant_b: string
+          // Nullable since group chats (group rows have no pair).
+          participant_a: string | null
+          participant_b: string | null
           updated_at: string
           status: string
           requester_id: string | null
+          is_group: boolean
+          title: string | null
+          created_by: string | null
         }
         Insert: {
           id?: string
           last_message_at?: string | null
-          participant_a: string
-          participant_b: string
+          participant_a?: string | null
+          participant_b?: string | null
           updated_at?: string
           status?: string
           requester_id?: string | null
+          is_group?: boolean
+          title?: string | null
+          created_by?: string | null
         }
         Update: {
           id?: string
           last_message_at?: string | null
-          participant_a?: string
-          participant_b?: string
+          participant_a?: string | null
+          participant_b?: string | null
           updated_at?: string
           status?: string
           requester_id?: string | null
+          is_group?: boolean
+          title?: string | null
+          created_by?: string | null
         }
         Relationships: [
           {
@@ -763,6 +962,8 @@ export type Database = {
           category: string | null
           created_at: string
           external_id: string | null
+          chain: string | null
+          institution: string | null
           geofence_radius_meters: number
           id: string
           latitude: number
@@ -775,6 +976,8 @@ export type Database = {
           category?: string | null
           created_at?: string
           external_id?: string | null
+          chain?: string | null
+          institution?: string | null
           geofence_radius_meters?: number
           id?: string
           latitude: number
@@ -787,6 +990,8 @@ export type Database = {
           category?: string | null
           created_at?: string
           external_id?: string | null
+          chain?: string | null
+          institution?: string | null
           geofence_radius_meters?: number
           id?: string
           latitude?: number
@@ -1225,9 +1430,93 @@ export type Database = {
         Relationships: []
       }
       conversation_participants: {
-        Row: { conversation_id: string; user_id: string; joined_at: string; muted: boolean; folder_id: string | null; last_read_at: string | null }
-        Insert: { conversation_id: string; user_id: string; joined_at?: string; muted?: boolean; folder_id?: string | null; last_read_at?: string | null }
-        Update: { conversation_id?: string; user_id?: string; joined_at?: string; muted?: boolean; folder_id?: string | null; last_read_at?: string | null }
+        Row: { conversation_id: string; user_id: string; joined_at: string; muted: boolean; folder_id: string | null; last_read_at: string | null; cleared_at: string | null }
+        Insert: { conversation_id: string; user_id: string; joined_at?: string; muted?: boolean; folder_id?: string | null; last_read_at?: string | null; cleared_at?: string | null }
+        Update: { conversation_id?: string; user_id?: string; joined_at?: string; muted?: boolean; folder_id?: string | null; last_read_at?: string | null; cleared_at?: string | null }
+        Relationships: []
+      }
+      music_picks: {
+        Row: {
+          id: string
+          user_id: string
+          track_id: string
+          track_name: string | null
+          artist_id: string | null
+          artist_name: string | null
+          genre_id: string | null
+          genre_name: string | null
+          picked_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          track_id: string
+          track_name?: string | null
+          artist_id?: string | null
+          artist_name?: string | null
+          genre_id?: string | null
+          genre_name?: string | null
+          picked_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          track_id?: string
+          track_name?: string | null
+          artist_id?: string | null
+          artist_name?: string | null
+          genre_id?: string | null
+          genre_name?: string | null
+          picked_at?: string
+        }
+        Relationships: []
+      }
+      music_chart_daily: {
+        Row: {
+          day: string
+          rank: number
+          track_id: string
+          title: string
+          artist: string
+          artist_id: string | null
+          genre_id: string | null
+          genre_name: string | null
+          artwork_url: string | null
+          preview_url: string | null
+          explicit: boolean
+          source: string
+          release_year: number | null
+        }
+        Insert: {
+          day: string
+          rank: number
+          track_id: string
+          title: string
+          artist: string
+          artist_id?: string | null
+          genre_id?: string | null
+          genre_name?: string | null
+          artwork_url?: string | null
+          preview_url?: string | null
+          explicit?: boolean
+          source?: string
+          release_year?: number | null
+        }
+        Update: {
+          day?: string
+          rank?: number
+          track_id?: string
+          title?: string
+          artist?: string
+          artist_id?: string | null
+          genre_id?: string | null
+          genre_name?: string | null
+          artwork_url?: string | null
+          preview_url?: string | null
+          explicit?: boolean
+          source?: string
+          release_year?: number | null
+        }
         Relationships: []
       }
       message_folders: {
@@ -1270,6 +1559,36 @@ export type Database = {
         Row: { story_id: string; user_id: string; created_at: string }
         Insert: { story_id: string; user_id: string; created_at?: string }
         Update: { story_id?: string; user_id?: string; created_at?: string }
+        Relationships: []
+      }
+      workout_routines: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          exercises: Json
+          last_used_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          exercises?: Json
+          last_used_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          exercises?: Json
+          last_used_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
         Relationships: []
       }
       workouts: {
@@ -1551,6 +1870,10 @@ export type Database = {
       profiles: {
         Row: {
           is_private: boolean
+          posts_private: boolean
+          active_conversation_id: string | null
+          active_conversation_at: string | null
+          friends_list_hidden: boolean
           location_audience: string
           quiet_checkin_default: boolean
           account_status: string
@@ -1582,9 +1905,14 @@ export type Database = {
           timezone: string
           updated_at: string
           username: string
+          username_changed_at: string | null
         }
         Insert: {
           is_private?: boolean
+          posts_private?: boolean
+          active_conversation_id?: string | null
+          active_conversation_at?: string | null
+          friends_list_hidden?: boolean
           location_audience?: string
           quiet_checkin_default?: boolean
           account_status?: string
@@ -1616,9 +1944,14 @@ export type Database = {
           timezone?: string
           updated_at?: string
           username: string
+          username_changed_at?: string | null
         }
         Update: {
           is_private?: boolean
+          posts_private?: boolean
+          active_conversation_id?: string | null
+          active_conversation_at?: string | null
+          friends_list_hidden?: boolean
           location_audience?: string
           quiet_checkin_default?: boolean
           account_status?: string
@@ -1650,6 +1983,7 @@ export type Database = {
           timezone?: string
           updated_at?: string
           username?: string
+          username_changed_at?: string | null
         }
         Relationships: [
           {
@@ -1696,6 +2030,207 @@ export type Database = {
           },
         ]
       }
+      gym_days: {
+        Row: {
+          user_id: string
+          day: string
+          post_id: string | null
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          day: string
+          post_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          day?: string
+          post_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_days_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_days_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suggestion_dismissals: {
+        Row: {
+          user_id: string
+          dismissed_id: string
+          dismissed_at: string
+        }
+        Insert: {
+          user_id: string
+          dismissed_id: string
+          dismissed_at?: string
+        }
+        Update: {
+          user_id?: string
+          dismissed_id?: string
+          dismissed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suggestion_dismissals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suggestion_dismissals_dismissed_id_fkey"
+            columns: ["dismissed_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_exercises: {
+        Row: {
+          user_id: string
+          name: string
+          muscle: string
+          def_w: number | null
+          def_r: number | null
+          def_min: number | null
+          def_mi: number | null
+          def_inc: number | null
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          name: string
+          muscle?: string
+          def_w?: number | null
+          def_r?: number | null
+          def_min?: number | null
+          def_mi?: number | null
+          def_inc?: number | null
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          name?: string
+          muscle?: string
+          def_w?: number | null
+          def_r?: number | null
+          def_min?: number | null
+          def_mi?: number | null
+          def_inc?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_exercises_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exercise_favorites: {
+        Row: {
+          user_id: string
+          exercise_name: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          exercise_name: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          exercise_name?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_favorites_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      private_stories: {
+        Row: {
+          id: string
+          owner_id: string
+          name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          owner_id: string
+          name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          owner_id?: string
+          name?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "private_stories_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      private_story_members: {
+        Row: {
+          story_id: string
+          user_id: string
+          added_at: string
+        }
+        Insert: {
+          story_id: string
+          user_id: string
+          added_at?: string
+        }
+        Update: {
+          story_id?: string
+          user_id?: string
+          added_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "private_story_members_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "private_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "private_story_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stories: {
         Row: {
           overlay_text: string | null
@@ -1704,6 +2239,7 @@ export type Database = {
           media_url: string
           created_at: string
           expires_at: string
+          private_story_id: string | null
           music_title: string | null
           music_artist: string | null
           music_preview_url: string | null
@@ -1717,6 +2253,7 @@ export type Database = {
           media_url: string
           created_at?: string
           expires_at?: string
+          private_story_id?: string | null
           music_title?: string | null
           music_artist?: string | null
           music_preview_url?: string | null
@@ -1730,6 +2267,7 @@ export type Database = {
           media_url?: string
           created_at?: string
           expires_at?: string
+          private_story_id?: string | null
           music_title?: string | null
           music_artist?: string | null
           music_preview_url?: string | null
@@ -1742,6 +2280,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stories_private_story_id_fkey"
+            columns: ["private_story_id"]
+            isOneToOne: false
+            referencedRelation: "private_stories"
             referencedColumns: ["id"]
           },
         ]
@@ -1865,13 +2410,35 @@ export type Database = {
         }
         Returns: undefined
       }
+      record_post_view: { Args: { p_post_id: string }; Returns: undefined }
+      touch_user_activity: { Args: { p_app_version?: string | null; p_platform?: string | null }; Returns: undefined }
+      record_profile_view: { Args: { p_profile_id: string }; Returns: undefined }
       respond_message_request: { Args: { p_conversation_id: string; p_accept: boolean }; Returns: undefined }
+      trophy_progress: {
+        Args: { p_user: string }
+        Returns: { key: string; current: number; target: number }[]
+      }
+      evaluate_user_trophies: {
+        Args: { p_user: string }
+        Returns: { r_key: string; r_name: string; r_tier: string | null; r_instance: string }[]
+      }
+      profile_lite: {
+        Args: { p_ids: string[] }
+        Returns: { id: string; username: string; display_name: string; avatar_url: string | null }[]
+      }
+      set_active_conversation: { Args: { p_conversation: string | null }; Returns: undefined }
+      community_permissions: { Args: { p_community: string; p_user: string }; Returns: Json }
+      set_community_member_role: { Args: { p_community: string; p_user: string; p_role: string }; Returns: undefined }
+      remove_community_member: { Args: { p_community: string; p_user: string }; Returns: undefined }
       community_invite_code: { Args: { cid: string }; Returns: string | null }
       regenerate_community_invite_code: { Args: { cid: string }; Returns: string }
       join_community_by_code: { Args: { code: string }; Returns: string | null }
       nudge_community: { Args: { cid: string; p_text?: string }; Returns: number }
       notify_second_workout: { Args: { p_post: string; p_name: string }; Returns: number }
       check_age_gate: { Args: { p_email: string; p_device_id: string; p_dob: string }; Returns: string }
+      create_group_conversation: { Args: { p_title: string; p_member_ids: string[] }; Returns: string }
+      add_group_members: { Args: { p_conversation: string; p_member_ids: string[] }; Returns: undefined }
+      group_display_name: { Args: { p_conversation: string; p_viewer: string }; Returns: string }
       block_user: { Args: { p_target: string }; Returns: undefined }
       unblock_user: { Args: { p_target: string }; Returns: undefined }
       restrict_user: { Args: { p_target: string }; Returns: undefined }
@@ -1926,6 +2493,40 @@ export type Database = {
           id: string
           mutual_friends_count: number
           username: string
+          reason: string | null
+        }[]
+      }
+      gyms_in_bounds: {
+        Args: {
+          p_min_lat: number
+          p_min_lng: number
+          p_max_lat: number
+          p_max_lng: number
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          name: string
+          address: string | null
+          latitude: number
+          longitude: number
+          category: string | null
+          chain: string | null
+          institution: string | null
+        }[]
+      }
+      mutual_friend_counts: {
+        Args: { p_ids: string[] }
+        Returns: { user_id: string; mutual_count: number }[]
+      }
+      match_contacts: {
+        Args: { p_emails: string[]; p_phones: string[] }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          id: string
+          mutual_friends_count: number
+          username: string
         }[]
       }
       is_blocked: { Args: { a: string; b: string }; Returns: boolean }
@@ -1934,6 +2535,8 @@ export type Database = {
         Returns: boolean
       }
       join_gym_community: { Args: { p_gym_id: string }; Returns: string }
+      community_presence_now: { Args: { p_community_id: string }; Returns: Json }
+      community_board: { Args: { p_community_id: string }; Returns: Json }
       refine_gym_location: {
         Args: { p_gym_id: string; p_latitude: number; p_longitude: number }
         Returns: boolean
@@ -1962,8 +2565,8 @@ export type Database = {
         Args: { p_community_id: string; p_accept: boolean }
         Returns: undefined
       }
-      send_taunt: {
-        Args: { p_target: string; p_text: string }
+      record_trophies: {
+        Args: { p_trophy_ids: string[] }
         Returns: undefined
       }
       record_streak_high_water: {
@@ -1973,6 +2576,12 @@ export type Database = {
       trophy_rarity: {
         Args: never
         Returns: { trophy_id: string; earned_count: number; total_users: number; pct: number }[]
+      }
+      mark_rest_day: {
+        Args: {
+          p_rest?: boolean
+        }
+        Returns: Json
       }
       search_gyms: {
         Args: {
@@ -1995,6 +2604,7 @@ export type Database = {
     Enums: {
       friendship_status: "pending" | "accepted" | "blocked"
       notification_type:
+        | "mention"
         | "friend_request"
         | "friend_accepted"
         | "post_view"
@@ -2016,6 +2626,9 @@ export type Database = {
         | "second_workout"
         | "daily_nudge"
         | "arrival_buzz"
+        | "system_notice"
+        | "post_comment"
+        | "community_message"
       schedule_visibility: "public" | "friends" | "private"
       subscription_tier: "free" | "plus"
     }
@@ -2147,6 +2760,7 @@ export const Constants = {
     Enums: {
       friendship_status: ["pending", "accepted", "blocked"],
       notification_type: [
+        "mention",
         "friend_request",
         "friend_accepted",
         "post_view",
@@ -2168,6 +2782,9 @@ export const Constants = {
         "second_workout",
         "daily_nudge",
         "arrival_buzz",
+        "system_notice",
+        "post_comment",
+        "community_message",
       ],
       schedule_visibility: ["public", "friends", "private"],
       subscription_tier: ["free", "plus"],

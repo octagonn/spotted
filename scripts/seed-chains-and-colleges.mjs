@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-env node */
 /**
  * Second-pass gym seeder.
  *  - Hardcodes major SoCal college rec centers (often missed by leisure=fitness_centre tag).

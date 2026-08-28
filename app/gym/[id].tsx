@@ -1,21 +1,24 @@
 import { useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 
+import { GymLogo } from "@/components/GymLogo";
 import { Screen } from "@/components/Screen";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { Text } from "@/components/ui/Text";
-import { useGymPresence } from "@/hooks/queries/useGymPresence";
+import { useGym, useGymPresence } from "@/hooks/queries/useGymPresence";
 
 export default function GymDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const presence = useGymPresence();
-  const gym = presence.data?.gyms.find((item) => item.id === params.id) ?? presence.data?.gyms[0];
+  const gymQuery = useGym(params.id);
+  const gym = gymQuery.data;
   const friends = presence.data?.presence.filter((item) => item.gym.id === gym?.id) ?? [];
 
   return (
     <Screen>
+      {gym ? <GymLogo gym={gym} size={64} radius={16} fallback={null} style={{ marginBottom: 12 }} /> : null}
       <Text variant="display-sm" accessibilityRole="header">{gym?.name.toUpperCase() ?? "GYM"}</Text>
       <Text variant="caption" className="mt-2 italic">
         Friends here now. Recent posts you can already see.

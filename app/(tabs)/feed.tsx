@@ -1,12 +1,14 @@
+import { Image } from "expo-image";
 import { useIsFocused, useScrollToTop } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { Bell } from "lucide-react-native";
+import { Bell, WifiOff } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshControl, Text as RNText, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LockOverlay } from "@/components/post/LockOverlay";
+import { PendingPostsStrip } from "@/components/post/PendingPostsStrip";
 import { StoriesRail } from "@/components/post/StoriesRail";
 import { PostCard } from "@/components/post/PostCard";
 import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
@@ -15,13 +17,14 @@ import { Segmented } from "@/components/ui/Segmented";
 import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useSheet } from "@/components/ui/Sheet";
 import { useActivityUnreadCount } from "@/hooks/queries/useNotifications";
-import { useFeed } from "@/hooks/queries/useFeed";
+import { useFeed, useRecordPostViews } from "@/hooks/queries/useFeed";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { type FeedMockPost } from "@/lib/redesignData";
 import { usePostedState } from "@/hooks/queries/usePostedState";
 import { useAuthStore } from "@/stores/auth";
 import { useTabActions } from "@/stores/tabActions";
 import { colors } from "@/theme/colors";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 
 const NAV_H = 84;
 
@@ -57,16 +60,17 @@ function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
   return {
     id: post.id,
     kind: isVideo ? "lift" : "fb",
+    authorId: post.user_id,
     user: { name: post.profile.display_name, handle: post.profile.username, avatarUrl: post.profile.avatar_url },
     gym: post.gym?.name,
-    altLoc: post.gym ? undefined : post.location_kind === "home" ? "Home Gym" : "Unlisted location",
+    altLoc: post.gym ? undefined : post.location_kind === "home" ? "Custom Location" : "Unlisted location",
     time,
     mediaUri: post.media_url,
     // Dual-camera front frame → BeReal corner inset (FbMedia).
     insetUri: post.inset_url ?? undefined,
     underReview: post.moderation_status === "flagged",
     mediaUris: !isVideo && (post.media_urls?.length ?? 0) > 1 ? (post.media_urls as string[]) : undefined,
-    video: isVideo && post.media_url ? { uri: post.media_url, trimStart, trimEnd } : undefined,
+    video: isVideo && post.media_url ? { uri: post.media_url, trimStart, trimEnd, posterUrl: post.thumbnail_url } : undefined,
     lift: isVideo ? { lift: post.lift_name ?? "Lift", weight: post.lift_weight ?? "" } : undefined,
     duration: clipSeconds ? `0:${String(clipSeconds).padStart(2, "0")}` : undefined,
     caption: post.caption ?? undefined,
@@ -106,6 +110,9 @@ export default function HomeScreen() {
   const { postedToday, resolved: postedResolved } = usePostedState();
   const sheet = useSheet();
   const feed = useFeed();
+  // No NetInfo dependency: a failed (re)fetch IS the offline signal. Cached
+  // rows keep rendering underneath — the banner just explains the silence.
+  const offline = feed.isError;
   const router = useRouter();
   const unreadCount = useActivityUnreadCount();
 
@@ -115,6 +122,10 @@ export default function HomeScreen() {
   const friendIds = useMemo(() => new Set((friends.data ?? []).map((f) => f.id)), [friends.data]);
   // Pull-to-refresh bumps this to reshuffle the visible order.
   const [shuffleSeed, setShuffleSeed] = useState(0);
+  // Spinner ONLY for a manual pull. Binding it to feed.isRefetching made the
+  // 60s background refetch (and every focus refetch) pop the spinner and shove
+  // the list down — read as "the feed keeps refreshing on its own".
+  const [pulling, setPulling] = useState(false);
 
   // Friends tab: you + your crew. Public tab: ONLY people you haven't added
   // (discovery) — your friends' content stays in the Friends tab. No fixtures.
@@ -173,8 +184,10 @@ export default function HomeScreen() {
   }, [feedResetNonce]);
 
   const refresh = () => {
+    trackAnalyticsEvent("feed_refreshed", { tab });
     setShuffleSeed((s) => s + 1);
-    void feed.refetch();
+    setPulling(true);
+    void feed.refetch().finally(() => setPulling(false));
   };
 
   const openReactionCapture = (postId: string) => {
@@ -188,10 +201,21 @@ export default function HomeScreen() {
   // The single most-visible post drives BOTH music and video autoplay (IG-style).
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+  // Backend-only view capture: record posts as they become mostly visible —
+  // but never while the feed is locked (blurred posts weren't really seen).
+  // Refs, because the viewability handler below is created exactly once.
+  const recordPostView = useRecordPostViews();
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: { isViewable: boolean; item?: FeedMockPost }[] }) => {
       const first = viewableItems.find((v) => v.isViewable && v.item);
       setActivePostId(first?.item?.id ?? null);
+      if (!lockedRef.current) {
+        for (const v of viewableItems) {
+          if (v.isViewable && v.item) recordPostView(v.item.id);
+        }
+      }
     }
   ).current;
 
@@ -202,9 +226,15 @@ export default function HomeScreen() {
       <FlashList
         ref={listRef}
         data={posts}
+        // FlashList v2 anchors the viewport when items are prepended, so on app
+        // open the cached feed painted, the refetch added newer posts ABOVE,
+        // and the user landed on yesterday's-last-seen post ("it loads from
+        // the last post I saw and I have to scroll up"). Anyone near the top
+        // now follows new posts to the top; mid-scroll readers keep their spot.
+        maintainVisibleContentPosition={{ autoscrollToTopThreshold: 300 }}
         refreshControl={
           <RefreshControl
-            refreshing={feed.isRefetching}
+            refreshing={pulling}
             onRefresh={refresh}
             tintColor={colors.white}
           />
@@ -214,10 +244,24 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View>
             {/* App head — brand (§2.4) */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8, paddingHorizontal: 18, paddingBottom: 4 }}>
+            {/* 16px gutter matches the post cards (header/caption padding) so
+                the brand, stories rail, segmented, and posts share one edge.
+                Layout: mark left, wordmark centered (left/right zones are the
+                same width so the title is truly centered), bell right. */}
+            <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 8, paddingHorizontal: 16, paddingBottom: 4 }}>
+              <View style={{ width: 44, alignItems: "flex-start", justifyContent: "center" }}>
+                <Image
+                  source={require("../../assets/images/welcome-mark.png")}
+                  accessible={false}
+                  contentFit="contain"
+                  style={{ width: 42, height: 28 }}
+                />
+              </View>
               <RNText
                 maxFontSizeMultiplier={1.4}
                 style={{
+                  flex: 1,
+                  textAlign: "center",
                   fontFamily: "Boldonse_400Regular",
                   fontSize: 19,
                   lineHeight: 19 * 1.4 + 8,
@@ -230,32 +274,78 @@ export default function HomeScreen() {
               </RNText>
               <Pressable
                 onPress={() => router.push("/inbox")}
-                accessibilityLabel={unreadCount > 0 ? "Notifications, unread" : "Notifications"}
+                accessibilityLabel={
+                  unreadCount > 0
+                    ? `Notifications, ${unreadCount} unread`
+                    : "Notifications"
+                }
                 hitSlop={11}
                 style={{ width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}
               >
                 <View>
                   <Bell size={26} color={colors.white} strokeWidth={2} />
                   {unreadCount > 0 ? (
+                    // iOS-style red count badge (9+ cap).
                     <View
                       style={{
                         position: "absolute",
-                        top: -1,
-                        right: -1,
-                        width: 9,
-                        height: 9,
-                        borderRadius: 5,
-                        backgroundColor: colors.gold,
+                        top: -6,
+                        right: -8,
+                        minWidth: 17,
+                        height: 17,
+                        borderRadius: 9,
+                        paddingHorizontal: 4,
+                        backgroundColor: "#FF3B30",
                         borderWidth: 1.5,
-                        borderColor: colors.black
+                        borderColor: colors.black,
+                        alignItems: "center",
+                        justifyContent: "center"
                       }}
-                    />
+                    >
+                      <RNText
+                        style={{
+                          fontFamily: "Geist_700Bold",
+                          fontSize: 10,
+                          lineHeight: 12,
+                          color: "#FFFFFF",
+                          includeFontPadding: false
+                        }}
+                      >
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </RNText>
+                    </View>
                   ) : null}
                 </View>
               </Pressable>
             </View>
+            {/* Offline: cached posts still render (persisted feed + disk-cached
+                media) — this pill says why nothing new is arriving. */}
+            {offline ? (
+              <View style={{ alignItems: "center", paddingTop: 6 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    backgroundColor: colors.graphite,
+                    borderWidth: 1,
+                    borderColor: colors.iron,
+                    borderRadius: 999,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6
+                  }}
+                >
+                  <WifiOff size={12} color={colors.fog} strokeWidth={2.2} />
+                  <RNText style={{ fontFamily: "Geist_500Medium", fontSize: 11.5, color: colors.fog }}>
+                    You&apos;re offline — showing recent posts
+                  </RNText>
+                </View>
+              </View>
+            ) : null}
             {tab === "Friends" ? <StoriesRail /> : null}
             <Segmented options={["Friends", "Public"]} value={tab} onChange={setTab} />
+            {/* Posts captured offline, waiting in the upload queue. */}
+            <PendingPostsStrip />
           </View>
         }
         onViewableItemsChanged={onViewableItemsChanged}
@@ -278,10 +368,12 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
-              <RNText style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
-                {tab === "Friends"
-                  ? "Nothing from your crew yet. Add friends or post today's SPOTTED."
-                  : "No public posts yet. Set your profile to Public and post to show up here."}
+              <RNText style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 18 }}>
+                {offline
+                  ? "You're offline. Posts will show up as soon as you reconnect."
+                  : tab === "Friends"
+                    ? "Nothing from your crew yet. Add friends or post today's SPOTTED."
+                    : "No public posts yet. Set your profile to Public and post to show up here."}
               </RNText>
             </View>
           )

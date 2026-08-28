@@ -1,10 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
+
+import { invalidateAfterPostChange } from "@/lib/queryClient";
+import { appAlert } from "@/components/ui/AppDialog";
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { ImageIcon, Music2, RefreshCcw, Send, X, Zap } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, TextInput, View } from "react-native";
+import { ActivityIndicator, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Camera, type PhotoFile } from "react-native-vision-camera";
 
@@ -77,7 +80,7 @@ export default function CameraScreen() {
 
   async function capture() {
     if (!camera.ready || !cameraRef.current) {
-      Alert.alert("Camera not ready", "Grant camera permission and wait for the lens to warm up.");
+      appAlert("Camera not ready", "Grant camera permission and wait for the lens to warm up.");
       return;
     }
     try {
@@ -87,7 +90,7 @@ export default function CameraScreen() {
       await successHaptic();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Camera failed.";
-      Alert.alert("Couldn't capture", message);
+      appAlert("Couldn't capture", message);
     }
   }
 
@@ -105,7 +108,7 @@ export default function CameraScreen() {
     try {
       ImagePicker = require("expo-image-picker") as typeof import("expo-image-picker");
     } catch {
-      Alert.alert(
+      appAlert(
         "Library not available",
         "Photo library isn't bundled in this build of the dev client. Install the latest build to enable it."
       );
@@ -114,7 +117,7 @@ export default function CameraScreen() {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Library access off", "Enable photo access in Settings to pick a post from your library.");
+        appAlert("Library access off", "Enable photo access in Settings to pick a post from your library.");
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -133,14 +136,14 @@ export default function CameraScreen() {
       await successHaptic();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Couldn't open library.";
-      Alert.alert("Library error", message);
+      appAlert("Library error", message);
     }
   }
 
   async function postDrop() {
     if (!photo) return;
     if (!isSupabaseConfigured || !userId) {
-      Alert.alert("Not signed in", "Sign in to post.");
+      appAlert("Not signed in", "Sign in to post.");
       return;
     }
     setPosting(true);
@@ -154,14 +157,14 @@ export default function CameraScreen() {
         is_verified_at_gym: photo.kind === "captured"
       });
       if (error) throw error;
-      await queryClient.invalidateQueries({ queryKey: ["feed"] });
+      await invalidateAfterPostChange(queryClient);
       await successHaptic();
       setPhoto(null);
       setCaption("");
       router.replace("/feed");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload failed.";
-      Alert.alert("Couldn't post", message);
+      appAlert("Couldn't post", message);
     } finally {
       setPosting(false);
     }

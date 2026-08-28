@@ -1,7 +1,8 @@
 import { router, type Href } from "expo-router";
-import { Ban, Bell, ChevronRight, Download, FileText, Lock, LogOut, MoonStar, Shield, ShieldCheck, Trash2, UserMinus, UserRound } from "lucide-react-native";
+import { appAlert } from "@/components/ui/AppDialog";
+import { Ban, Bell, ChevronRight, CircleUserRound, Download, FileText, Lock, LogOut, MoonStar, Shield, ShieldCheck, Trash2, UserMinus, UserRound } from "lucide-react-native";
 import { type ReactNode, useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import { Screen } from "@/components/Screen";
 import { BackButton } from "@/components/ui/BackButton";
@@ -71,18 +72,18 @@ export default function SettingsScreen() {
   const latestExport = useLatestExportRequest();
 
   const onExport = () => {
-    Alert.alert(
+    appAlert(
       "Download my data",
-      "We'll email a download link within 30 days: your profile, check-in history, posts, messages sent, friends, streak, and settings.",
+      "We'll email you a zip of everything on your account — profile, posts, workouts, messages you sent, friends, streak, and settings. Media links inside stay valid for 7 days.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Request",
+          text: "Email my data",
           onPress: () =>
             requestExport.mutate(undefined, {
-              onSuccess: () => showToast("Request filed — check your email within 30 days"),
+              onSuccess: () => showToast("Export sent — check your email"),
               onError: (e) =>
-                showToast(e instanceof Error && e.message === "rate_limited" ? "You can request once every 30 days" : "Couldn't file the request")
+                showToast(e instanceof Error && e.message === "rate_limited" ? "You can export once every 30 days" : "Couldn't build the export — try again")
             })
         }
       ]
@@ -90,7 +91,7 @@ export default function SettingsScreen() {
   };
 
   const onDeactivate = () => {
-    Alert.alert(
+    appAlert(
       "Deactivate account?",
       "Your profile, posts, and presence are hidden until you log back in. Your streak freezes — it resumes where it left off.",
       [
@@ -112,7 +113,7 @@ export default function SettingsScreen() {
   };
 
   const confirmSignOut = () => {
-    Alert.alert("Log out?", "You'll need to sign back in to post.", [
+    appAlert("Log out?", "You'll need to sign back in to post.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log out",
@@ -158,6 +159,12 @@ export default function SettingsScreen() {
           icon={<Bell size={19} color={ICON} strokeWidth={2} />}
           label="Notifications"
           onPress={() => router.push("/settings/notifications" as Href)}
+        />
+        <SettingsRow
+          icon={<CircleUserRound size={19} color={ICON} strokeWidth={2} />}
+          label="Stories"
+          sub="Private stories — who's in them, edit, delete"
+          onPress={() => router.push("/settings/stories" as Href)}
         />
         <SettingsRow
           icon={<Ban size={19} color={ICON} strokeWidth={2} />}

@@ -4,21 +4,23 @@ import * as FileSystem from "expo-file-system/legacy";
 import { logger } from "@/lib/logger";
 
 /**
- * Camera draft: the captured media + all in-progress edits persisted so a
- * crash, backgrounding, or a deliberate "Save draft" can be resumed later.
+ * Camera drafts: captured media + in-progress edits, saved ONLY on explicit
+ * intent ("Save as draft" on the details page, or the keep-as-draft prompt on
+ * close). There is no autosave — that's what silently turned already-posted
+ * photos into drafts.
  *
  * Design:
- *  - ONE draft slot per user (this is a daily-post app — a new post replaces
- *    the old draft; drafts expire after 24h).
+ *  - MULTIPLE drafts per user (newest first, capped at MAX_DRAFTS). They live
+ *    until posted or deleted from the drafts page — no time-based expiry.
  *  - Media is COPIED into a dedicated document-directory folder so it survives
- *    cache eviction. Copies are deduped per source uri, and every save sweeps
- *    files the current draft no longer references, so retakes and repeated
- *    autosaves can't leak storage.
- *  - Loading verifies the media files still exist; a draft with missing media
- *    is dropped instead of restoring a broken screen.
+ *    cache eviction. Copies are deduped per source uri, and every write sweeps
+ *    files no remaining draft references.
+ *  - Loading verifies each draft's primary media still exists; broken drafts
+ *    are dropped instead of restoring a dead screen.
  */
 
 export type CameraDraft = {
+  id: string;
   mode: "daily" | "story" | "lift";
   step: string;
   photoUri?: string | null;
@@ -50,13 +52,20 @@ export type CameraDraft = {
   savedAt: number;
 };
 
-const KEY = (userId: string) => `camera-draft:${userId}`;
-const DRAFT_DIR = `${FileSystem.documentDirectory}camera-drafts/`;
-/** Drafts older than this are considered stale and ignored/cleared on load. */
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export type CameraDraftInput = Omit<CameraDraft, "id" | "savedAt">;
 
-/** Source uri → persisted copy, so autosaves never copy the same file twice. */
+const LIST_KEY = (userId: string) => `camera-drafts:${userId}`;
+/** Pre-multi-draft single slot — migrated into the list on first load. */
+const LEGACY_KEY = (userId: string) => `camera-draft:${userId}`;
+const DRAFT_DIR = `${FileSystem.documentDirectory}camera-drafts/`;
+const MAX_DRAFTS = 20;
+
+/** Source uri → persisted copy, so repeat saves never copy the same file twice. */
 const persistedCopies = new Map<string, string>();
+
+function newDraftId(): string {
+  return `d-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+}
 
 async function persistMedia(uri: string | null | undefined): Promise<string | null> {
   if (!uri) return null;
@@ -78,8 +87,15 @@ async function persistMedia(uri: string | null | undefined): Promise<string | nu
   }
 }
 
-/** Delete every file in the drafts dir that the draft doesn't reference. */
-async function sweepUnreferenced(keep: Set<string>): Promise<void> {
+function mediaOf(draft: CameraDraft): string[] {
+  return [draft.photoUri, draft.dualFrontUri, draft.videoUri, ...(draft.extraPhotos ?? [])].filter(
+    (u): u is string => Boolean(u) && (u as string).startsWith(DRAFT_DIR)
+  );
+}
+
+/** Delete every file in the drafts dir that NO remaining draft references. */
+async function sweepUnreferenced(drafts: CameraDraft[]): Promise<void> {
+  const keep = new Set(drafts.flatMap(mediaOf));
   try {
     const names = await FileSystem.readDirectoryAsync(DRAFT_DIR);
     await Promise.all(
@@ -93,35 +109,33 @@ async function sweepUnreferenced(keep: Set<string>): Promise<void> {
   }
 }
 
-/** Save (or update) the current draft. Media is copied to persistent storage. */
-export async function saveCameraDraft(userId: string | null, draft: Omit<CameraDraft, "savedAt">): Promise<void> {
-  if (!userId) return;
+async function readList(userId: string): Promise<CameraDraft[]> {
+  let list: CameraDraft[] = [];
   try {
-    const [photoUri, dualFrontUri, videoUri, ...extras] = await Promise.all([
-      persistMedia(draft.photoUri),
-      persistMedia(draft.dualFrontUri),
-      persistMedia(draft.videoUri),
-      ...(draft.extraPhotos ?? []).map((u) => persistMedia(u))
-    ]);
-    const full: CameraDraft = {
-      ...draft,
-      photoUri,
-      dualFrontUri,
-      videoUri,
-      extraPhotos: extras.filter((u): u is string => Boolean(u)),
-      savedAt: Date.now()
-    };
-    await AsyncStorage.setItem(KEY(userId), JSON.stringify(full));
-    // Anything no longer referenced (old takes, superseded copies) goes away.
-    const keep = new Set(
-      [full.photoUri, full.dualFrontUri, full.videoUri, ...(full.extraPhotos ?? [])].filter(
-        (u): u is string => Boolean(u) && (u as string).startsWith(DRAFT_DIR)
-      )
-    );
-    await sweepUnreferenced(keep);
-  } catch (error) {
-    logger.warn("camera_draft_save_failed", { message: error instanceof Error ? error.message : String(error) });
+    const raw = await AsyncStorage.getItem(LIST_KEY(userId));
+    if (raw) list = JSON.parse(raw) as CameraDraft[];
+  } catch {
+    list = [];
   }
+  // One-time migration of the old single-slot draft.
+  try {
+    const legacyRaw = await AsyncStorage.getItem(LEGACY_KEY(userId));
+    if (legacyRaw) {
+      const legacy = JSON.parse(legacyRaw) as Omit<CameraDraft, "id">;
+      if (legacy.photoUri || legacy.videoUri) {
+        list = [{ ...legacy, id: newDraftId() }, ...list];
+      }
+      await AsyncStorage.removeItem(LEGACY_KEY(userId));
+      await writeList(userId, list);
+    }
+  } catch {
+    // best-effort
+  }
+  return list;
+}
+
+async function writeList(userId: string, drafts: CameraDraft[]): Promise<void> {
+  await AsyncStorage.setItem(LIST_KEY(userId), JSON.stringify(drafts));
 }
 
 async function fileExists(uri: string): Promise<boolean> {
@@ -134,50 +148,97 @@ async function fileExists(uri: string): Promise<boolean> {
 }
 
 /**
- * Load the saved draft, or null if none, stale, or its media is gone
- * (stale/broken drafts are cleared).
+ * Save a draft. Passing an existing `id` updates that draft in place (resumed
+ * draft re-saved); otherwise a new draft is prepended. Returns the draft id.
  */
-export async function loadCameraDraft(userId: string | null): Promise<CameraDraft | null> {
+export async function saveCameraDraft(userId: string | null, draft: CameraDraftInput, id?: string | null): Promise<string | null> {
   if (!userId) return null;
   try {
-    const raw = await AsyncStorage.getItem(KEY(userId));
-    if (!raw) return null;
-    const draft = JSON.parse(raw) as CameraDraft;
-    if (!draft.savedAt || Date.now() - draft.savedAt > MAX_AGE_MS) {
-      await clearCameraDraft(userId);
-      return null;
-    }
-    // A draft is only worth resuming if it has captured media…
-    if (!draft.photoUri && !draft.videoUri) return null;
-    // …that still exists on disk.
-    const primary = draft.photoUri ?? draft.videoUri;
-    if (primary && !(await fileExists(primary))) {
-      await clearCameraDraft(userId);
-      return null;
-    }
-    if (draft.extraPhotos?.length) {
-      const checks = await Promise.all(draft.extraPhotos.map(fileExists));
-      draft.extraPhotos = draft.extraPhotos.filter((_, i) => checks[i]);
-    }
-    if (draft.dualFrontUri && !(await fileExists(draft.dualFrontUri))) {
-      draft.dualFrontUri = null;
-    }
-    return draft;
-  } catch {
+    const [photoUri, dualFrontUri, videoUri, ...extras] = await Promise.all([
+      persistMedia(draft.photoUri),
+      persistMedia(draft.dualFrontUri),
+      persistMedia(draft.videoUri),
+      ...(draft.extraPhotos ?? []).map((u) => persistMedia(u))
+    ]);
+    const draftId = id ?? newDraftId();
+    const full: CameraDraft = {
+      ...draft,
+      id: draftId,
+      photoUri,
+      dualFrontUri,
+      videoUri,
+      extraPhotos: extras.filter((u): u is string => Boolean(u)),
+      savedAt: Date.now()
+    };
+    const list = await readList(userId);
+    const next = [full, ...list.filter((d) => d.id !== draftId)].slice(0, MAX_DRAFTS);
+    await writeList(userId, next);
+    await sweepUnreferenced(next);
+    return draftId;
+  } catch (error) {
+    logger.warn("camera_draft_save_failed", { message: error instanceof Error ? error.message : String(error) });
     return null;
   }
 }
 
-/** Clear the draft (on post or explicit delete) + remove ALL draft media. */
-export async function clearCameraDraft(userId: string | null): Promise<void> {
-  if (!userId) return;
+/** All saved drafts, newest first. Drafts whose media vanished are dropped. */
+export async function loadCameraDrafts(userId: string | null): Promise<CameraDraft[]> {
+  if (!userId) return [];
   try {
-    await AsyncStorage.removeItem(KEY(userId));
-    persistedCopies.clear();
-    // The dir is dedicated to drafts — removing it wholesale also collects any
-    // orphans left behind by older versions of this module.
-    await FileSystem.deleteAsync(DRAFT_DIR, { idempotent: true }).catch(() => {});
+    const list = await readList(userId);
+    const checks = await Promise.all(
+      list.map(async (draft) => {
+        const primary = draft.photoUri ?? draft.videoUri;
+        if (!primary) return false;
+        return fileExists(primary);
+      })
+    );
+    const alive = list.filter((_, i) => checks[i]);
+    for (const draft of alive) {
+      if (draft.extraPhotos?.length) {
+        const extraChecks = await Promise.all(draft.extraPhotos.map(fileExists));
+        draft.extraPhotos = draft.extraPhotos.filter((_, i) => extraChecks[i]);
+      }
+      if (draft.dualFrontUri && !(await fileExists(draft.dualFrontUri))) {
+        draft.dualFrontUri = null;
+      }
+    }
+    if (alive.length !== list.length) {
+      await writeList(userId, alive);
+      await sweepUnreferenced(alive);
+    }
+    return alive;
+  } catch {
+    return [];
+  }
+}
+
+/** Delete drafts by id (posted, or removed from the drafts page). */
+export async function deleteCameraDrafts(userId: string | null, ids: string[]): Promise<void> {
+  if (!userId || ids.length === 0) return;
+  try {
+    const remove = new Set(ids);
+    const list = await readList(userId);
+    const next = list.filter((d) => !remove.has(d.id));
+    await writeList(userId, next);
+    await sweepUnreferenced(next);
   } catch {
     // best-effort
   }
+}
+
+/* ---- resume hand-off (drafts page → camera, no router params needed) ---- */
+
+let pendingResumeId: string | null = null;
+
+/** Drafts page: mark this draft to open when the camera regains focus. */
+export function requestDraftResume(id: string): void {
+  pendingResumeId = id;
+}
+
+/** Camera: consume the pending resume request, if any. */
+export function takeDraftResume(): string | null {
+  const id = pendingResumeId;
+  pendingResumeId = null;
+  return id;
 }

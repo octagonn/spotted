@@ -11,6 +11,8 @@ import { TrophyIcon } from "@/components/trophies/TrophyIcon";
 import { TrophyShareCard, type TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import { formatEarnedDate } from "@/components/trophies/trophyFormat";
 import { logger } from "@/lib/logger";
+import { DiamondGlint } from "@/components/trophies/DiamondGlint";
+import { medalColors, medalLabel } from "@/lib/trophyMedal";
 import { formatRarity, PREMIUM_RARITY_THRESHOLD } from "@/lib/trophyRaritySeeds";
 import { colors } from "@/theme/colors";
 
@@ -92,21 +94,22 @@ export function TrophyUnlockModal({
               overflow: "hidden",
               backgroundColor: colors.graphite,
               borderWidth: 1,
-              borderColor: premium ? colors.gold : "rgba(232,180,76,0.45)"
+              borderColor: premium || data?.medal === "diamond" ? medalColors(data?.medal).solid : medalColors(data?.medal).border
             }}
           >
-            {/* Warm gold wash from the top — reads as a celebration, not a dialog. */}
+            {/* Tier-colored wash from the top — reads as a celebration, not a dialog. */}
             <LinearGradient
-              colors={["rgba(232,180,76,0.22)", "rgba(232,180,76,0)"]}
+              colors={[medalColors(data?.medal).soft, "rgba(0,0,0,0)"]}
               style={{ position: "absolute", top: 0, left: 0, right: 0, height: 150 }}
             />
+            {data?.medal === "diamond" ? <DiamondGlint width={308} height={360} /> : null}
             <View style={{ paddingVertical: 30, paddingHorizontal: 24, alignItems: "center" }}>
             <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}>
               <X size={18} color={colors.fog} strokeWidth={2.4} />
             </Pressable>
 
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 3, textTransform: "uppercase", color: colors.gold }}>
-              Trophy Unlocked
+            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 3, textTransform: "uppercase", color: medalColors(data?.medal).text }}>
+              {data?.medal ? `${medalLabel(data.medal)} unlocked` : "Trophy Unlocked"}
             </Text>
 
             <Animated.View

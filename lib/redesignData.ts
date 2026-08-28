@@ -315,6 +315,8 @@ export type FeedMockPost = {
   altLoc?: string;
   time: string;
   /** Scene placeholders for mock media; real posts use `mediaUri`/`insetUri`. */
+  /** Post author's user id (real posts) — powers report/block targeting. */
+  authorId?: string;
   main?: FeedScene;
   inset?: FeedScene;
   mediaUri?: string;
@@ -323,8 +325,9 @@ export type FeedMockPost = {
   underReview?: boolean;
   /** Multi-photo carousel (real posts): signed URLs, first = cover. */
   mediaUris?: string[];
-  /** Real video post: signed URL + soft-trim window (seconds). */
-  video?: { uri: string; trimStart: number; trimEnd: number };
+  /** Real video post: signed URL + soft-trim window (seconds). posterUrl is
+   *  the signed thumbnail painted while the stream buffers. */
+  video?: { uri: string; trimStart: number; trimEnd: number; posterUrl?: string | null };
   /** Milestone plate (kinds pr/streak). */
   plate?: { tag: string; big: string; unit: string };
   /** Video chips top-left, e.g. ["PR", "Form check"]. */

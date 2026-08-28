@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RealInboxThread } from "@/components/friends/useInboxThreads";
 import type { ChatMessage } from "@/hooks/queries/useMessages";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 
@@ -17,17 +18,27 @@ import { showToast } from "@/stores/ui";
 type ReactionMap = Record<string, { userId: string; emoji: string }[]>;
 
 /** All reactions on a set of messages, keyed by message id. */
+/**
+ * A message that is still sending carries an optimistic id ("temp-<ts>-<n>",
+ * see useMessages) rather than a real uuid. Sending those to Postgres made the
+ * whole reactions query fail with 22P02 (invalid input syntax for type uuid),
+ * so while ANY message was in flight, nobody's reactions rendered — and every
+ * send logged two 500s. Only real ids reach the database now.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function useMessageReactions(conversationId?: string | null, messageIds?: string[]) {
-  const key = (messageIds ?? []).join(",");
+  const persistedIds = (messageIds ?? []).filter((id) => UUID_RE.test(id));
+  const key = persistedIds.join(",");
   return useQuery({
     queryKey: ["message-reactions", conversationId, key],
-    enabled: isSupabaseConfigured && Boolean(conversationId) && (messageIds?.length ?? 0) > 0,
+    enabled: isSupabaseConfigured && Boolean(conversationId) && persistedIds.length > 0,
     staleTime: 10_000,
     queryFn: async (): Promise<Record<string, { userId: string; emoji: string }[]>> => {
       const { data, error } = await supabase
         .from("message_reactions")
         .select("message_id, user_id, emoji")
-        .in("message_id", messageIds as string[]);
+        .in("message_id", persistedIds);
       if (error) throw error;
       const map: Record<string, { userId: string; emoji: string }[]> = {};
       for (const row of data ?? []) {
@@ -58,6 +69,7 @@ export function useReactToMessage(conversationId?: string | null) {
           .eq("user_id", userId);
         if (error) throw error;
       }
+      trackAnalyticsEvent("message_reacted", { set: Boolean(emoji) });
     },
     // The reactions cache key ends with the joined visible-message-id list, so
     // update every cache under the ["message-reactions", conversationId] prefix.
@@ -412,6 +424,7 @@ export function useForwardMessage() {
         .from("messages")
         .insert({ conversation_id: conversationId, sender_id: userId, content: `↪ ${content}` });
       if (error) throw error;
+      trackAnalyticsEvent("message_forwarded");
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
   });
@@ -490,6 +503,48 @@ export function useSetThreadFolder() {
       showToast("Couldn't move that conversation");
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] })
+  });
+}
+
+/**
+ * Delete a conversation FOR ME (Instagram semantics): stamps my participant
+ * row's cleared_at. The thread + its history disappear from my inbox and chat;
+ * a new message after that moment resurrects the thread showing only what came
+ * after. The other person's side is untouched.
+ */
+export function useDeleteConversation() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!isSupabaseConfigured || !userId) return;
+      const { error } = await supabase
+        .from("conversation_participants")
+        .update({ cleared_at: new Date().toISOString() })
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    // Optimistic: the row leaves the inbox instantly.
+    onMutate: async (conversationId) => {
+      const queryKey = ["inbox-threads"];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueriesData<RealInboxThread[]>({ queryKey });
+      queryClient.setQueriesData<RealInboxThread[]>({ queryKey }, (threads) =>
+        threads?.filter((thread) => thread.conversationId !== conversationId)
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
+      }
+      showToast("Couldn't delete the conversation");
+    },
+    onSettled: (_d, _e, conversationId) => {
+      void queryClient.invalidateQueries({ queryKey: ["inbox-threads"] });
+      void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+    }
   });
 }
 

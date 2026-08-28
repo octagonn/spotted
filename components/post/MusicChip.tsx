@@ -6,6 +6,7 @@ import { Text, View } from "react-native";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { useAudioStore } from "@/stores/audio";
 import { colors } from "@/theme/colors";
+import { typeScale } from "@/theme/tokens";
 
 export type PostMusic = {
   title: string;
@@ -106,19 +107,30 @@ export function MusicChip({
 
   const audible = active && !muted && status.playing;
 
+  // One 16px leading glyph (artwork or note) + one metadata line whose
+  // lineHeight matches the glyph, so the row sits on a single optical
+  // centerline.
   const body = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 18, paddingTop: 7 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
       {music.artworkUrl ? (
-        <CachedImage source={{ uri: music.artworkUrl }} style={{ width: 18, height: 18, borderRadius: 4 }} contentFit="cover" />
+        <CachedImage source={{ uri: music.artworkUrl }} style={{ width: 16, height: 16, borderRadius: 4 }} contentFit="cover" />
       ) : (
-        <Music size={12} color={colors.silver} strokeWidth={2} />
+        <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
+          <Music size={12} color={audible ? colors.white : colors.fog} strokeWidth={2.2} />
+        </View>
       )}
-      <Music size={10} color={audible ? colors.white : colors.fog} strokeWidth={2.4} />
       <Text
         numberOfLines={1}
-        style={{ flexShrink: 1, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: audible ? colors.silver : colors.fog }}
+        style={{
+          flexShrink: 1,
+          ...typeScale.meta,
+          lineHeight: 16,
+          includeFontPadding: false,
+          color: audible ? colors.silver : colors.fog
+        }}
       >
-        {music.title} · {music.artist}
+        {music.title}
+        <Text style={{ color: colors.fog }}>  ·  {music.artist}</Text>
       </Text>
     </View>
   );

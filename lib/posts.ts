@@ -6,14 +6,24 @@ import { removePostObjects, uploadPostObject } from "@/lib/r2";
 import { supabase } from "@/lib/supabase";
 
 /**
- * Feed/story images: 1080px is the Instagram standard — sharp on a phone while
- * roughly halving the pixels vs 1440 (faster loads, less egress). 0.85 quality
- * keeps it crisp (the old 1080 was soft only because it used 0.7).
+ * Feed/story upload size.
+ *
+ * 1080 was chosen as "the Instagram standard", but that standard predates 3x
+ * displays: the feed photo frame is full-bleed, so on a 390pt-wide phone at @3x
+ * it paints ~1170 device pixels — a 1080-wide upload was being UPSCALED on
+ * every modern iPhone, which reads as softness no amount of JPEG quality fixes.
+ * Posts are also pinch-zoomable, which wants headroom beyond 1:1.
+ *
+ * 1440 covers both with room to spare. R2 charges nothing for egress, so the
+ * cost is storage alone (~700 KB/photo), and the 320px thumbnail still carries
+ * the grids so scrolling is unaffected.
  */
-const MAX_UPLOAD_WIDTH = 1080;
+const MAX_UPLOAD_WIDTH = 1440;
 /** Grid/thumbnail width — grids only need a small image, not the full photo. */
 const THUMB_WIDTH = 320;
-const JPEG_QUALITY = 0.85;
+/** 0.85 rings on the high-contrast edges of gym equipment and banding in flat
+ *  gym lighting; 0.9 clears both for a modest size increase. */
+const JPEG_QUALITY = 0.9;
 
 /**
  * Downscale (only if larger than the target) + re-encode before upload. A raw
@@ -301,4 +311,55 @@ export async function publishDailyPost(input: PublishDailyPostInput): Promise<st
     throw insert.error;
   }
   return insert.data.id;
+}
+
+export type DailyPostExtras = {
+  userId: string;
+  /** Tagged friend ids → post_tags rows. */
+  tags: string[];
+  /** Positional photo tags (normalized 0–1 coords). */
+  photoTags: { userId: string; x: number; y: number }[];
+  /** Workout logged just before the daily (workout-first flow) to attach. */
+  workoutId: string | null;
+  /** Communities to cross-post to (pre-filtered for the chosen gym). */
+  communityIds: string[];
+};
+
+/**
+ * The best-effort rows that ride along with a daily post (friend tags,
+ * positional photo tags, workout attach, community cross-posts). Shared by the
+ * camera's online publish and the offline queue's deferred upload — each piece
+ * logs-and-continues so a partial failure never sinks the post itself.
+ */
+export async function attachDailyPostExtras(postId: string, extras: DailyPostExtras): Promise<void> {
+  if (extras.tags.length) {
+    // Deduped + ignoreDuplicates: a repeated id must not fail the whole batch.
+    const { error } = await supabase
+      .from("post_tags")
+      .upsert(
+        [...new Set(extras.tags)].map((id) => ({ post_id: postId, user_id: id })),
+        { onConflict: "post_id,user_id", ignoreDuplicates: true }
+      );
+    if (error) logger.warn("post_tags_insert_failed", { message: error.message });
+  }
+  if (extras.photoTags.length) {
+    const { error } = await supabase
+      .from("photo_tags")
+      .insert(extras.photoTags.map((t) => ({ post_id: postId, photo_index: 0, user_id: t.userId, x: t.x, y: t.y })));
+    if (error) logger.warn("photo_tags_insert_failed", { message: error.message });
+  }
+  if (extras.workoutId) {
+    const { error } = await supabase
+      .from("workouts")
+      .update({ post_id: postId })
+      .eq("id", extras.workoutId)
+      .eq("user_id", extras.userId);
+    if (error) logger.warn("workout_attach_failed", { message: error.message });
+  }
+  if (extras.communityIds.length) {
+    const { error } = await supabase
+      .from("post_communities")
+      .insert(extras.communityIds.map((id) => ({ post_id: postId, community_id: id })));
+    if (error) logger.warn("post_communities_insert_failed", { message: error.message });
+  }
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-env node */
 /**
  * Seeds the `gyms` table with fitness centers across major US metros.
  * Pulls from OpenStreetMap Overpass API per-metro to avoid timeouts.

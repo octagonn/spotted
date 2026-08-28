@@ -21,6 +21,9 @@ type DayEntry = {
   workouts: { id: string; name: string }[];
   isFuture: boolean;
   isToday: boolean;
+  /** They posted a SPOTTED that day (gym_days ledger) — so it wasn't a rest day
+   *  even though no workout was logged. */
+  posted: boolean;
 };
 
 type WeekPage = {
@@ -54,12 +57,16 @@ function fmtRange(start: Date): string {
  */
 export function WeeklySplit({
   workouts,
+  gymDays,
   isLoading,
   ownProfile,
   splitPublic,
   onTogglePublic
 }: {
   workouts: WorkoutRow[];
+  /** Local-date keys the user posted on. A day they posted but didn't log is
+   *  "workout not listed", NOT a rest day. */
+  gymDays?: ReadonlySet<string> | Map<string, unknown>;
   isLoading: boolean;
   ownProfile: boolean;
   /** Current privacy value (own profile only). */
@@ -82,10 +89,28 @@ export function WeeklySplit({
     }
     const todayKey = localDateKey(new Date());
     const thisMonday = mondayOf(new Date());
+    // History stops at the week of the EARLIEST workout — no endless empty
+    // REST weeks before the user ever posted (12-week cap still applies).
+    const earliest = workouts.length
+      ? workouts.reduce((min, w) => (w.startedAt < min ? w.startedAt : min), workouts[0].startedAt)
+      : null;
+    // History depth must account for POSTED days too — someone who posts daily
+    // but never logs a workout previously got zero history pages.
+    const gymDayKeys = gymDays ? [...(gymDays as Map<string, unknown>).keys()] : [];
+    const earliestGymDay = gymDayKeys.length ? gymDayKeys.reduce((a, b) => (a < b ? a : b)) : null;
+    const earliestWorkoutMonday = earliest ? localDateKey(mondayOf(new Date(earliest))) : null;
+    const earliestGymMonday = earliestGymDay
+      ? localDateKey(mondayOf(new Date(`${earliestGymDay}T12:00:00`)))
+      : null;
+    const candidates = [earliestWorkoutMonday, earliestGymMonday].filter((k): k is string => Boolean(k));
+    const earliestMondayKey = candidates.length
+      ? candidates.reduce((a, b) => (a < b ? a : b))
+      : localDateKey(thisMonday);
     const out: WeekPage[] = [];
     for (let weekBack = 0; weekBack < MAX_WEEKS; weekBack += 1) {
       const start = new Date(thisMonday);
       start.setDate(start.getDate() - weekBack * 7);
+      if (weekBack > 0 && localDateKey(start) < earliestMondayKey) break;
       const days: DayEntry[] = [];
       for (let i = 0; i < 7; i += 1) {
         const d = new Date(start);
@@ -97,7 +122,8 @@ export function WeeklySplit({
           // Reverse chronological within the day so AM session lists first.
           workouts: (byDay.get(dateKey) ?? []).slice().reverse(),
           isFuture: dateKey > todayKey,
-          isToday: dateKey === todayKey
+          isToday: dateKey === todayKey,
+          posted: gymDays ? gymDays.has(dateKey) : false
         });
       }
       out.push({
@@ -108,7 +134,7 @@ export function WeeklySplit({
       });
     }
     return out;
-  }, [workouts]);
+  }, [workouts, gymDays]);
 
   // Loading: one placeholder row per day of the week.
   if (isLoading) {
@@ -141,7 +167,11 @@ export function WeeklySplit({
     <View style={{ width, paddingHorizontal: 18 }}>
       <View style={{ gap: 6 }}>
         {item.days.map((day) => {
-          const rest = !day.isFuture && day.workouts.length === 0;
+          const nothingLogged = !day.isFuture && day.workouts.length === 0;
+          // Posted but never opened the workout logger → the session happened,
+          // we just don't know what it was. Calling that "REST" was wrong.
+          const notListed = nothingLogged && day.posted;
+          const rest = nothingLogged && !day.posted;
           return (
             <View
               key={day.dateKey}
@@ -168,6 +198,13 @@ export function WeeklySplit({
                   accessibilityLabel="Upcoming"
                   style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.graphite }}
                 />
+              ) : notListed ? (
+                <Text
+                  accessibilityLabel="Workout not listed"
+                  style={{ flex: 1, fontFamily: "Geist_500Medium", fontSize: 12.5, letterSpacing: 1, color: colors.fog }}
+                >
+                  WORKOUT NOT LISTED
+                </Text>
               ) : rest ? (
                 <Text
                   accessibilityLabel="Rest day"

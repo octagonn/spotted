@@ -30,9 +30,12 @@ export function isSafeNotificationRoute(value: unknown): value is string {
     value === "/(tabs)/feed" ||
     value === "/inbox" ||
     value === "/profile-section/trophies" ||
-    /^\/chat\/[0-9a-f-]{36}$/i.test(value) ||
+    value === "/settings/privacy" ||
+    value === "/settings/legal/privacy" ||
+    value === "/settings/legal/terms" ||
+    /^\/chat\/[0-9a-f-]{36}(\?group=1)?$/i.test(value) ||
     /^\/post\/[0-9a-f-]{36}$/i.test(value) ||
-    /^\/community\/[0-9a-f-]{36}$/i.test(value) ||
+    /^\/community\/[0-9a-f-]{36}(\?tab=(Chat|Board|Feed|Members))?$/i.test(value) ||
     /^\/user\/[a-z0-9_]{3,20}$/.test(value) ||
     /^\/story\?user=[a-z0-9_]{3,20}$/.test(value)
   );
@@ -54,10 +57,16 @@ export function routeForNotification(input: NotificationRouteInput): string {
       : null;
 
   switch (input.type) {
-    case "dm":
+    case "dm": {
+      // Group messages route to the GROUP thread, not a 1:1 with the sender.
+      const conversationId = uuidValue(payload.conversation_id);
+      if (payload.is_group === true && conversationId) return `/chat/${conversationId}?group=1`;
       return actorId ? `/chat/${actorId}` : "/inbox";
+    }
     case "post_view":
     case "post_reaction":
+    case "post_comment":
+    case "mention":
     case "taunt_answered":
     case "second_workout":
       return postId ? `/post/${postId}` : "/inbox";
@@ -67,6 +76,8 @@ export function routeForNotification(input: NotificationRouteInput): string {
     case "community_invite":
     case "community_nudge":
       return communityId ? `/community/${communityId}` : "/inbox";
+    case "community_message":
+      return communityId ? `/community/${communityId}?tab=Chat` : "/inbox";
     case "streak_milestone":
     case "trophy_unlocked":
     case "claim_approved":
@@ -75,6 +86,9 @@ export function routeForNotification(input: NotificationRouteInput): string {
     case "daily_nudge":
     case "arrival_buzz":
       return "/(tabs)/feed";
+    case "system_notice":
+      // Actor-less notices carry their own destination (allowlisted above).
+      return isSafeNotificationRoute(payload.route) ? payload.route : "/inbox";
     default:
       return actorUsername ? `/user/${actorUsername}` : "/inbox";
   }

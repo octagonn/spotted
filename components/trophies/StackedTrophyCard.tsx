@@ -5,6 +5,7 @@ import { TrophyProgressBar } from "@/components/trophies/TrophyProgressBar";
 import { TrophyRarity } from "@/components/trophies/TrophyRarity";
 import { Pressable } from "@/components/ui/Pressable";
 import { type TrophyCardModel } from "@/lib/trophySelectors";
+import { medalColors } from "@/lib/trophyMedal";
 import { colors } from "@/theme/colors";
 
 /**
@@ -39,7 +40,7 @@ export function StackedTrophyCard({ card, width, onPress }: { card: TrophyCardMo
             borderRadius: 23,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: earned ? colors.goldSoft : colors.charcoal,
+            backgroundColor: earned ? medalColors(card.displayTier?.medal).soft : colors.charcoal,
             borderWidth: earned ? 0 : 1,
             borderColor: colors.iron
           }}
@@ -55,14 +56,14 @@ export function StackedTrophyCard({ card, width, onPress }: { card: TrophyCardMo
         </Text>
 
         {earned ? (
-          <Text style={{ fontFamily: "Geist_400Regular", fontSize: 10, color: colors.gold }}>Earned</Text>
+          <Text style={{ fontFamily: "Geist_400Regular", fontSize: 10, color: medalColors(card.displayTier?.medal).text }}>Earned</Text>
         ) : card.requirement ? (
           <Text numberOfLines={1} style={{ fontFamily: "Geist_400Regular", fontSize: 10, color: colors.fog }}>{card.requirement}</Text>
         ) : null}
 
         {card.progress ? (
           <View style={{ width: "100%", paddingHorizontal: 2 }}>
-            <TrophyProgressBar current={card.progress.current} target={card.progress.target} unit={card.progress.unit} earned={earned} />
+            <TrophyProgressBar current={card.progress.current} target={card.progress.target} unit={card.progress.unit} earned={earned} toward={card.progress.toward} />
           </View>
         ) : null}
 

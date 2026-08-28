@@ -60,7 +60,7 @@ export function StandaloneTrophyCard({ card, width, onPress }: { card: TrophyCar
 
         {card.progress ? (
           <View style={{ width: "100%", paddingHorizontal: 2 }}>
-            <TrophyProgressBar current={card.progress.current} target={card.progress.target} unit={card.progress.unit} earned={earned} />
+            <TrophyProgressBar current={card.progress.current} target={card.progress.target} unit={card.progress.unit} earned={earned} toward={card.progress.toward} />
           </View>
         ) : null}
 

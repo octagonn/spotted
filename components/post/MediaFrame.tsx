@@ -1,5 +1,5 @@
 import { Heart } from "lucide-react-native";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -10,6 +10,7 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 
+import { useZoomPreview, zoomScale, zoomTx, zoomTy } from "@/components/post/ZoomPreviewHost";
 import { colors } from "@/theme/colors";
 
 /**
@@ -17,15 +18,25 @@ import { colors } from "@/theme/colors";
  *  - pinch to zoom + pan while pinching; springs back on release
  *  - double-tap to like, with a heart-burst animation
  * Disabled entirely when `locked` (frosted feed).
+ *
+ * When `zoomUri` is provided (plain photo posts), the pinch drives the ROOT
+ * ZoomPreviewHost instead of transforming in place: a copy of the photo is
+ * rendered above the whole app with a dimming backdrop, so the zoom covers
+ * the screen (IG behavior) instead of being painted over by the caption and
+ * neighboring cards — and the dual-camera inset disappears under it.
  */
 export function MediaFrame({
   children,
   locked = false,
+  zoomUri = null,
   onLike,
   onSingleTap
 }: {
   children: React.ReactNode;
   locked?: boolean;
+  /** Plain photo URL to preview full-screen while pinching. Omit for videos /
+   *  carousels / stacks — those keep the in-place transform. */
+  zoomUri?: string | null;
   /** Called on double-tap. Return handled synchronously; the burst always plays. */
   onLike?: () => void;
   /** Optional single-tap action (e.g. video mute) — waits for the double-tap
@@ -35,39 +46,98 @@ export function MediaFrame({
   const scale = useSharedValue(1);
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
-  const focalX = useSharedValue(0);
-  const focalY = useSharedValue(0);
   const heart = useSharedValue(0);
   const lastLike = useRef(0);
+  const frameRef = useRef<View>(null);
+  const useOverlay = Boolean(zoomUri);
+
+  const beginZoom = () => {
+    if (!zoomUri) return;
+    frameRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 0 && height > 0) {
+        useZoomPreview.getState().show(zoomUri, { x, y, width, height });
+      }
+    });
+  };
+
+  const endZoom = () => {
+    useZoomPreview.getState().hide();
+  };
 
   const pinch = Gesture.Pinch()
     .enabled(!locked)
-    .onStart((e) => {
-      focalX.value = e.focalX;
-      focalY.value = e.focalY;
+    .onStart(() => {
+      if (useOverlay) {
+        zoomScale.value = 1;
+        zoomTx.value = 0;
+        zoomTy.value = 0;
+        runOnJS(beginZoom)();
+      }
     })
     .onUpdate((e) => {
-      scale.value = Math.max(1, Math.min(4, e.scale));
+      const next = Math.max(1, Math.min(4, e.scale));
+      if (useOverlay) zoomScale.value = next;
+      else scale.value = next;
     })
-    .onEnd(() => {
-      scale.value = withSpring(1, { damping: 20, stiffness: 240 });
-      tx.value = withSpring(0);
-      ty.value = withSpring(0);
+    // onFinalize, NOT onEnd: onEnd never fires when the gesture is CANCELLED
+    // (the list steals it, navigation happens mid-pinch) — the release spring
+    // then never ran and the full-screen overlay stayed up, dimming the whole
+    // app until a refresh. onFinalize runs on every way a gesture can stop.
+    .onFinalize(() => {
+      if (useOverlay) {
+        zoomTx.value = withSpring(0);
+        zoomTy.value = withSpring(0);
+        // Hide even when the spring was interrupted (finished === false):
+        // an interrupted close otherwise stranded the overlay too. A brand-new
+        // pinch re-shows it in its own onStart, so over-hiding is harmless.
+        zoomScale.value = withSpring(1, { damping: 20, stiffness: 240 }, () => {
+          runOnJS(endZoom)();
+        });
+      } else {
+        scale.value = withSpring(1, { damping: 20, stiffness: 240 });
+        tx.value = withSpring(0);
+        ty.value = withSpring(0);
+      }
     });
 
   const pan = Gesture.Pan()
     .enabled(!locked)
     .minPointers(2)
     .onUpdate((e) => {
-      if (scale.value > 1) {
+      const zoomed = (useOverlay ? zoomScale.value : scale.value) > 1;
+      if (!zoomed) return;
+      if (useOverlay) {
+        zoomTx.value = e.translationX;
+        zoomTy.value = e.translationY;
+      } else {
         tx.value = e.translationX;
         ty.value = e.translationY;
       }
     })
-    .onEnd(() => {
-      tx.value = withSpring(0);
-      ty.value = withSpring(0);
+    .onFinalize(() => {
+      if (useOverlay) {
+        zoomTx.value = withSpring(0);
+        zoomTy.value = withSpring(0);
+      } else {
+        tx.value = withSpring(0);
+        ty.value = withSpring(0);
+      }
     });
+
+  // Last-resort cleanup: if this card unmounts (recycled, navigated away)
+  // while it owns the preview, take the overlay down with it.
+  useEffect(
+    () => () => {
+      if (zoomUri && useZoomPreview.getState().uri === zoomUri) {
+        useZoomPreview.getState().hide();
+        zoomScale.value = 1;
+        zoomTx.value = 0;
+        zoomTy.value = 0;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [zoomUri]
+  );
 
   const fireLike = () => {
     const now = Date.now();
@@ -103,6 +173,7 @@ export function MediaFrame({
 
   const composed = Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap));
 
+  // In-place transform only for media without an overlay preview.
   const mediaStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: tx.value },
@@ -118,7 +189,7 @@ export function MediaFrame({
 
   return (
     <GestureDetector gesture={composed}>
-      <View>
+      <View ref={frameRef} collapsable={false}>
         <Animated.View style={mediaStyle}>{children}</Animated.View>
         <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }, heartStyle]}>
           <Heart size={96} color={colors.white} fill={colors.white} strokeWidth={0} />

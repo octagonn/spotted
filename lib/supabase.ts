@@ -34,10 +34,21 @@ function isRefreshTokenNoise(args: unknown[]): boolean {
 if (!(globalThis as { __spottedAuthNoisePatched?: boolean }).__spottedAuthNoisePatched) {
   (globalThis as { __spottedAuthNoisePatched?: boolean }).__spottedAuthNoisePatched = true;
   const originalError = console.error.bind(console);
+  const originalWarn = console.warn.bind(console);
+  // A bare `TypeError: Network request failed` is supabase-js's auth
+  // auto-refresh (or realtime) losing the network for a moment — it retries on
+  // its own. Keep it visible as a warning instead of a red error box.
+  const isTransientNetwork = (args: unknown[]) =>
+    args.length === 1 &&
+    args[0] instanceof TypeError &&
+    /network request failed/i.test(args[0].message);
   console.error = (...args: unknown[]) => {
-    if (!isRefreshTokenNoise(args)) {
-      originalError(...args);
+    if (isRefreshTokenNoise(args)) return;
+    if (isTransientNetwork(args)) {
+      originalWarn("Transient network failure (auto-retried):", (args[0] as Error).message);
+      return;
     }
+    originalError(...args);
   };
 }
 
@@ -72,12 +83,14 @@ export const supabase = createClient<Database>(
   }
 );
 
+/**
+ * Avatars live in R2 like every other image; the DB stores "r2:<key>" and
+ * <Avatar>/<CachedImage> resolve it to a signed URL. Kept for the few legacy
+ * rows that still hold an absolute URL — those pass through unchanged.
+ */
 export function publicAvatarUrl(path?: string | null) {
-  if (!path || !isSupabaseConfigured) {
-    return null;
-  }
-  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-  return data.publicUrl;
+  if (!path) return null;
+  return path;
 }
 
 /**
@@ -194,17 +207,35 @@ export async function signedPostUrls(paths: (string | null | undefined)[]): Prom
       const R2_SIGN_CHUNK = 200;
       for (let i = 0; i < r2Paths.length; i += R2_SIGN_CHUNK) {
         const chunk = r2Paths.slice(i, i + R2_SIGN_CHUNK);
-        const urls = await r2SignDownloads(chunk.map(r2Key));
-        for (const path of chunk) {
-          const url = urls.get(r2Key(path));
-          if (url) {
-            map.set(path, url);
-            rememberSigned(path, url, now);
+        // Retry, exactly like the Storage branch below. r2SignDownloads brokers
+        // through an EDGE FUNCTION, so a cold start or transient 5xx is routine
+        // — and invokeR2 reports that by returning an EMPTY MAP rather than
+        // throwing, so the outer catch never fired and there was no second
+        // attempt. One hiccup therefore blanked every R2 photo on the page, and
+        // since nearly all media is now R2 that reads as "random posts don't
+        // load". Drive the loop off what is still missing, not off exceptions,
+        // so it covers a thrown error and a silent empty result alike.
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const pending = chunk.filter((p) => !map.has(p));
+          if (!pending.length) break;
+          // Give a cold-starting function a moment before trying again.
+          if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 300));
+          try {
+            const urls = await r2SignDownloads(pending.map(r2Key));
+            for (const path of pending) {
+              const url = urls.get(r2Key(path));
+              if (url) {
+                map.set(path, url);
+                rememberSigned(path, url, now);
+              }
+            }
+          } catch {
+            // swallow; the next attempt retries whatever is still missing
           }
         }
       }
     } catch {
-      // leftovers stay unsigned; callers show placeholders
+      // module load failed — leftovers stay unsigned and callers show placeholders
     }
   }
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -239,6 +270,8 @@ export async function signedMessageUrl(path: string) {
   // return them unchanged instead of asking Storage to sign a non-existent
   // object (which throws → the optimistic media renders as a blank box).
   if (/^(file|content|assets-library|ph|https?):/i.test(path)) return path;
+  // Chat media is in R2 (same cache/TTL as post media).
+  if (path.startsWith("r2:")) return signedPostUrl(path);
   const cacheKey = `msg:${path}`;
   const now = Date.now();
   const hit = signedUrlCache.get(cacheKey);

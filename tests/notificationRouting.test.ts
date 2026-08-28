@@ -30,7 +30,19 @@ describe("notification routing", () => {
     expect(isSafeNotificationRoute(`/post/${postId}`)).toBe(true);
     expect(isSafeNotificationRoute("https://example.com")).toBe(false);
     expect(isSafeNotificationRoute("//example.com")).toBe(false);
-    expect(isSafeNotificationRoute("/settings/privacy")).toBe(false);
+    // System notices may deep-link to the privacy settings + legal docs only.
+    expect(isSafeNotificationRoute("/settings/privacy")).toBe(true);
+    expect(isSafeNotificationRoute("/settings/legal/privacy")).toBe(true);
+    expect(isSafeNotificationRoute("/settings/delete-account")).toBe(false);
+    expect(
+      routeForNotification({ type: "system_notice", payload: { route: "/settings/legal/privacy" } })
+    ).toBe("/settings/legal/privacy");
+    expect(routeForNotification({ type: "system_notice", payload: { route: "/settings/nope" } })).toBe("/inbox");
+    expect(routeForNotification({ type: "community_message", payload: { community_id: communityId } })).toBe(
+      `/community/${communityId}?tab=Chat`
+    );
+    expect(isSafeNotificationRoute(`/community/${communityId}?tab=Chat`)).toBe(true);
+    expect(isSafeNotificationRoute(`/community/${communityId}?tab=Evil`)).toBe(false);
     expect(
       routeForNotification({
         type: "daily_nudge",

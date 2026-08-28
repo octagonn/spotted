@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
+import { logger } from "@/lib/logger";
 import { mockFeed, mockGyms, mockPermanentDrops, mockProfiles, mockRoutine, mockStreak } from "@/lib/mockData";
 import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
@@ -175,7 +177,7 @@ export function useUserStreak(userId?: string | null) {
 
 export type UserPost = Pick<
   Post,
-  "id" | "media_url" | "caption" | "created_at" | "saved" | "permanent" | "is_daily_drop" | "media_type" | "music_title" | "music_artist" | "music_preview_url" | "music_artwork_url" | "music_clip_start"
+  "id" | "media_url" | "caption" | "created_at" | "saved" | "permanent" | "is_daily_drop" | "media_type" | "gym_id" | "music_title" | "music_artist" | "music_preview_url" | "music_artwork_url" | "music_clip_start"
 > & {
   thumbnail_url: string | null;
   /** Carousel photo paths (unsigned) — everything posted that day. */
@@ -205,6 +207,7 @@ export function useUserPosts(userId?: string | null) {
             permanent: post.permanent,
             is_daily_drop: post.is_daily_drop,
             media_type: post.media_type,
+            gym_id: post.gym_id ?? null,
             thumbnail_url: null,
             media_urls: post.media_urls ?? null,
             inset_url: null,
@@ -221,7 +224,7 @@ export function useUserPosts(userId?: string | null) {
       const { data, error } = await supabase
         .from("posts")
         .select(
-          "id, media_url, caption, created_at, saved, permanent, is_daily_drop, media_type, thumbnail_url, media_urls, inset_url, music_title, music_artist, music_preview_url, music_artwork_url, music_clip_start, attached_workouts:workouts!workouts_post_id_fkey(id, name, duration_seconds, started_at, data)"
+          "id, media_url, caption, created_at, saved, permanent, is_daily_drop, media_type, gym_id, thumbnail_url, media_urls, inset_url, music_title, music_artist, music_preview_url, music_artwork_url, music_clip_start, attached_workouts:workouts!workouts_post_id_fkey(id, name, duration_seconds, started_at, data)"
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -230,31 +233,16 @@ export function useUserPosts(userId?: string | null) {
         throw error;
       }
       // Cast: generated types don't know the workouts.post_id FK (same as useFeed).
-      const rows = (data ?? []) as unknown as UserPost[];
-      return Promise.all(
-        rows.map(async (row) => {
-          let mediaUrl = row.media_url;
-          if (mediaUrl && !mediaUrl.startsWith("http")) {
-            try {
-              mediaUrl = await signedPostUrl(mediaUrl);
-            } catch {
-              // Fall back to a placeholder, NOT the raw "r2:<key>" path — an
-              // unsigned storage key can't render and (in a recycled grid)
-              // shows the previous cell's image.
-              mediaUrl = "";
-            }
-          }
-          let thumbnailUrl = row.thumbnail_url;
-          if (thumbnailUrl && !thumbnailUrl.startsWith("http")) {
-            try {
-              thumbnailUrl = await signedPostUrl(thumbnailUrl);
-            } catch {
-              thumbnailUrl = null;
-            }
-          }
-          return { ...row, media_url: mediaUrl, thumbnail_url: thumbnailUrl };
-        })
-      );
+      // Paths stay RAW here. This used to sign media_url + thumbnail_url with a
+      // per-post signedPostUrl call — up to 240 individual round trips for a
+      // full 120-post archive — and every consumer that actually renders images
+      // (useSignedUserPosts) signed them again anyway, batched.
+      //
+      // Worse, a failed sign wrote media_url = "", which useSignedUserPosts
+      // reads as `hasMedia: false`, and both profile grids drop !hasMedia posts.
+      // So one flaky signing call made a real post VANISH from your profile
+      // rather than showing a placeholder tile. Raw paths keep hasMedia honest.
+      return (data ?? []) as unknown as UserPost[];
     }
   });
 }
@@ -348,4 +336,23 @@ export function useFriendshipStatus(otherUserId?: string | null) {
       return data.user_id === userId ? "pending-outgoing" : "pending-incoming";
     }
   });
+}
+
+/**
+ * Backend-only profile-view capture (nothing in the UI reads this yet).
+ * Fires record_profile_view once per visited profile per mount; the server
+ * dedupes repeat visits within the hour and ignores self views and blocked
+ * viewers. Errors are swallowed — capture must never affect the screen.
+ */
+export function useRecordProfileView(profileId: string | undefined) {
+  const recorded = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !profileId) return;
+    const me = useAuthStore.getState().userId;
+    if (!me || profileId === me || recorded.current === profileId) return;
+    recorded.current = profileId;
+    void supabase.rpc("record_profile_view", { p_profile_id: profileId }).then(({ error }) => {
+      if (error) logger.warn("record_profile_view_failed", { message: error.message });
+    });
+  }, [profileId]);
 }

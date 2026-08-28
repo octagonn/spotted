@@ -41,10 +41,10 @@ export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
           <Dumbbell size={17} color={colors.gold} strokeWidth={1.9} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontFamily: "Boldonse_400Regular", fontSize: 13, color: colors.white }}>
+          <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: colors.white }}>
             {workout.name}
           </Text>
-          <Text style={{ marginTop: 2, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>
+          <Text style={{ marginTop: 2, fontFamily: "Geist_400Regular", fontSize: 13, color: colors.fog }}>
             {[
               `${sets} ${sets === 1 ? "set" : "sets"}`,
               cardioMin > 0 ? `${cardioMin} min cardio` : null,
@@ -108,8 +108,8 @@ export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
                         backgroundColor: s.pr ? "rgba(232,180,76,0.12)" : "rgba(255,255,255,0.03)"
                       }}
                     >
-                      <Text style={{ width: 16, fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>{i + 1}</Text>
-                      <Text style={{ flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.bone }}>{text}</Text>
+                      <Text style={{ width: 18, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.fog }}>{i + 1}</Text>
+                      <Text style={{ flex: 1, fontFamily: "Geist_400Regular", fontSize: 13, color: colors.bone }}>{text}</Text>
                     </View>
                   );
                 })}

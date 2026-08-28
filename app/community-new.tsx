@@ -14,7 +14,7 @@ import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { COMMUNITY_ICONS, WIZARD_TYPES } from "@/lib/communityTypes";
 import { compressReactionSelfie } from "@/lib/posts";
 import { logger } from "@/lib/logger";
-import { publicAvatarUrl, supabase } from "@/lib/supabase";
+import { uploadMediaObject } from "@/lib/r2";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
@@ -92,10 +92,7 @@ export default function CommunityWizard() {
       const compressed = await compressReactionSelfie(result.assets[0].uri);
       const body = await (await fetch(compressed)).arrayBuffer();
       if (!body || body.byteLength === 0) throw new Error("empty");
-      const path = `${userId}/community-${Date.now()}.jpg`;
-      const upload = await supabase.storage.from("avatars").upload(path, body, { contentType: "image/jpeg", upsert: false });
-      if (upload.error) throw upload.error;
-      setPhotoUrl(publicAvatarUrl(path) ?? null);
+      setPhotoUrl(await uploadMediaObject(`${userId}/community-${Date.now()}.jpg`, body, "image/jpeg"));
     } catch (error) {
       logger.warn("community_photo_failed", { message: error instanceof Error ? error.message : String(error) });
       showToast("Couldn't upload photo — try again");

@@ -1,10 +1,10 @@
 import { Image } from "expo-image";
-import { Check, Crop, Download, Pen, RotateCw, Smile, Trash2, Type, Undo2, X } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Check, Crop, Download, Eraser, Pen, RotateCw, Trash2, Type, Undo2, X } from "lucide-react-native";
 import { useRef, useState } from "react";
 import {
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path as SvgPath } from "react-native-svg";
 import { captureRef } from "react-native-view-shot";
 
+import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
 import { savePhotoToCameraRoll } from "@/lib/mediaLibrary";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import { showToast } from "@/stores/ui";
@@ -43,10 +44,21 @@ const TEXT_FONTS: { label: string; family: string }[] = [
   { label: "Light", family: "Geist_400Regular" }
 ];
 const PEN_WIDTHS = [4, 8, 14];
-const EMOJIS = ["🔥", "💪", "🏋️", "😤", "🥵", "🎯", "🏆", "⚡", "💯", "🙌", "😮‍💨", "🧠"];
 
 let counter = 0;
 const uid = () => `e${++counter}`;
+
+/** Full-saturation hue → hex (the RGB wheel slider). */
+function hslToHex(hue: number): string {
+  const f = (n: number) => {
+    const k = (n + hue / 30) % 12;
+    const c = 0.5 - Math.max(-1, Math.min(k - 3, 9 - k, 1)) * 0.45;
+    return Math.round(255 * c)
+      .toString(16)
+      .padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
 
 function DraggableOverlay({
   x,
@@ -149,26 +161,42 @@ function DraggableOverlay({
 }
 
 /**
- * Snapchat/Instagram-style editor for stories and non-daily photos. The daily
- * geoverified post never uses this — it stays raw. Tools stack in one session:
- * filters, pen drawing, draggable/resizable text + emoji stickers, rotate.
- * "Done" flattens the layers to a new image via view-shot (falls back to the
- * original if capture isn't available).
+ * Snapchat/Instagram-style editor for stories, daily posts and non-daily
+ * photos. Tools stack in one session: filters, pen drawing,
+ * draggable/resizable text + emoji stickers, rotate. "Done" flattens the
+ * layers to a new image via view-shot (falls back to the original if capture
+ * isn't available).
  */
 export function PhotoEditor({
   uri,
   insetUri,
+  bakeInset = true,
   onDone,
   onCancel
 }: {
   uri: string;
-  /** Optional dual-camera selfie, baked into the edited story image. */
+  /** Optional dual-camera selfie shown as the corner PIP. */
   insetUri?: string | null;
+  /**
+   * Whether the inset is FLATTENED into the exported image.
+   *
+   * Stories bake it (true): a story is one flat image — there is no separate
+   * inset column to draw from later.
+   *
+   * Daily posts must NOT bake it (false): they upload the selfie separately as
+   * `inset_url`, and the feed, profile grid and streak calendar all draw the
+   * PIP live from that column. Baking it here too would show the same selfie
+   * TWICE on the post. Rendering it outside the captured view still lets you
+   * see and compose around the PIP while editing, while `inset_url` stays the
+   * single source of truth.
+   */
+  bakeInset?: boolean;
   onDone: (editedUri: string, overlayText: string) => void;
   onCancel: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  const keyboardHeight = useKeyboardHeight();
   const captureViewRef = useRef<View>(null);
 
   const [tool, setTool] = useState<Tool>("none");
@@ -244,6 +272,11 @@ export function PhotoEditor({
     });
   const cropGesture = Gesture.Simultaneous(cropPan, cropPinch, cropRotate);
 
+  // Chronological undo log — strokes, texts, AND crops undo in the order
+  // they happened (the old undo was strokes-then-stickers-then-texts).
+  const actionsRef = useRef<("stroke" | "text" | "crop")[]>([]);
+  const cropUndoRef = useRef<{ scale: number; tx: number; ty: number; rot: number }[]>([]);
+
   const enterCrop = () => {
     cropSnapshot.current = { scale: cScale.value, tx: cTx.value, ty: cTy.value, rot: cRot.value };
     setTool("crop");
@@ -259,9 +292,93 @@ export function PhotoEditor({
   const rotate90 = () => {
     cRot.value = withTiming(cRot.value + Math.PI / 2, { duration: 160 });
   };
+  /**
+   * Snap the crop transform back inside "covers the frame" bounds — panning
+   * or rotating could expose the black backdrop at the edges, which then got
+   * BAKED into the exported image (the reported "weird borders").
+   */
+  const clampCrop = () => {
+    const r = cRot.value;
+    const c = Math.abs(Math.cos(r));
+    const s = Math.abs(Math.sin(r));
+    const minScale = Math.max((width * c + height * s) / width, (width * s + height * c) / height, 1);
+    const scale = Math.max(cScale.value, minScale);
+    const slackX = Math.max(0, (scale * (width * c + height * s) - width) / 2);
+    const slackY = Math.max(0, (scale * (width * s + height * c) - height) / 2);
+    cScale.value = withTiming(scale, { duration: 160 });
+    cTx.value = withTiming(Math.max(-slackX, Math.min(slackX, cTx.value)), { duration: 160 });
+    cTy.value = withTiming(Math.max(-slackY, Math.min(slackY, cTy.value)), { duration: 160 });
+  };
+  const applyCrop = () => {
+    cropUndoRef.current.push({ ...cropSnapshot.current });
+    actionsRef.current.push("crop");
+    clampCrop();
+    setTool("none");
+  };
 
   const ptsRef = useRef<string>("");
 
+  // RGB wheel (8th swatch): opens a full-hue slider at the bottom.
+  const [showWheel, setShowWheel] = useState(false);
+  const [hueBarWidth, setHueBarWidth] = useState(0);
+  const pickHue = (x: number) => {
+    if (hueBarWidth <= 0) return;
+    const hue = Math.max(0, Math.min(359, (x / hueBarWidth) * 360));
+    setPenColor(hslToHex(hue));
+  };
+  const hueGesture = Gesture.Pan()
+    .runOnJS(true)
+    .onBegin((e) => pickHue(e.x))
+    .onUpdate((e) => pickHue(e.x));
+
+  // Eraser: a true brush — it carves away only the PARTS of strokes it drags
+  // over (splitting a line into surviving segments), not whole lines.
+  const [erasing, setErasing] = useState(false);
+  const eraseAt = (x: number, y: number) => {
+    const R2 = 22 * 22;
+    setStrokes((prev) => {
+      const out: Stroke[] = [];
+      let changed = false;
+      for (const stroke of prev) {
+        const nums = stroke.d.match(/-?\d+(\.\d+)?/g);
+        if (!nums) {
+          out.push(stroke);
+          continue;
+        }
+        const pts: [number, number][] = [];
+        for (let i = 0; i + 1 < nums.length; i += 2) pts.push([Number(nums[i]), Number(nums[i + 1])]);
+        const segs: [number, number][][] = [];
+        let seg: [number, number][] = [];
+        let hit = false;
+        for (const p of pts) {
+          const dx = p[0] - x;
+          const dy = p[1] - y;
+          if (dx * dx + dy * dy <= R2) {
+            hit = true;
+            if (seg.length > 1) segs.push(seg);
+            seg = [];
+          } else {
+            seg.push(p);
+          }
+        }
+        if (seg.length > 1) segs.push(seg);
+        if (!hit) {
+          out.push(stroke);
+          continue;
+        }
+        changed = true;
+        for (const sPts of segs) {
+          out.push({
+            id: uid(),
+            d: `M ${sPts[0][0]} ${sPts[0][1]}` + sPts.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join(""),
+            color: stroke.color,
+            width: stroke.width
+          });
+        }
+      }
+      return changed ? out : prev;
+    });
+  };
 
   // runOnJS(true): callbacks run on the JS thread, so touching the React ref
   // and calling setState directly is safe. The worklet version crashed in Expo
@@ -271,9 +388,17 @@ export function PhotoEditor({
     .enabled(tool === "draw")
     .runOnJS(true)
     .onBegin((e) => {
+      if (erasing) {
+        eraseAt(e.x, e.y);
+        return;
+      }
       ptsRef.current = `M ${e.x.toFixed(1)} ${e.y.toFixed(1)}`;
     })
     .onUpdate((e) => {
+      if (erasing) {
+        eraseAt(e.x, e.y);
+        return;
+      }
       ptsRef.current += ` L ${e.x.toFixed(1)} ${e.y.toFixed(1)}`;
       setStrokes((prev) => {
         const next = prev.slice();
@@ -284,6 +409,8 @@ export function PhotoEditor({
       });
     })
     .onFinalize(() => {
+      if (erasing) return;
+      actionsRef.current.push("stroke");
       setStrokes((prev) => prev.map((s) => (s.id === "live" ? { ...s, id: uid() } : s)));
     });
 
@@ -302,8 +429,22 @@ export function PhotoEditor({
       setTool("none");
       return;
     }
-    if (!text) return;
+    if (!text) {
+      // Dismissed empty: the tool must reset too — leaving it on "text" left
+      // the editor stuck (rail lit, tap-to-type dead).
+      setTool("none");
+      return;
+    }
+    actionsRef.current.push("text");
     setTexts((prev) => [...prev, { id: uid(), text, color: penColor, font: textFont, x: width / 2 - 60, y: height / 2 - 20 }]);
+    setTool("none");
+  };
+
+  /** Cancel the text composer entirely (rail Type button acts as a toggle). */
+  const cancelCompose = () => {
+    setComposing(false);
+    setDraft("");
+    setEditingTextId(null);
     setTool("none");
   };
 
@@ -328,23 +469,57 @@ export function PhotoEditor({
     setComposing(true);
   };
 
-  const addSticker = (emoji: string) => {
-    setStickers((prev) => [...prev, { id: uid(), emoji, x: width / 2 - 24, y: height / 2 - 24 }]);
+  const undo = () => {
+    // Chronological: the LAST thing done is what undoes — including crops.
+    const last = actionsRef.current.pop();
+    if (last === "stroke") {
+      setStrokes((prev) => prev.slice(0, -1));
+    } else if (last === "text") {
+      setTexts((prev) => prev.slice(0, -1));
+    } else if (last === "crop") {
+      const snap = cropUndoRef.current.pop();
+      if (snap) {
+        cScale.value = withTiming(snap.scale, { duration: 160 });
+        cTx.value = withTiming(snap.tx, { duration: 160 });
+        cTy.value = withTiming(snap.ty, { duration: 160 });
+        cRot.value = withTiming(snap.rot, { duration: 160 });
+      }
+    } else if (stickers.length) {
+      // Legacy stickers from before the emoji tool was removed.
+      setStickers((prev) => prev.slice(0, -1));
+    }
   };
 
-  const undo = () => {
-    if (strokes.length) setStrokes((prev) => prev.slice(0, -1));
-    else if (stickers.length) setStickers((prev) => prev.slice(0, -1));
-    else if (texts.length) setTexts((prev) => prev.slice(0, -1));
-  };
+  /**
+   * True when nothing has actually been changed — no drawing, no text, no
+   * legacy sticker, an untouched crop transform, and no selfie inset that has
+   * to be flattened in.
+   */
+  const hasNoEdits = (): boolean =>
+    strokes.length === 0 &&
+    texts.length === 0 &&
+    stickers.length === 0 &&
+    cScale.value === 1 &&
+    cTx.value === 0 &&
+    cTy.value === 0 &&
+    cRot.value === 0 &&
+    !(insetUri && bakeInset);
 
   const renderEditedPhoto = async (): Promise<string> => {
     setSelected(null);
+    // captureRef rasterises the VIEW, so it caps the photo at the on-screen
+    // size — roughly 1170px wide at @3x, less at @2x — and re-encodes it. That
+    // is a large, permanent quality loss, and it was being paid on every trip
+    // through the editor even when the user changed nothing. Opening the editor
+    // and pressing Done should be lossless.
+    if (hasNoEdits()) return workingUri;
     let out = workingUri;
     try {
       // Race against a timeout so a platform without capture support can never hang Done.
       const captured = await Promise.race([
-        captureRef(captureViewRef, { format: "jpg", quality: 0.9 }),
+        // quality 1: this is already downsampled to screen size, so the JPEG
+        // step should not take a second bite. lib/posts re-encodes on upload.
+        captureRef(captureViewRef, { format: "jpg", quality: 1 }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
       ]);
       if (captured) out = captured;
@@ -382,6 +557,29 @@ export function PhotoEditor({
     onDone(out, texts.map((t) => t.text).join(" ").trim());
   };
 
+  // One definition, rendered either inside the captured frame (stories, where
+  // it must be flattened into the image) or outside it (daily posts, where the
+  // selfie is uploaded separately as inset_url and drawn live by the feed).
+  const insetPip = insetUri ? (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: insets.top + 66,
+        left: 16,
+        width: "30%",
+        aspectRatio: 3 / 4,
+        borderRadius: 14,
+        overflow: "hidden",
+        borderWidth: 2,
+        borderColor: colors.black,
+        backgroundColor: colors.black
+      }}
+    >
+      <Image source={{ uri: insetUri }} contentFit="cover" style={{ flex: 1 }} />
+    </View>
+  ) : null;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       {/* Captured region: photo (crop-transformed) + drawings + overlays. The
@@ -397,25 +595,22 @@ export function PhotoEditor({
           ))}
         </Svg>
 
-        {insetUri ? (
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: insets.top + 66,
-              left: 16,
-              width: "30%",
-              aspectRatio: 3 / 4,
-              borderRadius: 14,
-              overflow: "hidden",
-              borderWidth: 2,
-              borderColor: colors.black,
-              backgroundColor: colors.black
+        {/* Tap the photo to start typing (overlays render above and keep
+            their own gestures; draw mode's surface covers this). */}
+        {tool === "none" && !composing ? (
+          <Pressable
+            accessibilityLabel="Tap to add text"
+            onPress={() => {
+              setTool("text");
+              setComposing(true);
             }}
-          >
-            <Image source={{ uri: insetUri }} contentFit="cover" style={{ flex: 1 }} />
-          </View>
+            style={StyleSheet.absoluteFill}
+          />
         ) : null}
+
+        {/* Baked only for stories. For a daily post this same PIP is rendered
+            OUTSIDE the captured view below, so it never lands in the pixels. */}
+        {insetUri && bakeInset ? insetPip : null}
 
         {texts.map((t) => (
           <DraggableOverlay
@@ -462,6 +657,12 @@ export function PhotoEditor({
         ))}
       </View>
 
+      {/* Daily posts: the PIP lives OUTSIDE the captured frame, so you can see
+          and compose around it while editing but it is never flattened into the
+          exported photo — the post stores the selfie once, in inset_url, and
+          the feed draws it from there. */}
+      {insetUri && !bakeInset ? insetPip : null}
+
       {/* Draw gesture surface (only intercepts touches in draw mode) */}
       {tool === "draw" ? (
         <GestureDetector gesture={drawGesture}>
@@ -482,23 +683,90 @@ export function PhotoEditor({
         </Pressable>
       </View>
 
-      {/* Right-side tool rail */}
-      <View style={{ position: "absolute", top: insets.top + 64, right: 12, gap: 12 }}>
-        <RoundBtn active={tool === "text"} onPress={() => { setTool("text"); setComposing(true); }} accessibilityLabel="Text">
-          <Type size={20} color={colors.white} strokeWidth={2.2} />
-        </RoundBtn>
-        <RoundBtn active={tool === "draw"} onPress={() => setTool(tool === "draw" ? "none" : "draw")} accessibilityLabel="Draw">
+      {/* Right-side tool rail. Draw mode collapses the rail to just the pen
+          with the color column beneath it (other tools return on exit). Every
+          tool button toggles OFF when tapped again. */}
+      <View style={{ position: "absolute", top: insets.top + 64, right: 12, gap: 12, alignItems: "center" }}>
+        {tool !== "draw" ? (
+          <RoundBtn
+            active={tool === "text" || composing}
+            onPress={() => {
+              if (composing || tool === "text") {
+                cancelCompose();
+              } else {
+                setTool("text");
+                setComposing(true);
+              }
+            }}
+            accessibilityLabel="Text"
+          >
+            <Type size={20} color={colors.white} strokeWidth={2.2} />
+          </RoundBtn>
+        ) : null}
+        <RoundBtn
+          active={tool === "draw"}
+          onPress={() => {
+            setShowWheel(false);
+            setErasing(false);
+            setTool(tool === "draw" ? "none" : "draw");
+          }}
+          accessibilityLabel="Draw"
+        >
           <Pen size={20} color={colors.white} strokeWidth={2.2} />
         </RoundBtn>
-        <RoundBtn active={tool === "sticker"} onPress={() => setTool(tool === "sticker" ? "none" : "sticker")} accessibilityLabel="Stickers">
-          <Smile size={20} color={colors.white} strokeWidth={2.2} />
-        </RoundBtn>
-        <RoundBtn active={tool === "crop"} onPress={() => (tool === "crop" ? setTool("none") : enterCrop())} accessibilityLabel="Crop">
-          <Crop size={20} color={colors.white} strokeWidth={2.2} />
-        </RoundBtn>
-        <RoundBtn onPress={undo} accessibilityLabel="Undo">
-          <Undo2 size={20} color={colors.white} strokeWidth={2.2} />
-        </RoundBtn>
+        {tool === "draw" ? (
+          <>
+            {/* Colors drop vertically under the pen: 7 defaults + the wheel. */}
+            {PEN_COLORS.map((c) => (
+              <Pressable
+                key={c}
+                onPress={() => {
+                  setPenColor(c);
+                  setErasing(false);
+                  setShowWheel(false);
+                }}
+                accessibilityLabel={`Color ${c}`}
+              >
+                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c, borderWidth: !erasing && !showWheel && penColor === c ? 3 : 1, borderColor: !erasing && !showWheel && penColor === c ? colors.white : "rgba(255,255,255,0.5)" }} />
+              </Pressable>
+            ))}
+            {/* 8th: the RGB wheel — opens the hue bar at the bottom. */}
+            <Pressable onPress={() => { setShowWheel((v) => !v); setErasing(false); }} accessibilityLabel="Color wheel" accessibilityState={{ selected: showWheel }}>
+              <LinearGradient
+                colors={["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ width: 26, height: 26, borderRadius: 13, borderWidth: showWheel ? 3 : 1, borderColor: showWheel ? colors.white : "rgba(255,255,255,0.5)" }}
+              />
+            </Pressable>
+            {/* Eraser — carves strokes where you drag. */}
+            <Pressable onPress={() => { setErasing((v) => !v); setShowWheel(false); }} accessibilityLabel="Eraser" accessibilityState={{ selected: erasing }}>
+              <View
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "rgba(0,0,0,0.45)",
+                  borderWidth: erasing ? 3 : 1,
+                  borderColor: erasing ? colors.white : "rgba(255,255,255,0.5)"
+                }}
+              >
+                <Eraser size={14} color={colors.white} strokeWidth={2.2} />
+              </View>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <RoundBtn active={tool === "crop"} onPress={() => (tool === "crop" ? cancelCrop() : enterCrop())} accessibilityLabel="Crop">
+              <Crop size={20} color={colors.white} strokeWidth={2.2} />
+            </RoundBtn>
+            <RoundBtn onPress={undo} accessibilityLabel="Undo">
+              <Undo2 size={20} color={colors.white} strokeWidth={2.2} />
+            </RoundBtn>
+          </>
+        )}
       </View>
 
       {/* Save the current flattened edit without leaving the story editor. */}
@@ -514,42 +782,35 @@ export function PhotoEditor({
         </View>
       ) : null}
 
-      {/* Pen color + width (draw or text tool) */}
-      {tool === "draw" || tool === "text" ? (
+      {/* Draw mode bottom controls: stroke widths + (when the wheel swatch is
+          on) the full-hue slider. Colors themselves live in the rail column. */}
+      {tool === "draw" ? (
         <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 14, right: 70, gap: 10 }}>
-          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-            {PEN_COLORS.map((c) => (
-              <Pressable key={c} onPress={() => setPenColor(c)} accessibilityLabel={`Color ${c}`}>
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c, borderWidth: penColor === c ? 3 : 1, borderColor: penColor === c ? colors.white : "rgba(255,255,255,0.5)" }} />
-              </Pressable>
-            ))}
-          </View>
-          {tool === "draw" ? (
-            <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-              {PEN_WIDTHS.map((w) => (
-                <Pressable key={w} onPress={() => setPenWidth(w)} accessibilityLabel={`Width ${w}`}>
-                  <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: penWidth === w ? 2 : 1, borderColor: penWidth === w ? colors.white : "rgba(255,255,255,0.4)" }}>
-                    <View style={{ width: w + 2, height: w + 2, borderRadius: (w + 2) / 2, backgroundColor: colors.white }} />
-                  </View>
-                </Pressable>
-              ))}
-            </View>
+          {showWheel ? (
+            <GestureDetector gesture={hueGesture}>
+              <View
+                onLayout={(e) => setHueBarWidth(e.nativeEvent.layout.width)}
+                accessibilityRole="adjustable"
+                accessibilityLabel="Pick any color"
+              >
+                <LinearGradient
+                  colors={["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF", "#FF0000"]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={{ height: 26, borderRadius: 13, borderWidth: 2, borderColor: penColor }}
+                />
+              </View>
+            </GestureDetector>
           ) : null}
-        </View>
-      ) : null}
-
-      {/* Sticker (emoji) picker */}
-      {tool === "sticker" ? (
-        <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 14, right: 60 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-            {EMOJIS.map((e) => (
-              <Pressable key={e} onPress={() => addSticker(e)} accessibilityLabel={`Sticker ${e}`}>
-                <View style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)" }}>
-                  <Text style={{ fontSize: 26 }}>{e}</Text>
+          <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+            {PEN_WIDTHS.map((w) => (
+              <Pressable key={w} onPress={() => setPenWidth(w)} accessibilityLabel={`Width ${w}`}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: penWidth === w ? 2 : 1, borderColor: penWidth === w ? colors.white : "rgba(255,255,255,0.4)" }}>
+                  <View style={{ width: w + 2, height: w + 2, borderRadius: (w + 2) / 2, backgroundColor: colors.white }} />
                 </View>
               </Pressable>
             ))}
-          </ScrollView>
+          </View>
         </View>
       ) : null}
 
@@ -567,8 +828,12 @@ export function PhotoEditor({
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Done</Text>
             </View>
           </View>
-          {/* Input sits in the upper third so the keyboard never hides it. */}
-          <View style={{ position: "absolute", top: insets.top + 90, left: 24, right: 24 }} pointerEvents="box-none">
+          {/* Input centers in the VISIBLE area (screen minus keyboard) —
+              middle of the screen per partner ask, never hidden under keys. */}
+          <View
+            style={{ position: "absolute", top: insets.top + 60, left: 24, right: 24, bottom: keyboardHeight, justifyContent: "center" }}
+            pointerEvents="box-none"
+          >
             <TextInput
               value={draft}
               onChangeText={setDraft}
@@ -576,17 +841,21 @@ export function PhotoEditor({
               placeholderTextColor="rgba(255,255,255,0.6)"
               autoFocus
               multiline
-              blurOnSubmit
+              // Return commits the text directly (no edit-options detour).
+              submitBehavior="blurAndSubmit"
+              returnKeyType="done"
+              onSubmitEditing={addText}
               style={{ minWidth: 200, fontFamily: textFont, fontSize: 30, color: penColor, textAlign: "center" }}
             />
-            {/* Font picker (#18) — colors come from the pen palette below. */}
+            {/* Font picker (#18) — IDENTICAL bubble size for every font;
+                colors come from the pen palette below. */}
             <View style={{ marginTop: 18, flexDirection: "row", justifyContent: "center", gap: 8 }}>
               {TEXT_FONTS.map((f) => {
                 const on = textFont === f.family;
                 return (
                   <Pressable key={f.family} onPress={() => setTextFont(f.family)} accessibilityLabel={`Font ${f.label}`}>
-                    <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: on ? colors.white : "rgba(0,0,0,0.4)", borderWidth: 1, borderColor: on ? colors.white : "rgba(255,255,255,0.35)" }}>
-                      <Text style={{ fontFamily: f.family, fontSize: 13, color: on ? colors.black : colors.white }}>{f.label}</Text>
+                    <View style={{ width: 72, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 999, backgroundColor: on ? colors.white : "rgba(0,0,0,0.4)", borderWidth: 1, borderColor: on ? colors.white : "rgba(255,255,255,0.35)" }}>
+                      <Text numberOfLines={1} style={{ fontFamily: f.family, fontSize: 13, color: on ? colors.black : colors.white }}>{f.label}</Text>
                     </View>
                   </Pressable>
                 );
@@ -670,7 +939,7 @@ export function PhotoEditor({
                 <RotateCw size={22} color={colors.white} strokeWidth={2.2} />
               </View>
             </Pressable>
-            <Pressable onPress={() => setTool("none")} accessibilityLabel="Apply crop" hitSlop={10}>
+            <Pressable onPress={applyCrop} accessibilityLabel="Apply crop" hitSlop={10}>
               <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}>
                 <Check size={22} color={colors.black} strokeWidth={2.6} />
               </View>

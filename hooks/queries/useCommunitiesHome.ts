@@ -88,6 +88,8 @@ export type HomeGymHub = {
   communityId: string | null;
   memberCount: number;
   checkedInToday: number;
+  /** Preview of people who train here (community members, newest first). */
+  members: { id: string; name: string; username: string; avatarUrl: string | null }[];
   /** Latest visible message in the gym community — omitted when unknown
    *  (spec: no fake activity). */
   lastActivity: { senderName: string; preview: string; sentAt: string } | null;
@@ -118,26 +120,117 @@ export function useHomeGymHub(homeGymId?: string | null) {
       const community = communityResult.data as unknown as { id: string; members?: { count: number }[] } | null;
 
       let lastActivity: HomeGymHub["lastActivity"] = null;
+      let members: HomeGymHub["members"] = [];
       if (community) {
-        const { data: msg } = await supabase
-          .from("community_messages")
-          .select("content, sent_at, sender:sender_id(display_name)")
-          .eq("community_id", community.id)
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const row = msg as unknown as { content: string; sent_at: string; sender: { display_name: string } | null } | null;
+        const [msgResult, memberResult] = await Promise.all([
+          supabase
+            .from("community_messages")
+            .select("content, sent_at, sender:sender_id(display_name)")
+            .eq("community_id", community.id)
+            .order("sent_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          // The people who train here — makes the hub card member-first.
+          supabase
+            .from("community_members")
+            .select("profile:user_id(id, display_name, username, avatar_url)")
+            .eq("community_id", community.id)
+            .order("joined_at", { ascending: false })
+            .limit(12)
+        ]);
+        const row = msgResult.data as unknown as { content: string; sent_at: string; sender: { display_name: string } | null } | null;
         if (row?.sender) {
           lastActivity = { senderName: row.sender.display_name, preview: row.content, sentAt: row.sent_at };
         }
+        const memberRows = (memberResult.data ?? []) as unknown as {
+          profile: { id: string; display_name: string; username: string; avatar_url: string | null } | null;
+        }[];
+        members = memberRows
+          .filter((m) => m.profile)
+          .map((m) => ({
+            id: m.profile!.id,
+            name: m.profile!.display_name,
+            username: m.profile!.username,
+            avatarUrl: m.profile!.avatar_url
+          }));
       }
       return {
         communityId: community?.id ?? null,
         memberCount: community?.members?.[0]?.count ?? 0,
         checkedInToday: checkinsResult.count ?? 0,
+        members,
         lastActivity
       };
     }
+  });
+}
+
+/* ------------------------------ presence now ------------------------------ */
+
+export type CommunityPresence = {
+  count: number;
+  people: { id: string; name: string; avatar_url: string | null }[];
+  /** True when the server refused (caller isn't a member). */
+  locked?: boolean;
+};
+
+/** Community members checked in at the gym right now (membership-gated RPC). */
+export function useCommunityPresence(communityId?: string | null) {
+  return useQuery({
+    queryKey: ["community-presence", communityId ?? null],
+    enabled: isSupabaseConfigured && Boolean(communityId),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<CommunityPresence> => {
+      const { data, error } = await supabase.rpc("community_presence_now", { p_community_id: communityId as string });
+      if (error) throw error;
+      const row = (data ?? {}) as Partial<CommunityPresence>;
+      return { count: row.count ?? 0, people: row.people ?? [], locked: row.locked };
+    }
+  });
+}
+
+/* --------------------------------- board ---------------------------------- */
+
+export type BoardRow = {
+  user_id: string;
+  name: string;
+  username: string;
+  avatar_url: string | null;
+  joined_at: string;
+  /** Consecutive local days with a check-in at THIS gym (today/yesterday anchored). */
+  streak: number;
+  /** Distinct check-in days at this gym this calendar month. */
+  month_days: number;
+  last_day: string | null;
+};
+
+export type CommunityBoard = { rows: BoardRow[]; locked?: boolean };
+
+/** Gym-scoped board (spec Part 3). Server refuses non-members. */
+export function useCommunityBoard(communityId?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["community-board", communityId ?? null],
+    enabled: isSupabaseConfigured && Boolean(communityId) && enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<CommunityBoard> => {
+      const { data, error } = await supabase.rpc("community_board", { p_community_id: communityId as string });
+      if (error) throw error;
+      const row = (data ?? {}) as Partial<CommunityBoard>;
+      return { rows: row.rows ?? [], locked: row.locked };
+    }
+  });
+}
+
+/** Rank rows for a board tab; ties share a rank. */
+export function rankBoard(rows: BoardRow[], metric: "streak" | "month_days"): { row: BoardRow; rank: number }[] {
+  const sorted = [...rows].sort((a, b) => b[metric] - a[metric] || b.month_days - a.month_days || a.name.localeCompare(b.name));
+  let rank = 0;
+  let last: number | null = null;
+  return sorted.map((row, i) => {
+    if (last === null || row[metric] !== last) rank = i + 1;
+    last = row[metric];
+    return { row, rank };
   });
 }
 

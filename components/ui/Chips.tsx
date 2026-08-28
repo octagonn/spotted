@@ -30,9 +30,9 @@ export function TypePill({ children }: { children: ReactNode }) {
     >
       <Text
         style={{
-          fontFamily: "GeistMono_400Regular",
-          fontSize: 9.5,
-          letterSpacing: 9.5 * 0.1,
+          fontFamily: "Geist_500Medium",
+          fontSize: 10,
+          letterSpacing: 1,
           textTransform: "uppercase",
           color: colors.silver
         }}
@@ -55,7 +55,7 @@ export function TodayPill({ count }: { count: number }) {
         alignSelf: "flex-start"
       }}
     >
-      <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 9, color: colors.black }}>{count} today</Text>
+      <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 10, color: colors.black }}>{count} today</Text>
     </View>
   );
 }
@@ -79,9 +79,8 @@ export function CtxChip({ icon, children }: { icon?: ReactNode; children: ReactN
       {icon}
       <Text
         style={{
-          fontFamily: "GeistMono_400Regular",
-          fontSize: 10,
-          letterSpacing: 10 * 0.05,
+          fontFamily: "Geist_500Medium",
+          fontSize: 12,
           color: colors.silver
         }}
       >
@@ -107,9 +106,9 @@ export function VChip({ children, hot }: { children: ReactNode; hot?: boolean })
     >
       <Text
         style={{
-          fontFamily: "GeistMono_500Medium",
-          fontSize: 9,
-          letterSpacing: 9 * 0.16,
+          fontFamily: "Geist_600SemiBold",
+          fontSize: 10,
+          letterSpacing: 1,
           textTransform: "uppercase",
           color: hot ? colors.black : colors.mist
         }}
@@ -166,7 +165,7 @@ export function LiftTag({
       <Trophy size={16} color={tokens.accent.gold} strokeWidth={2} />
       <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: tokens.text.primary }}>{titleCase(name)}</Text>
       {value ? (
-        <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 13, color: tokens.accent.gold }}>{value}</Text>
+        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: tokens.accent.gold }}>{value}</Text>
       ) : null}
     </View>
   );
@@ -187,7 +186,7 @@ export function VidDur({ children, style }: { children: ReactNode; style?: ViewS
         style
       ]}
     >
-      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.white }}>{children}</Text>
+      <Text style={{ fontFamily: "Geist_500Medium", fontSize: 12, color: colors.white }}>{children}</Text>
     </View>
   );
 }
@@ -209,9 +208,9 @@ export function LiveBadge({ style }: { style?: ViewStyle }) {
     >
       <Text
         style={{
-          fontFamily: "GeistMono_500Medium",
-          fontSize: 8,
-          letterSpacing: 8 * 0.14,
+          fontFamily: "Geist_600SemiBold",
+          fontSize: 9,
+          letterSpacing: 1,
           color: colors.black
         }}
       >

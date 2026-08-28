@@ -1,6 +1,6 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Bell, ChevronRight, ExternalLink } from "lucide-react-native";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SettingRow as Row, SettingSectionLabel as SectionLabel, SettingToggle as Toggle } from "@/components/ui/SettingRow";
 import { SkeletonToggleRows } from "@/components/ui/Skeleton";
 import {
   useNotificationPrefs,
@@ -31,101 +32,7 @@ import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
 
-function Toggle({
-  value,
-  onToggle,
-  disabled = false
-}: {
-  value: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityState={{ checked: value, disabled }}
-      disabled={disabled}
-      onPress={onToggle}
-      haptic={false}
-      style={{
-        width: 48,
-        height: 28,
-        borderRadius: 14,
-        padding: 3,
-        opacity: disabled ? 0.45 : 1,
-        backgroundColor: value ? tokens.accent.gold : colors.iron,
-        alignItems: value ? "flex-end" : "flex-start"
-      }}
-    >
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          backgroundColor: value ? colors.black : colors.silver
-        }}
-      />
-    </Pressable>
-  );
-}
-function Row({
-  title,
-  sub,
-  right
-}: {
-  title: string;
-  sub?: string;
-  right: ReactNode;
-}) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.graphite
-      }}
-    >
-      <View style={{ flex: 1 }}>
-        <Text
-          style={{
-            fontFamily: "Geist_600SemiBold",
-            fontSize: 15,
-            color: colors.white
-          }}
-        >
-          {title}
-        </Text>
-        {sub ? (
-          <Text style={{ marginTop: 3, fontSize: 12.5, lineHeight: 17, color: colors.fog }}>
-            {sub}
-          </Text>
-        ) : null}
-      </View>
-      {right}
-    </View>
-  );
-}
 
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <Text
-      style={{
-        marginTop: 26,
-        marginBottom: 4,
-        fontFamily: "GeistMono_400Regular",
-        fontSize: 10.5,
-        letterSpacing: 1.4,
-        textTransform: "uppercase",
-        color: colors.mist
-      }}
-    >
-      {children}
-    </Text>
-  );
-}
 
 const SCOPES: { key: FriendCheckinScope; label: string }[] = [
   { key: "my_gym", label: "My gym" },
@@ -541,11 +448,6 @@ export default function NotificationSettingsScreen() {
           <Row
             title="Reactions"
             right={<CategoryToggle value={p.reactionsEnabled} field="reactionsEnabled" update={update} />}
-          />
-          <Row
-            title="Post views"
-            sub="Can be busy, so this starts off."
-            right={<CategoryToggle value={p.postViewsEnabled} field="postViewsEnabled" update={update} />}
           />
           <Row
             title="Tags"

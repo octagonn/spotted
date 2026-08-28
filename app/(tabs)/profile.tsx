@@ -1,12 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Image } from "expo-image";
 import { useRouter, type Href } from "expo-router";
-import { CalendarDays, Camera, ChevronDown, ChevronRight, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Play, Plus, Tag, Trophy, Users } from "lucide-react-native";
+import { CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Plus, Tag, Trophy, Users } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { LayoutAnimation, Linking, RefreshControl, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
+import { LayoutAnimation, RefreshControl, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CalendarTapHint } from "@/components/profile/CalendarTapHint";
+import { PostGridCell } from "@/components/profile/PostGridCell";
 import { StreakCalendar } from "@/components/profile/StreakCalendar";
 import { WeeklySplit } from "@/components/profile/WeeklySplit";
 import { StreakPopup } from "@/components/profile/StreakPopup";
@@ -15,6 +15,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
+import { Stat } from "@/components/ui/Stat";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useUserCounts } from "@/hooks/queries/useUserCounts";
 import { useMyProfile } from "@/hooks/queries/useProfile";
@@ -23,20 +24,24 @@ import { useWorkouts } from "@/hooks/queries/useWorkouts";
 import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRecordStreakHighWater, useStreak } from "@/hooks/queries/useStreak";
+import { appAlert } from "@/components/ui/AppDialog";
+import { restDayMessage, useMarkRestDay } from "@/hooks/queries/useRestDay";
+import { showToast } from "@/stores/ui";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
+import { useGymStreak } from "@/hooks/useGymStreak";
 import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
 import { useTrophyProgress } from "@/hooks/useTrophyProgress";
-import { parseSocialLinks, socialEntries } from "@/lib/socialLinks";
-import { computeGymStreak } from "@/lib/streak";
-import { localDateKey } from "@/stores/ui";
+import { shareProfile as shareProfileLink } from "@/lib/share";
+import { SocialLinksRow } from "@/components/profile/SocialLinksRow";
 import { colors } from "@/theme/colors";
 import { radius as R, tokens } from "@/theme/tokens";
 
 const NAV_H = 84;
 const RADIUS = 16;
 const CALENDAR_OPEN_KEY = "profile-calendar-open";
-// Vertical rhythm between sections — generous so the page scrolls as one piece.
-const SECTION = 30;
+// Vertical rhythm between sections — tightened 50% (partner feedback: too much
+// dead space between stats / calendar / trophies / tab bar).
+const SECTION = 15;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -53,6 +58,7 @@ export default function ProfileScreen() {
   const posts = useSignedUserPosts(profile?.id);
   const streak = useStreak();
   const streakDays = useStreakDays(profile?.id);
+  const markRestDay = useMarkRestDay();
   const hasStory = useHasActiveStory(profile?.id);
   const setVisibility = useSetVisibility();
   const [streakOpen, setStreakOpen] = useState(false);
@@ -106,19 +112,13 @@ export default function ProfileScreen() {
   const postCount = (posts.data ?? []).filter((p) => p.hasMedia).length;
   // Streak computed from the gym-day posts with a grace window for today, so it
   // never reads 0 the morning after a post.
-  const gymStreak = useMemo(
-    // Guard the Map contract: a stale/corrupted persisted cache could hand back
-    // a non-Map, so only call .keys() when it really is one.
-    () => computeGymStreak(streakDays.data instanceof Map ? streakDays.data.keys() : []),
-    [streakDays.data]
-  );
+  const gymStreak = useGymStreak(streakDays.data);
   const currentStreak = gymStreak.count;
   const longestStreak = Math.max(streak.data?.longest_streak ?? 0, currentStreak);
   // Persist a newly-observed high-water so "Longest" survives a streak break.
   useRecordStreakHighWater(currentStreak, streak.data?.longest_streak ?? 0);
   const trophies = useTrophyProgress();
   const hasActiveStory = hasStory.data ?? false;
-  const socials = useMemo(() => socialEntries(parseSocialLinks(profile?.social_links)), [profile?.social_links]);
   // Featured trophies pinned to the header (spec C).
   const featuredTrophies = useMemo(() => {
     const raw = profile?.featured_trophies;
@@ -134,7 +134,7 @@ export default function ProfileScreen() {
   };
 
   const shareProfile = () => {
-    void Share.share({ message: `Check out @${handle} on Spotted` });
+    shareProfileLink(handle);
   };
 
   return (
@@ -198,25 +198,28 @@ export default function ProfileScreen() {
               >
                 <Avatar name={name || "?"} uri={profile?.avatar_url} size={hasActiveStory ? avatarOuter - 14 : avatarOuter - 8} />
               </View>
-              {!hasActiveStory ? (
-                <View
-                  style={{
-                    position: "absolute",
-                    right: 3,
-                    bottom: 3,
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    backgroundColor: colors.white,
-                    borderWidth: 3,
-                    borderColor: colors.black,
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }}
-                >
-                  <Plus size={13} color={colors.black} strokeWidth={3} />
-                </View>
-              ) : null}
+              {/* Add-story: ALWAYS present (even with a story up) — the badge
+                  adds; tapping the avatar itself opens the active story. */}
+              <Pressable
+                onPress={() => router.push("/camera?mode=story")}
+                accessibilityLabel="Add to your story"
+                hitSlop={6}
+                style={{
+                  position: "absolute",
+                  right: 3,
+                  bottom: 3,
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: colors.white,
+                  borderWidth: 3,
+                  borderColor: colors.black,
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                <Plus size={13} color={colors.black} strokeWidth={3} />
+              </Pressable>
             </View>
           </Pressable>
 
@@ -236,38 +239,23 @@ export default function ProfileScreen() {
               {bio}
             </Text>
           ) : null}
-          {gym ? (
+          {/* Tap your home gym to change it. Changing it was only reachable by
+              guessing that it lived inside Edit profile — a tester spent a day
+              unable to get the wrong gym off their profile. */}
+          <Pressable
+            onPress={() => router.push("/edit-profile")}
+            accessibilityLabel={gym ? `Home gym ${gym}. Change home gym` : "Set your home gym"}
+            haptic={false}
+          >
             <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
               <MapPin size={14} color={colors.silver} strokeWidth={2} />
-              <Text style={{ fontFamily: "Geist_400Regular", fontSize: 14, color: colors.silver }}>{gym}</Text>
+              <Text style={{ fontFamily: "Geist_400Regular", fontSize: 14, color: gym ? colors.silver : colors.fog }}>
+                {gym ?? "Set your home gym"}
+              </Text>
+              <ChevronRight size={13} color={colors.fog} strokeWidth={2} />
             </View>
-          ) : null}
-          {socials.length ? (
-            <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {socials.map(({ meta, url }) => (
-                <Pressable
-                  key={meta.key}
-                  onPress={() => void Linking.openURL(url)}
-                  accessibilityLabel={meta.label}
-                  hitSlop={6}
-                >
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      borderWidth: 1,
-                      borderColor: colors.iron,
-                      alignItems: "center",
-                      justifyContent: "center"
-                    }}
-                  >
-                    <meta.icon size={17} color={colors.silver} strokeWidth={2} />
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+          </Pressable>
+          <SocialLinksRow links={profile?.social_links} />
         </View>
 
         {/* Edit / Share — recessed, equal-width, 44pt outline buttons */}
@@ -291,15 +279,15 @@ export default function ProfileScreen() {
         {/* Inline stats — Instagram treatment, no backgrounds, no dividers */}
         <View style={{ paddingHorizontal: H, paddingTop: SECTION }}>
           <View style={{ flexDirection: "row" }}>
-            <InlineStat
+            <Stat
               value={currentStreak}
               unit="days"
               label="Gym streak"
               icon={<Flame size={13} color={colors.gold} strokeWidth={2.2} />}
               onPress={() => setStreakOpen(true)}
             />
-            <InlineStat value={longestStreak} unit="days" label="Longest" />
-            <InlineStat
+            <Stat value={longestStreak} unit="days" label="Longest" />
+            <Stat
               value={trophies.earnedCount}
               label="Trophies"
               icon={<Trophy size={13} color={tokens.accent.gold} strokeWidth={2} />}
@@ -344,14 +332,45 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
+        {/* My Workouts — history + records moved here from the old dumbbell tab. */}
+        <View style={{ paddingHorizontal: H, paddingTop: SECTION }}>
+          <Pressable onPress={() => router.push("/my-workouts" as Href)} accessibilityLabel="My Workouts">
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 14,
+                paddingVertical: 16,
+                paddingHorizontal: 18,
+                borderRadius: R.md,
+                borderWidth: 1,
+                borderColor: "rgba(232,180,76,0.35)",
+                backgroundColor: tokens.accent.goldSubtle
+              }}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
+                <Dumbbell size={21} color={tokens.accent.gold} strokeWidth={2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>My Workouts</Text>
+                <Text style={{ marginTop: 2, fontSize: 12.5, color: colors.fog }}>History, records and in-progress sessions</Text>
+              </View>
+              <ChevronRight size={18} color={tokens.accent.gold} strokeWidth={2} />
+            </View>
+          </Pressable>
+        </View>
+
         {/* Streak calendar — the hero, the one contained surface. Collapsible;
             the header row always shows so it can be reopened. */}
         <View style={{ paddingTop: SECTION }}>
           <View
+            // Same bubble treatment as the Trophies button below, per spec.
             style={{
               marginHorizontal: H,
               borderRadius: RADIUS,
-              backgroundColor: colors.ink,
+              backgroundColor: tokens.bg.raised,
+              borderWidth: 1,
+              borderColor: tokens.border.default,
               paddingVertical: calendarOpen ? 16 : 4,
               overflow: "hidden"
             }}
@@ -384,6 +403,20 @@ export default function ProfileScreen() {
                 days={streakDays.data instanceof Map ? streakDays.data : new Map()}
                 createdAt={profile?.created_at}
                 onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
+                // Change of mind: today's rest cell taps through to cancel.
+                onRestDayPress={() =>
+                  appAlert("Cancel today's rest day?", "Your streak goes back to needing a post today.", [
+                    { text: "Keep resting", style: "cancel" },
+                    {
+                      text: "Cancel rest day",
+                      onPress: () =>
+                        markRestDay.mutate(false, {
+                          onSuccess: (result) => showToast(restDayMessage(result)),
+                          onError: () => showToast("Couldn't cancel — try again.")
+                        })
+                    }
+                  ])
+                }
               />
             ) : null}
           </View>
@@ -413,6 +446,7 @@ export default function ProfileScreen() {
           <View style={{ paddingTop: 14 }}>
             <WeeklySplit
               workouts={workouts.data ?? []}
+              gymDays={streakDays.data instanceof Map ? streakDays.data : undefined}
               isLoading={workouts.isLoading}
               ownProfile
               splitPublic={profile?.split_public ?? true}
@@ -429,7 +463,12 @@ export default function ProfileScreen() {
                   accessibilityLabel="Open post"
                   onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
                 >
-                  <GridCell post={{ media_url: post.media_url, media_type: post.mediaType, thumbnail_url: post.thumbnailUrl }} />
+                  <PostGridCell
+                    mediaUrl={post.media_url}
+                    thumbnailUrl={post.thumbnailUrl}
+                    insetUrl={post.inset_url}
+                    isVideo={post.mediaType === "video"}
+                  />
                 </Pressable>
               ))}
             </View>
@@ -450,15 +489,13 @@ export default function ProfileScreen() {
             {tagged.data.map((post) => (
               <Pressable
                 key={post.id}
-                style={{ width: "33.333%", aspectRatio: 4 / 5, padding: 1 }}
+                style={{ width: gridCellW, aspectRatio: 4 / 5, padding: 1 }}
                 accessibilityLabel="Open post"
-                onPress={() =>
-                  router.push(
-                    `/daily/${localDateKey(new Date(post.created_at))}?user=${post.user_id}&post=${post.id}` as Href
-                  )
-                }
+                // One swipeable feed over ALL tagged posts, landing on this
+                // one — the day viewer forced open/back/open per post.
+                onPress={() => router.push(`/tagged-posts/${post.id}?user=${profile?.id}` as Href)}
               >
-                <GridCell post={{ media_url: post.media_url, media_type: "image", thumbnail_url: null }} />
+                <PostGridCell mediaUrl={post.media_url} thumbnailUrl={post.thumbnail_url} isVideo={post.media_type === "video"} />
               </Pressable>
             ))}
           </View>
@@ -494,41 +531,6 @@ export default function ProfileScreen() {
   );
 }
 
-function InlineStat({
-  value,
-  unit,
-  label,
-  icon,
-  onPress
-}: {
-  value: number;
-  unit?: string;
-  label: string;
-  icon?: React.ReactNode;
-  onPress?: () => void;
-}) {
-  const body = (
-    <>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-        {icon}
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
-          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 20, color: colors.white }}>{value}</Text>
-          {unit ? <Text style={{ fontFamily: "Geist_400Regular", fontSize: 11.5, color: colors.fog }}>{unit}</Text> : null}
-        </View>
-      </View>
-      <Text style={{ marginTop: 5, fontFamily: "Geist_400Regular", fontSize: 12.5, color: colors.fog }}>{label}</Text>
-    </>
-  );
-  if (onPress) {
-    return (
-      <Pressable onPress={onPress} accessibilityLabel={`${value} ${label}`} haptic={false} style={{ flex: 1, alignItems: "center" }}>
-        {body}
-      </Pressable>
-    );
-  }
-  return <View style={{ flex: 1, alignItems: "center" }}>{body}</View>;
-}
-
 function AchievementButton({
   icon: Icon,
   label,
@@ -558,30 +560,6 @@ function AchievementButton({
         <ChevronRight size={18} color={tokens.text.tertiary} strokeWidth={2} style={{ position: "absolute", right: 16 }} />
       </View>
     </Pressable>
-  );
-}
-
-/**
- * One grid cell. Photos show their image; videos show the poster thumbnail (or
- * a bg.subtle placeholder when none was generated) with a play badge overlay,
- * so video posts never render as blank black cells.
- */
-function GridCell({ post }: { post: { media_url: string | null; media_type?: string; thumbnail_url?: string | null } }) {
-  const isVideo = post.media_type === "video";
-  // Prefer the small thumbnail for ALL grid cells (photos + videos); fall back
-  // to the full image only for legacy posts that have no thumbnail yet.
-  const src = post.thumbnail_url ?? post.media_url;
-  return (
-    // Placeholder frame while the image streams in (spec #18) — expo-image
-    // decodes async + caches to disk, so cells fade in instead of popping.
-    <View style={{ flex: 1, backgroundColor: isVideo && !src ? tokens.bg.subtle : colors.graphite }}>
-      {src ? <Image source={{ uri: src }} accessible={false} contentFit="cover" transition={140} cachePolicy="memory-disk" style={{ flex: 1 }} /> : null}
-      {isVideo ? (
-        <View style={{ position: "absolute", right: 6, bottom: 6 }}>
-          <Play size={16} color="rgba(255,255,255,0.9)" fill="rgba(255,255,255,0.9)" strokeWidth={1} />
-        </View>
-      ) : null}
-    </View>
   );
 }
 
@@ -618,14 +596,4 @@ function ProfileTab({
   );
 }
 
-function Stat({ value, label, onPress }: { value: number; label: string; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={{ flex: 1, alignItems: "center", paddingHorizontal: 2 }} haptic={false} accessibilityLabel={`${value} ${label}`}>
-      <Text style={{ fontFamily: "Geist_700Bold", fontSize: 20, color: colors.white }}>{value}</Text>
-      <Text numberOfLines={1} style={{ marginTop: 3, fontFamily: "Geist_400Regular", fontSize: 13, color: colors.silver }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
 

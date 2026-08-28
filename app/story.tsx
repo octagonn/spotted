@@ -2,24 +2,28 @@ import { useAudioPlayer } from "expo-audio";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Eye, Flag, Heart, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
+import { Eye, Flag, Heart, Image as ImageIcon, Lock, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+// RNGH ScrollView: negotiates with the root story gestures, so the viewers
+// list actually scrolls instead of losing its touches to the pan handlers.
+import { Gesture, GestureDetector, ScrollView as GHScrollView } from "react-native-gesture-handler";
 import Animated, {
+  cancelAnimation,
   Easing,
+  ReduceMotion,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -39,11 +43,9 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
-import { tokens } from "@/theme/tokens";
 
 /** How long each story auto-plays, ms. */
 const STORY_MS = 5000;
-const TICK_MS = 50;
 
 function timeAgo(iso: string): string {
   const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -84,7 +86,7 @@ async function replyToStory(userId: string, otherId: string, content: string, st
 }
 
 export default function StoryViewer() {
-  const { user } = useLocalSearchParams<{ user?: string }>();
+  const { user, ps } = useLocalSearchParams<{ user?: string; ps?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
@@ -99,6 +101,11 @@ export default function StoryViewer() {
   const [gi, setGi] = useState(0);
   const [si, setSi] = useState(0);
   const [held, setHeld] = useState(false);
+  // Hold-to-fullscreen: while the long-press pause is active FROM THE TAP
+  // ZONES, all chrome (scrim, progress, header, bars) fades out so the photo
+  // stands alone — IG behavior. Separate from `held` because the viewers
+  // sheet also sets held.
+  const [immersed, setImmersed] = useState(false);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
   // Inline overlays (a fullScreenModal renders above the global sheet host, so
@@ -110,7 +117,6 @@ export default function StoryViewer() {
   const reportContent = useReportContent();
 
   const barFill = useSharedValue(0);
-  const elapsedRef = useRef(0);
   const pausedRef = useRef(false);
   const replyInputRef = useRef<TextInput>(null);
   pausedRef.current = held || typing;
@@ -130,6 +136,11 @@ export default function StoryViewer() {
   const canPrev = useSharedValue(0);
   const canNext = useSharedValue(0);
   const paging = useSharedValue(0); // 1 while a horizontal pan is active (pauses timer)
+  // 1 while an overlay (options menu / viewers sheet / report sheet / reply
+  // keyboard) is up. The root gestures ignore touches then — otherwise a drag
+  // inside the viewers list dismissed the whole story, and a swipe behind an
+  // open sheet paged to another person underneath it.
+  const overlayBlock = useSharedValue(0);
 
   // Pick the starting group + first UNVIEWED story once, when stories load.
   useEffect(() => {
@@ -138,13 +149,16 @@ export default function StoryViewer() {
       router.back();
       return;
     }
-    const gIdx = Math.max(0, groups.findIndex((g) => g.userId === user));
+    const gIdx = Math.max(
+      0,
+      groups.findIndex((g) => g.userId === user && (ps ? g.privateStoryId === ps : !g.privateStoryId))
+    );
     const g = groups[gIdx];
     const firstUnseen = g ? g.stories.findIndex((s) => !s.seen) : -1;
     setQueue(groups);
     setGi(gIdx);
     setSi(firstUnseen >= 0 ? firstUnseen : 0);
-  }, [groups, queue, router, user]);
+  }, [groups, queue, router, user, ps]);
 
   const group: StoryGroup | undefined = queue?.[gi];
   const story = group?.stories[si];
@@ -181,11 +195,13 @@ export default function StoryViewer() {
     return out;
   }, [queue, gi, si]);
 
-  // Keep the UI-thread bounds in sync so the pan can rubber-band at the ends.
+  // (Bounds sync moved into the settle-release useLayoutEffect below — they
+  // MUST update in the same synchronous pass. When bounds lagged in a passive
+  // effect, a fast double-flick could commit past the ends: giSV went out of
+  // range, `settling` never released, and swiping died for the session.)
   useEffect(() => {
-    canPrev.value = gi > 0 ? 1 : 0;
-    canNext.value = queue && gi < queue.length - 1 ? 1 : 0;
-  }, [gi, queue, canPrev, canNext]);
+    overlayBlock.value = menuOpen || viewersOpen || reportOpen || typing ? 1 : 0;
+  }, [menuOpen, viewersOpen, reportOpen, typing, overlayBlock]);
   const viewers = useStoryViewers(story?.id, Boolean(group?.isMe));
   const likers = useStoryLikers(story?.id, Boolean(group?.isMe) && viewersOpen);
   const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
@@ -259,32 +275,72 @@ export default function StoryViewer() {
     }
   }, [queue, gi, si]);
 
-  // Drive the progress timer for the current story. A per-story guard makes the
-  // auto-advance fire exactly once (no double-advances), and the effect cleanup
-  // clears the interval on every story change (no stuck bars).
+  // Smooth progress: ONE UI-thread linear timing drives the bar for the whole
+  // story (the old 50ms JS interval stepped the width ~1% per tick and
+  // stuttered whenever the JS thread was busy). Pausing cancels the animation
+  // (the value freezes in place); resuming re-times just the remainder.
+  const advancedRef = useRef(false);
+
+  const autoAdvance = useCallback(() => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    // End of the LAST story: park with the bar full instead of closing the
+    // viewer by itself — closing is the user's move (tap past the end, swipe
+    // down, or the X).
+    const atEnd = Boolean(queue && gi === queue.length - 1 && group && si === group.stories.length - 1);
+    if (atEnd) return;
+    goNext();
+  }, [goNext, queue, gi, si, group]);
+
+  const startBar = useCallback(() => {
+    if (pausedRef.current || advancedRef.current) return;
+    const remaining = Math.max(16, (1 - barFill.value) * STORY_MS);
+    // ReduceMotion.Never is CRITICAL here: this timing IS the story timer, not
+    // a decorative animation. With the system Reduce Motion setting on,
+    // Reanimated completes animations instantly (finished: true) — which
+    // auto-advanced through every story in one frame and closed the viewer
+    // the moment it opened on affected phones.
+    barFill.value = withTiming(
+      1,
+      { duration: remaining, easing: Easing.linear, reduceMotion: ReduceMotion.Never },
+      (finished) => {
+        if (finished) runOnJS(autoAdvance)();
+      }
+    );
+  }, [autoAdvance, barFill]);
+
+  // Per-story reset: new story → fresh bar, single-fire advance guard.
   useEffect(() => {
     if (!queue || !story) return;
-    const currentId = story.id;
-    let advanced = false;
-    elapsedRef.current = 0;
+    advancedRef.current = false;
+    cancelAnimation(barFill);
     barFill.value = 0;
     if (group && !group.isMe) {
-      markViewed.mutate(currentId);
+      markViewed.mutate(story.id);
     }
-    const timer = setInterval(() => {
-      if (pausedRef.current || paging.value > 0) return;
-      elapsedRef.current += TICK_MS;
-      barFill.value = Math.min(1, elapsedRef.current / STORY_MS);
-      if (elapsedRef.current >= STORY_MS && !advanced) {
-        advanced = true;
-        clearInterval(timer);
-        goNext();
-      }
-    }, TICK_MS);
-    return () => clearInterval(timer);
-    // Keyed on the story identity; goNext/markViewed are intentionally omitted.
+    startBar();
+    return () => cancelAnimation(barFill);
+    // Keyed on the story identity; startBar/markViewed are intentionally omitted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queue, gi, si]);
+
+  // Hold / typing pause-resume.
+  useEffect(() => {
+    if (!story) return;
+    if (held || typing) cancelAnimation(barFill);
+    else startBar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [held, typing]);
+
+  // Page-swipe pause-resume (paging lives on the UI thread).
+  useAnimatedReaction(
+    () => paging.value > 0,
+    (isPaging, prev) => {
+      if (isPaging) cancelAnimation(barFill);
+      else if (prev) runOnJS(startBar)();
+    },
+    [startBar]
+  );
 
   const activeBarStyle = useAnimatedStyle(() => ({ width: `${barFill.value * 100}%` }));
 
@@ -363,8 +419,15 @@ export default function StoryViewer() {
       setGi(g - 1);
       setSi(0);
     } else {
+      // Shouldn't be reachable now that the bounds sync is synchronous — but
+      // if a commit ever lands at the first group, undo the worklet's
+      // speculative shift so the pager can't wedge on a bailed-out render.
+      giSV.value = g;
+      panX.value = 0;
+      settling.value = 0;
       setSi(0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Commit a page change AFTER the snap animation has moved the card fully to
@@ -377,14 +440,18 @@ export default function StoryViewer() {
     goPrevPerson();
   }, [goPrevPerson]);
   // React caught up with a commit (or gi changed via tap): sync the UI-thread
-  // mirror and release the settle guard. After a swipe commit the worklet has
-  // already set giSV/panX, so these assignments are no-ops there; for tap
-  // navigation they move the pager instantly (panX is already 0).
+  // mirror, the swipe bounds AND release the settle guard in ONE synchronous
+  // pass. Bounds must never lag the release — layout effects all run before
+  // any passive effect, so releasing here while bounds updated in a passive
+  // useEffect left a window where a second flick could page past the ends
+  // (giSV out of range → black screen, settling stuck → swipes dead).
   useLayoutEffect(() => {
     giSV.value = gi;
+    canPrev.value = gi > 0 ? 1 : 0;
+    canNext.value = queue && gi < queue.length - 1 ? 1 : 0;
     settling.value = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gi]);
+  }, [gi, queue]);
 
   // Swipe up: on someone else's story → reply keyboard; on YOUR OWN → viewer
   // sheet (4e). Stable (reads group from the ref).
@@ -403,23 +470,34 @@ export default function StoryViewer() {
   // stable). GestureDetector then keeps the same handler across renders, so a
   // re-render mid-swipe never interrupts the pan.
   const storyGesture = useMemo(() => {
-    const SNAP = { damping: 22, stiffness: 220 } as const;
     // Horizontal paging — the card tracks the finger 1:1, rubber-banding when
     // there's no neighbor in that direction, and snaps to the target on release.
-    const SNAP_TIMING = { duration: 230, easing: Easing.out(Easing.cubic) } as const;
+    // Page snaps carry the finger's release VELOCITY into a clamped spring —
+    // a hard fling lands fast, a slow drag glides — instead of the old fixed
+    // 230ms timing curve that ignored velocity and felt mechanical.
+    const SNAP_SPRING = {
+      damping: 34,
+      stiffness: 270,
+      mass: 0.8,
+      overshootClamping: true,
+      restDisplacementThreshold: 0.5,
+      restSpeedThreshold: 1
+    } as const;
     const pageG = Gesture.Pan()
       .activeOffsetX([-10, 10])
-      // Looser vertical tolerance: slightly diagonal swipes should still page
-      // instead of dying (a big part of the "sticky" feel).
-      .failOffsetY([-24, 24])
+      // Must bow out BEFORE either vertical gesture activates (up: 18, down:
+      // 16). At the old ±36 the pager could win the Race on a slightly-diagonal
+      // upward swipe — and on the last story that ran commitNext → close(),
+      // which is why "swipe up to reply" read as "swipe up closes the story".
+      .failOffsetY([-14, 14])
       .onStart(() => {
         "worklet";
-        if (settling.value === 1) return;
+        if (settling.value === 1 || overlayBlock.value === 1) return;
         paging.value = 1;
       })
       .onUpdate((e) => {
         "worklet";
-        if (settling.value === 1) return;
+        if (settling.value === 1 || overlayBlock.value === 1) return;
         let x = e.translationX;
         // Rubber-band past the ends (no next/prev to reveal).
         if (x < 0 && canNext.value === 0) x *= 0.25;
@@ -428,12 +506,15 @@ export default function StoryViewer() {
       })
       .onEnd((e) => {
         "worklet";
-        if (settling.value === 1) return;
-        const goNextSwipe = (e.translationX < -80 || e.velocityX < -650) && canNext.value === 1;
-        const goPrevSwipe = (e.translationX > 80 || e.velocityX > 650) && canPrev.value === 1;
+        if (settling.value === 1 || overlayBlock.value === 1) return;
+        // Slideshow thresholds: a quarter-screen drag OR a modest flick turns
+        // the page (the old 80px + 650 velocity made lazy swipes bounce back).
+        const turnDistance = screenW * 0.25;
+        const goNextSwipe = (e.translationX < -turnDistance || e.velocityX < -500) && canNext.value === 1;
+        const goPrevSwipe = (e.translationX > turnDistance || e.velocityX > 500) && canPrev.value === 1;
         if (goNextSwipe) {
           settling.value = 1;
-          panX.value = withTiming(-screenW, SNAP_TIMING, (done) => {
+          panX.value = withSpring(-screenW, { ...SNAP_SPRING, velocity: e.velocityX }, (done) => {
             "worklet";
             // A tap-advance mid-settle clears `settling` (via the sync
             // effect) — bail instead of double-advancing.
@@ -453,7 +534,7 @@ export default function StoryViewer() {
           });
         } else if (goPrevSwipe) {
           settling.value = 1;
-          panX.value = withTiming(screenW, SNAP_TIMING, (done) => {
+          panX.value = withSpring(screenW, { ...SNAP_SPRING, velocity: e.velocityX }, (done) => {
             "worklet";
             if (done && settling.value === 1) {
               giSV.value = giSV.value - 1;
@@ -466,7 +547,7 @@ export default function StoryViewer() {
             }
           });
         } else {
-          panX.value = withSpring(0, SNAP);
+          panX.value = withSpring(0, { ...SNAP_SPRING, velocity: e.velocityX, damping: 28 });
           paging.value = 0;
         }
       });
@@ -475,9 +556,13 @@ export default function StoryViewer() {
       .failOffsetY(-16)
       .failOffsetX([-20, 20])
       .onUpdate((e) => {
+        "worklet";
+        if (overlayBlock.value === 1) return;
         dragY.value = Math.max(0, e.translationY);
       })
       .onEnd((e) => {
+        "worklet";
+        if (overlayBlock.value === 1) return;
         if (dragY.value > 130 || e.velocityY > 900) {
           dragY.value = withTiming(700, { duration: 170 });
           runOnJS(close)();
@@ -490,6 +575,8 @@ export default function StoryViewer() {
       .failOffsetY(18)
       .failOffsetX([-20, 20])
       .onEnd((e) => {
+        "worklet";
+        if (overlayBlock.value === 1) return;
         if (e.translationY < -60 || e.velocityY < -700) runOnJS(swipeUpAction)();
       });
     // Pinch-to-zoom — two fingers, so it never fights the single-finger pans.
@@ -511,7 +598,7 @@ export default function StoryViewer() {
       });
     // Race the one-finger directions; pinch runs alongside (two fingers).
     return Gesture.Simultaneous(Gesture.Race(pageG, swipeDownG, swipeUpG), pinchG);
-  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW, pinchScale, pinchFocalX, pinchFocalY, giSV, settling]);
+  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW, pinchScale, pinchFocalX, pinchFocalY, giSV, settling, overlayBlock]);
 
   const pageStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -giSV.value * screenW + panX.value }]
@@ -613,28 +700,40 @@ export default function StoryViewer() {
             style={{ width: "33%" }}
             onPress={goPrev}
             delayLongPress={180}
-            onLongPress={() => setHeld(true)}
-            onPressOut={() => setHeld(false)}
+            onLongPress={() => {
+              setHeld(true);
+              setImmersed(true);
+            }}
+            onPressOut={() => {
+              setHeld(false);
+              setImmersed(false);
+            }}
           />
           <Pressable
             style={{ flex: 1 }}
             onPress={goNext}
             delayLongPress={180}
-            onLongPress={() => setHeld(true)}
-            onPressOut={() => setHeld(false)}
+            onLongPress={() => {
+              setHeld(true);
+              setImmersed(true);
+            }}
+            onPressOut={() => {
+              setHeld(false);
+              setImmersed(false);
+            }}
           />
         </View>
 
         <LinearGradient
           colors={["rgba(0,0,0,0.55)", "transparent"]}
           pointerEvents="none"
-          style={{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top + 110 }}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top + 110, opacity: immersed ? 0 : 1 }}
         />
 
         {/* Progress bars — one segment per story. */}
         <View
           pointerEvents="none"
-          style={{ position: "absolute", top: insets.top + 8, left: 12, right: 12, flexDirection: "row", gap: 4 }}
+          style={{ position: "absolute", top: insets.top + 8, left: 12, right: 12, flexDirection: "row", gap: 4, opacity: immersed ? 0 : 1 }}
         >
           {group.stories.map((s, index) => (
             <View
@@ -652,6 +751,7 @@ export default function StoryViewer() {
 
         {/* Header: poster + time + close */}
         <View
+          pointerEvents={immersed ? "none" : "auto"}
           style={{
             position: "absolute",
             top: insets.top + 20,
@@ -659,7 +759,8 @@ export default function StoryViewer() {
             right: 14,
             flexDirection: "row",
             alignItems: "center",
-            gap: 10
+            gap: 10,
+            opacity: immersed ? 0 : 1
           }}
         >
           <Pressable
@@ -672,7 +773,17 @@ export default function StoryViewer() {
             style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
           >
             <Avatar name={group.name} uri={group.avatarUrl} size={34} />
-            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white }}>{group.name}</Text>
+            <View>
+              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white }}>{group.name}</Text>
+              {group.privateStoryName ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+                  <Lock size={10} color="rgba(255,255,255,0.75)" strokeWidth={2.4} />
+                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>
+                    {group.privateStoryName}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </Pressable>
           <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: "rgba(255,255,255,0.7)" }}>
             {timeAgo(story.createdAt)}
@@ -693,6 +804,44 @@ export default function StoryViewer() {
             <X color={colors.white} size={24} strokeWidth={2.2} />
           </Pressable>
         </View>
+
+        {/* Reshared post — credit chip that opens the original (IG pattern).
+            Placed above the tag/music chips so the stack never overlaps. */}
+        {story.sharedPostId ? (
+          <Pressable
+            onPress={() => {
+              close();
+              router.push(`/post/${story.sharedPostId}`);
+            }}
+            accessibilityLabel="View the original post"
+            style={{
+              position: "absolute",
+              left: 14,
+              bottom:
+                insets.bottom +
+                (group.isMe ? 58 : 82) +
+                (story.music ? 40 : 0) +
+                (story.tags.length ? 40 : 0)
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                backgroundColor: "rgba(0,0,0,0.55)",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.25)"
+              }}
+            >
+              <ImageIcon size={13} color={colors.white} strokeWidth={2} />
+              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.white }}>View post</Text>
+            </View>
+          </Pressable>
+        ) : null}
 
         {/* Tagged friends — tappable chips that open each profile (consistent with posts). */}
         {story.tags.length ? (
@@ -737,6 +886,7 @@ export default function StoryViewer() {
             pointerEvents="none"
             style={{
               position: "absolute",
+              opacity: immersed ? 0 : 1,
               left: 14,
               bottom: insets.bottom + (group.isMe ? 58 : 82),
               flexDirection: "row",
@@ -765,6 +915,7 @@ export default function StoryViewer() {
           // old centered stack sat on top of the photo and hid the count
           // until the sheet was opened.
           <View
+            pointerEvents={immersed ? "none" : "auto"}
             style={{
               position: "absolute",
               bottom: insets.bottom + 16,
@@ -772,7 +923,8 @@ export default function StoryViewer() {
               right: 14,
               flexDirection: "row",
               alignItems: "center",
-              justifyContent: "space-between"
+              justifyContent: "space-between",
+              opacity: immersed ? 0 : 1
             }}
           >
             <Pressable
@@ -806,8 +958,10 @@ export default function StoryViewer() {
         ) : (
           // Reply field — sends a DM to the poster referencing this story.
           <View
+            pointerEvents={immersed ? "none" : "auto"}
             style={{
               position: "absolute",
+              opacity: immersed ? 0 : 1,
               // KAV padding can't move an absolutely-positioned bar — pin it
               // to the top of the keyboard ourselves.
               bottom: Platform.OS === "ios" ? keyboardHeight : 0,
@@ -954,7 +1108,7 @@ export default function StoryViewer() {
                   {`Seen by ${viewers.data?.length ?? 0}`}
                 </Text>
               </View>
-              <ScrollView style={{ maxHeight: 360 }}>
+              <GHScrollView style={{ maxHeight: 360 }}>
                 {viewers.isLoading ? (
                   <SkeletonRows count={4} avatar={34} />
                 ) : (viewers.data ?? []).length === 0 ? (
@@ -983,7 +1137,7 @@ export default function StoryViewer() {
                     </Pressable>
                   ))
                 )}
-              </ScrollView>
+              </GHScrollView>
             </Pressable>
           </Pressable>
         ) : null}

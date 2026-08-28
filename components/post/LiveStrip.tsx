@@ -28,7 +28,7 @@ function SpotSheet({ friend, onClose }: { friend: LiveFriend; onClose: () => voi
       <Text style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white, marginTop: 14 }}>
         {`${firstName} is at the gym`}
       </Text>
-      <Text style={{ fontSize: 12.5, color: colors.fog, marginTop: 4 }}>
+      <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: colors.fog, marginTop: 4 }}>
         {`${friend.note} · ${friend.gym}`}
       </Text>
       <View style={{ flexDirection: "row", gap: 10, marginTop: 18, alignSelf: "stretch" }}>
@@ -112,7 +112,7 @@ export function LiveStrip() {
             </LiveRing>
             <Text
               numberOfLines={1}
-              style={{ fontSize: 10, color: friend.live ? colors.mist : colors.fog, maxWidth: 62 }}
+              style={{ fontFamily: "Geist_400Regular", fontSize: 12, color: friend.live ? colors.mist : colors.fog, maxWidth: 64 }}
             >
               {spotted ? "◎ spotted" : firstName}
             </Text>

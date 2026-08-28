@@ -10,10 +10,10 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Camera, ChevronLeft, CornerUpLeft, Eye, Flame, ImagePlus, Mic, MoreVertical, Pause, Play, Send, Share2, Square, X } from "lucide-react-native";
+import { Camera, ChevronLeft, CornerUpLeft, Eye, EyeOff, Flame, Forward, ImagePlus, Mic, Pause, Play, Send, Share2, Square, Trash2, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable as RNPressable,
@@ -28,6 +28,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MessageActionMenu, type MessageAction } from "@/components/chat/MessageActionMenu";
 import { MessageBubble, TimeSeparator } from "@/components/friends/ChatBubbles";
 import { ForwardSheet } from "@/components/friends/ForwardSheet";
+import { groupDisplayName } from "@/lib/groupName";
 import { PresenceLine, presenceStatus } from "@/components/friends/PresenceLine";
 import { useMockChatStore } from "@/components/friends/chatStore";
 import { isMockThreadId, MOCK_CONVERSATIONS } from "@/components/friends/mockConversations";
@@ -39,6 +40,7 @@ import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { Pressable } from "@/components/ui/Pressable";
 import {
   useConversation,
+  useGroupInfo,
   useMarkConversationRead,
   useMarkMessageViewed,
   useMessages,
@@ -49,18 +51,15 @@ import {
 } from "@/hooks/queries/useMessages";
 import {
   useBlockedUsers,
-  useConversationMuted,
   useHideMessage,
   useMessageHides,
   useMessageReactions,
   useReactToMessage,
-  useSetConversationMuted,
   useUnsendMessage
 } from "@/hooks/queries/useMessagesExtras";
-import { useActivityStatus, useChatPresence, useHeartbeat } from "@/hooks/queries/useChatPresence";
+import { useMarkConversationNotificationsRead } from "@/hooks/queries/useNotifications";
+import { useActiveConversation, useActivityStatus, useChatPresence, useHeartbeat } from "@/hooks/queries/useChatPresence";
 import { useProfileById } from "@/hooks/queries/useProfile";
-import { useBlockUser, useUnblockUser } from "@/hooks/queries/useSafety";
-import { ReportSheet } from "@/components/ReportSheet";
 import { useSheet } from "@/components/ui/Sheet";
 import { signedMessageUrl, signedPostUrl } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
@@ -212,19 +211,39 @@ function ShareCard({
 
 /** Full-screen chat photo viewer — tap anywhere to dismiss. */
 function ChatPhotoViewer({ uri, onClose }: { uri: string; onClose: () => void }) {
+  // The X is the ONLY way out. Previously the whole photo was a close button
+  // (so any tap dismissed it) while the X was pointerEvents="none" and purely
+  // decorative — the exact inverse of what people expect, reported as "exiting
+  // images is buggy".
   return (
     <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
-      <Pressable onPress={onClose} accessibilityLabel="Close photo" style={{ flex: 1 }}>
-        <CachedImage source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
-      </Pressable>
-      <View pointerEvents="none" style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
+      <CachedImage source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
+      <Pressable
+        onPress={onClose}
+        accessibilityLabel="Close photo"
+        hitSlop={12}
+        style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}
+      >
         <X size={20} color={colors.white} strokeWidth={2.2} />
-      </View>
+      </Pressable>
     </View>
   );
 }
 
-function ChatMediaBubble({ path, mine, onOpen }: { path: string; mine: boolean; onOpen?: (uri: string) => void }) {
+function ChatMediaBubble({
+  path,
+  mine,
+  onOpen,
+  onLongPress
+}: {
+  path: string;
+  mine: boolean;
+  onOpen?: (uri: string) => void;
+  /** Reaction menu. A nested Pressable steals the responder from the row
+   *  wrapper, so without this a long-press on a photo never opened the menu —
+   *  reported as "can't react to images in group chats". */
+  onLongPress?: () => void;
+}) {
   const media = useQuery({
     queryKey: ["msg-media", path],
     staleTime: 50 * 60_000,
@@ -249,7 +268,12 @@ function ChatMediaBubble({ path, mine, onOpen }: { path: string; mine: boolean; 
       }}
     >
       {media.data ? (
-        <RNPressable onPress={() => onOpen?.(media.data as string)} accessibilityLabel="View photo">
+        <RNPressable
+          onPress={() => onOpen?.(media.data as string)}
+          onLongPress={onLongPress}
+          delayLongPress={220}
+          accessibilityLabel="View photo"
+        >
           <CachedImage source={{ uri: media.data }} style={{ width: 210, height: 270 }} contentFit="cover" />
         </RNPressable>
       ) : (
@@ -364,10 +388,13 @@ function ViewOnceViewer({ path, onConsume, onClose }: { path: string; onConsume:
 const NO_SENT_MESSAGES: string[] = [];
 
 export default function ChatScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, group } = useLocalSearchParams<{ id: string; group?: string }>();
   const router = useRouter();
   const mock = isMockThreadId(id);
-  const realProfileId = mock ? undefined : id;
+  // Group threads route as /chat/<conversation id>?group=1 — there is no
+  // single peer, so the profile/conversation-by-peer hooks stay disabled.
+  const isGroup = group === "1";
+  const realProfileId = mock || isGroup ? undefined : id;
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const userId = useAuthStore((state) => state.userId);
@@ -383,7 +410,8 @@ export default function ChatScreen() {
   const sheet = useSheet();
   const profile = useProfileById(realProfileId);
   const conversation = useConversation(realProfileId);
-  const conversationId = conversation.data ?? null;
+  const groupInfo = useGroupInfo(isGroup ? id : null, isGroup);
+  const conversationId = isGroup ? (id ?? null) : (conversation.data ?? null);
   const messages = useMessages(conversationId);
   const sendReal = useSendMessage(conversationId);
   const sendMedia = useSendMediaMessage(conversationId);
@@ -402,11 +430,15 @@ export default function ChatScreen() {
   const hides = useMessageHides();
   const hide = useHideMessage();
   const blocked = useBlockedUsers();
-  const blockUser = useBlockUser();
-  const unblockUser = useUnblockUser();
-  const muted = useConversationMuted(conversationId);
-  const setMuted = useSetConversationMuted(conversationId);
   const presence = useChatPresence(conversationId, realProfileId);
+  // Open thread → no push / no banner for its own messages.
+  useActiveConversation(conversationId);
+  // …and its "sent you a message" notifications count as seen.
+  const markConversationRead = useMarkConversationNotificationsRead(conversationId);
+  useEffect(() => {
+    if (conversationId) markConversationRead.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
   const activity = useActivityStatus(realProfileId);
   useHeartbeat();
   const isBlocked = Boolean(realProfileId && blocked.data?.has(realProfileId));
@@ -470,15 +502,27 @@ export default function ChatScreen() {
   };
 
   useMessagesRealtime(conversationId);
-  useMarkConversationRead(conversationId, messages.data?.length);
+  useMarkConversationRead(conversationId, messages.data?.length, isGroup);
 
   useEffect(() => {
     if (mock && id) markMockRead(id);
   }, [id, markMockRead, mock]);
 
   const mockConversation = mock ? MOCK_CONVERSATIONS[id] : null;
-  const title = mockConversation?.title ?? profile.data?.display_name ?? "Conversation";
-  const sub = mockConversation?.sub ?? (profile.data?.username ? `@${profile.data.username}` : undefined);
+  const groupMembers = useMemo(() => groupInfo.data?.members ?? [], [groupInfo.data]);
+  const memberById = useMemo(() => new Map(groupMembers.map((m) => [m.id, m])), [groupMembers]);
+  // "Who actually added you" — the group creator, resolved from the member list.
+  const groupCreatorName = groupInfo.data?.createdBy
+    ? memberById.get(groupInfo.data.createdBy)?.name?.split(" ")[0] ?? null
+    : null;
+  const title = isGroup
+    ? groupDisplayName(groupInfo.data?.title, groupMembers, userId)
+    : mockConversation?.title ?? profile.data?.display_name ?? "Conversation";
+  const sub = isGroup
+    ? groupMembers.length
+      ? `${groupMembers.length} members`
+      : undefined
+    : mockConversation?.sub ?? (profile.data?.username ? `@${profile.data.username}` : undefined);
   // The header Pressable collapses its children, so PresenceLine is never
   // announced on its own — fold the live presence into the header's label (4.1.3).
   const headerPresence = presenceStatus({
@@ -564,41 +608,16 @@ export default function ChatScreen() {
     const { message, mine } = actionTarget;
     const withinWindow = Date.now() - new Date(message.sent_at).getTime() < 15 * 60_000;
     const items: MessageAction[] = [
-      { label: "Reply", onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine }) }
+      { label: "Reply", icon: CornerUpLeft, onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine }) }
     ];
     if (message.content) {
-      items.push({ label: "Forward", onPress: () => sheet.open(<ForwardSheet content={message.content ?? ""} />) });
+      items.push({ label: "Forward", icon: Forward, onPress: () => sheet.open(<ForwardSheet content={message.content ?? ""} />) });
     }
     if (mine && withinWindow && message.media_url === null) {
-      items.push({ label: "Unsend for everyone", destructive: true, onPress: () => unsend.mutate(message.id) });
+      items.push({ label: "Unsend for everyone", icon: Trash2, destructive: true, onPress: () => unsend.mutate(message.id) });
     }
-    items.push({ label: "Delete for me", destructive: true, onPress: () => hide.mutate(message.id) });
+    items.push({ label: "Delete for me", icon: EyeOff, destructive: true, onPress: () => hide.mutate(message.id) });
     return items;
-  };
-
-  const openThreadMenu = () => {
-    if (!realProfileId) return;
-    Alert.alert(profile.data?.display_name ?? "Options", undefined, [
-      {
-        text: muted.data ? "Unmute notifications" : "Mute notifications",
-        onPress: () => setMuted.mutate(!(muted.data ?? false))
-      },
-      {
-        text: isBlocked ? "Unblock" : "Block",
-        style: isBlocked ? "default" : "destructive",
-        onPress: () => {
-          // Retroactive, silent block (§5) — severs friendship + presence.
-          const m = isBlocked ? unblockUser : blockUser;
-          m.mutate(realProfileId, { onSuccess: () => showToast(isBlocked ? "Unblocked" : "Blocked") });
-        }
-      },
-      {
-        text: "Report",
-        style: "destructive",
-        onPress: () => sheet.open(<ReportSheet contentType="user" contentId={realProfileId} label="user" reportedUserId={realProfileId} />)
-      },
-      { text: "Cancel", style: "cancel" }
-    ]);
   };
 
   return (
@@ -621,18 +640,26 @@ export default function ChatScreen() {
         </Pressable>
         <Pressable
           onPress={() => {
-            if (profile.data?.username) router.push(`/user/${profile.data.username}`);
+            // IG DMs: the header opens the conversation details screen —
+            // rename/members (groups) or the person + block (1:1), plus the
+            // media gallery, mute, and report. The old ⋯ menu is gone.
+            if (!conversationId) return;
+            router.push(
+              (isGroup
+                ? `/chat-details/${conversationId}`
+                : `/chat-details/${conversationId}?peer=${realProfileId}`) as Href
+            );
           }}
-          disabled={!profile.data?.username}
-          accessibilityLabel={`Open ${title}'s profile${headerPresence ? `, ${headerPresence}` : ""}`}
+          disabled={!conversationId || (!isGroup && !realProfileId)}
+          accessibilityLabel={`Open ${title} details${headerPresence ? `, ${headerPresence}` : ""}`}
           style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 12 }}
         >
-          <Avatar name={title} uri={profile.data?.avatar_url} size={44} />
+          <Avatar name={title} uri={isGroup ? null : profile.data?.avatar_url} size={44} />
           <View style={{ flex: 1 }}>
             <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 17.5, letterSpacing: 17.5 * -0.01, color: colors.white }}>
               {title}
             </Text>
-            {mock ? (
+            {mock || isGroup ? (
               sub ? (
                 <Text numberOfLines={1} style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>
                   {sub}
@@ -649,11 +676,8 @@ export default function ChatScreen() {
             )}
           </View>
         </Pressable>
-        {!mock && realProfileId ? (
-          <Pressable onPress={openThreadMenu} accessibilityLabel="Conversation options" hitSlop={8} style={{ padding: 8 }}>
-            <MoreVertical size={22} color={colors.mist} strokeWidth={2} />
-          </Pressable>
-        ) : null}
+        {/* No ⋯ menu — mute/block/report all live on the details screen
+            behind the header tap (IG DMs). */}
       </View>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -663,9 +687,14 @@ export default function ChatScreen() {
         <ScrollView
           ref={scrollRef}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, gap: 4, paddingTop: 8, paddingHorizontal: 16, paddingBottom: 16 }}
+          // Dragging the thread down tucks the keyboard away (iOS Messages).
+          keyboardDismissMode="interactive"
+          contentContainerStyle={{ flexGrow: 1, paddingTop: 8, paddingHorizontal: 16, paddingBottom: 16 }}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
+        {/* Tapping empty space in the thread dismisses the keyboard; bubbles
+            keep their own presses. */}
+        <RNPressable onPress={Keyboard.dismiss} style={{ flexGrow: 1, gap: 4 }} accessible={false}>
           {mockConversation ? (
             <>
               {mockConversation.seed.map((item, index) => item.kind === "sep" ? (
@@ -742,9 +771,16 @@ export default function ChatScreen() {
                         </Text>
                       </View>
                     ) : null}
-                    {/* Received messages show the sender's avatar to the left (#7). */}
+                    {/* Received messages show the sender's avatar to the left (#7).
+                        Groups resolve each sender from the member list. */}
                     <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}>
-                      {!mine ? <Avatar name={title} uri={profile.data?.avatar_url} size={26} /> : null}
+                      {!mine ? (
+                        <Avatar
+                          name={isGroup ? memberById.get(message.sender_id)?.name ?? "?" : title}
+                          uri={isGroup ? memberById.get(message.sender_id)?.avatarUrl ?? null : profile.data?.avatar_url}
+                          size={26}
+                        />
+                      ) : null}
                       <View style={{ flex: 1 }}>
                         {message.reply_story_media ? (
                           <StoryReplyPreview path={message.reply_story_media} mine={mine} />
@@ -763,9 +799,23 @@ export default function ChatScreen() {
                         ) : message.view_once ? (
                           <ViewOnceBubble message={message} mine={mine} onOpen={setViewOnceOpen} />
                         ) : message.media_url ? (
-                          <ChatMediaBubble path={message.media_url} mine={mine} onOpen={setPhotoViewer} />
+                          <ChatMediaBubble
+                            path={message.media_url}
+                            mine={mine}
+                            onOpen={setPhotoViewer}
+                            onLongPress={() => messageActions(message, mine)}
+                          />
                         ) : (
-                          <MessageBubble mine={mine} text={message.content ?? ""} senderName={title} />
+                          <MessageBubble
+                            mine={mine}
+                            text={message.content ?? ""}
+                            senderName={isGroup ? memberById.get(message.sender_id)?.name ?? "Member" : title}
+                            senderFirst={
+                              isGroup && !mine
+                                ? (memberById.get(message.sender_id)?.name ?? "Member").split(" ")[0]
+                                : undefined
+                            }
+                          />
                         )}
                       </View>
                     </View>
@@ -780,8 +830,9 @@ export default function ChatScreen() {
                 );
               })}
               {/* Delivery status under my most recent message (#5/#6):
-                  "Delivered" until opened, then "Seen {t}". */}
-              {lastMine && !lastMine.deleted_at ? (
+                  "Delivered" until opened, then "Seen {t}". Hidden in groups —
+                  the shared read stamp can't say WHO saw it. */}
+              {lastMine && !lastMine.deleted_at && !isGroup ? (
                 <Text style={{ alignSelf: "flex-end", paddingRight: 4, paddingTop: 2, fontFamily: "GeistMono_400Regular", fontSize: 9.5, color: colors.fog }}>
                   {lastMineRead ? `Seen ${seenLabel}` : "Delivered"}
                 </Text>
@@ -816,7 +867,13 @@ export default function ChatScreen() {
                 }}
               >
                 <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white, textAlign: "center" }}>
-                  {profile.data?.display_name ?? title} added you.
+                  {isGroup
+                    ? groupCreatorName
+                      ? groupInfo.data?.createdBy === userId
+                        ? "You created this group."
+                        : `${groupCreatorName} added you.`
+                      : "You're in this group."
+                    : `${profile.data?.display_name ?? title} added you.`}
                 </Text>
                 <Text style={{ fontFamily: "Geist_400Regular", fontSize: 12.5, color: colors.silver, textAlign: "center" }}>
                   Start a message now.
@@ -824,20 +881,10 @@ export default function ChatScreen() {
               </View>
             </View>
           )}
+        </RNPressable>
         </ScrollView>
 
-        <View style={{ position: "relative", paddingHorizontal: 16, paddingTop: 10, paddingBottom: keyboardVisible ? 10 : insets.bottom + 14 }}>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: -28,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.92)"
-            }}
-          />
+        <View style={{ position: "relative", paddingHorizontal: 16, paddingTop: 10, paddingBottom: keyboardVisible ? 10 : insets.bottom + 14, backgroundColor: colors.black }}>
           {/* Staged media preview — confirm with Send, X to discard. */}
           {pendingMedia ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -972,6 +1019,11 @@ export default function ChatScreen() {
           if (actionTarget) react.mutate({ messageId: actionTarget.message.id, emoji });
         }}
         actions={actionMenuItems()}
+        preview={
+          actionTarget
+            ? { text: actionTarget.message.content ?? (actionTarget.message.media_url ? "Photo" : null), mine: actionTarget.mine }
+            : null
+        }
       />
     </View>
   );

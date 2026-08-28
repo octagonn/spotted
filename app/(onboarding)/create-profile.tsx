@@ -1,117 +1,67 @@
 import { router } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
-import { AtSign, Plus } from "lucide-react-native";
+import { appAlert } from "@/components/ui/AppDialog";
+import { AtSign } from "lucide-react-native";
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
-import { compressReactionSelfie } from "@/lib/posts";
-import { isSupabaseConfigured, publicAvatarUrl, supabase } from "@/lib/supabase";
+import { usePageFade } from "@/hooks/usePageFade";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
-import { radius, tokens } from "@/theme/tokens";
 
 const usernameRegex = /^[a-z0-9_]+$/;
 
 export default function OnboardingCreateProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { fadeStyle, fadeNavigate } = usePageFade();
   const userId = useAuthStore((state) => state.userId);
   const session = useAuthStore((state) => state.session);
   const markProfileCreated = useAuthStore((state) => state.markProfileCreated);
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const usernameValid = username.length >= 3 && username.length <= 20 && usernameRegex.test(username);
   const displayNameValid = displayName.trim().length >= 1 && displayName.trim().length <= 40;
   const ready = usernameValid && displayNameValid && !submitting;
 
-  const pickFromLibrary = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8
-    });
-    if (!result.canceled && result.assets[0]) setAvatarUri(result.assets[0].uri);
-  };
-
-  const takePhoto = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Camera access needed", "Enable camera access in Settings to take a photo.");
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    if (!result.canceled && result.assets[0]) setAvatarUri(result.assets[0].uri);
-  };
-
-  const pickAvatar = () => {
-    Alert.alert("Add a photo", undefined, [
-      { text: "Take Photo", onPress: () => void takePhoto() },
-      { text: "Choose from Library", onPress: () => void pickFromLibrary() },
-      { text: "Cancel", style: "cancel" }
-    ]);
-  };
-
   async function handleNext() {
     if (!ready) return;
+    // The photo moved to its own prominent (but skippable) step next.
     if (!isSupabaseConfigured || !userId) {
-      router.push("/permissions");
+      fadeNavigate(() => router.push("/profile-photo"));
       return;
     }
     setSubmitting(true);
     try {
-      // Upload the chosen photo first (non-fatal — the profile is still created
-      // if the upload fails; they can add one later from Edit Profile).
-      let avatarUrl: string | undefined;
-      if (avatarUri) {
-        try {
-          const compressed = await compressReactionSelfie(avatarUri);
-          const body = await (await fetch(compressed)).arrayBuffer();
-          if (body.byteLength > 0) {
-            const path = `${userId}/${Date.now()}.jpg`;
-            const upload = await supabase.storage.from("avatars").upload(path, body, {
-              contentType: "image/jpeg",
-              upsert: false
-            });
-            if (!upload.error) avatarUrl = publicAvatarUrl(path) ?? path;
-          }
-        } catch {
-          // keep going without a photo
-        }
-      }
       const metadataBirthDate = session?.user.user_metadata?.birth_date;
       const { error } = await supabase.from("profiles").upsert({
         id: userId,
         username: username.toLowerCase(),
         display_name: displayName.trim(),
         birth_date: typeof metadataBirthDate === "string" ? metadataBirthDate : null,
-        onboarding_stage: "permissions",
-        ...(avatarUrl ? { avatar_url: avatarUrl } : {})
+        onboarding_stage: "permissions"
       });
       if (error) {
         throw error;
       }
       markProfileCreated(userId);
-      router.push("/permissions");
+      fadeNavigate(() => router.push("/profile-photo"));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save profile.";
-      Alert.alert("Couldn't save profile", message);
+      appAlert("Couldn't save profile", message);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1, backgroundColor: colors.black }}
-    >
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+      <Animated.View style={[{ flex: 1 }, fadeStyle]}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
@@ -123,38 +73,18 @@ export default function OnboardingCreateProfileScreen() {
       >
         <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
           <Text variant="micro" className="text-mist">
-            STEP 3 OF 6
+            STEP 3 OF 7
           </Text>
         </View>
         <Text variant="display-md" className="mt-6">
-          MAKE A FACE.
+          CLAIM YOUR NAME.
         </Text>
         <Text variant="body"  className="mt-3">
-          Add a photo, pick a name.
+          What your crew sees. Photo comes next.
         </Text>
 
-        <View className="mt-8 flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4">
-          <Pressable onPress={pickAvatar} accessibilityLabel="Add a profile photo">
-            <Avatar size={72} rounded="circle" uri={avatarUri} name={displayName || "?"} />
-            <View
-              style={{
-                position: "absolute",
-                right: -2,
-                bottom: -2,
-                width: 26,
-                height: 26,
-                borderRadius: radius.pill,
-                backgroundColor: tokens.accent.gold,
-                borderWidth: 2,
-                borderColor: colors.black,
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              <Plus size={15} color={colors.black} strokeWidth={3} />
-            </View>
-          </Pressable>
-          <View className="flex-1 gap-3">
+        <View className="mt-8 rounded-card border border-hairline-strong bg-glass-strong p-4">
+          <View className="gap-3">
             <View className="rounded-pill border border-hairline bg-glass-soft px-4 py-2">
               <TextInput
                 value={displayName}
@@ -196,6 +126,7 @@ export default function OnboardingCreateProfileScreen() {
           Next
         </Button>
       </ScrollView>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }

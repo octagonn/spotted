@@ -1,8 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
+import { CalendarOff, ImageOff, Moon } from "lucide-react-native";
 import { useMemo } from "react";
-import { Text } from "react-native";
-
-import { ImageOff, Moon } from "lucide-react-native";
 
 import { PostPagerScreen } from "@/components/post/PostPagerScreen";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -13,8 +11,22 @@ import { type FeedMockPost } from "@/lib/redesignData";
 import { signedPostToFeedPost } from "@/lib/toFeedPost";
 import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { icon } from "@/theme/tokens";
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December"
+];
 
 /**
  * Card stamp: clock time ("9:41 AM") while the day is still today, feed-style
@@ -86,22 +98,25 @@ export default function DayScreen() {
           // The day counted (and still counts toward the streak) but its post
           // is gone — say so, or the calendar looks like it's lying.
           <EmptyState
-            icon={<ImageOff size={22} color={colors.fog} strokeWidth={1.8} />}
+            icon={<ImageOff size={icon.size.sm + 2} color={colors.fog} strokeWidth={icon.stroke.thin} />}
             title="This day's post was deleted"
             body={`The gym day still counts — ${user ? "their" : "your"} streak keeps it.`}
             paddingTop={48}
           />
         ) : ledgerDay?.kind === "rest" ? (
           <EmptyState
-            icon={<Moon size={22} color={colors.silver} strokeWidth={1.8} />}
+            icon={<Moon size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.thin} />}
             title="Rest day"
             body="No post — the streak was frozen for the day, not broken."
             paddingTop={48}
           />
         ) : (
-          <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
-            No posts saved for this day.
-          </Text>
+          <EmptyState
+            icon={<CalendarOff size={icon.size.sm + 2} color={colors.fog} strokeWidth={icon.stroke.thin} />}
+            title="Nothing on this day"
+            body="No posts saved for this date."
+            paddingTop={48}
+          />
         )
       }
     />

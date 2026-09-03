@@ -8,6 +8,7 @@ import Animated from "react-native-reanimated";
 
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
+import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
 import { usePageFade } from "@/hooks/usePageFade";
@@ -17,6 +18,7 @@ import { advanceOnboarding } from "@/lib/onboarding";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { icon } from "@/theme/tokens";
 
 type Status = "idle" | "granted" | "denied";
 
@@ -72,83 +74,77 @@ export default function PermissionsScreen() {
 
   return (
     <Animated.View style={[{ flex: 1 }, fadeStyle]}>
-    <Screen transparent>
-      <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-        <Text variant="micro" className="text-mist">
-          STEP 5 OF 7
-        </Text>
-      </View>
-      <Text variant="display-md" className="mt-6">
-        LET IT WATCH.
-      </Text>
-      <Text variant="body"  className="mt-3">
-        Location finds gyms near you and verifies check-ins. Notifications make skipping public enough to matter.
-      </Text>
+      <Screen transparent>
+        <OnboardingHeader
+          step={5}
+          title="LET IT WATCH."
+          body="Location finds gyms near you and verifies check-ins. Notifications make skipping public enough to matter."
+        />
 
-      <View className="mt-8 gap-3">
-        <Pressable
-          accessibilityLabel={`Location while using, ${statusLabel(locationStatus).toLowerCase()}`}
-          accessibilityHint="Verify gym check-ins and find nearby gyms"
-          className="flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4"
-          onPress={handleLocation}
-        >
-          <View className="h-12 w-12 items-center justify-center rounded-full border border-hairline-strong bg-glass-soft">
-            <MapPin color={colors.white} size={20} strokeWidth={1.8} />
-          </View>
-          <View className="flex-1">
-            <Text variant="body-strong">Location While Using</Text>
-            <Text variant="caption" className="mt-1 text-mist">
-              Verify gym check-ins and find nearby gyms.
+        <View className="mt-8 gap-3">
+          <Pressable
+            accessibilityLabel={`Location while using, ${statusLabel(locationStatus).toLowerCase()}`}
+            accessibilityHint="Verify gym check-ins and find nearby gyms"
+            className="flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4"
+            onPress={handleLocation}
+          >
+            <View className="h-12 w-12 items-center justify-center rounded-full border border-hairline-strong bg-glass-soft">
+              <MapPin color={colors.white} size={icon.size.sm} strokeWidth={icon.stroke.thin} />
+            </View>
+            <View className="flex-1">
+              <Text variant="body-strong">Location While Using</Text>
+              <Text variant="caption" className="mt-1 text-mist">
+                Verify gym check-ins and find nearby gyms.
+              </Text>
+            </View>
+            <Text variant="micro" accessibilityLiveRegion="polite" className={statusColor(locationStatus)}>
+              {statusLabel(locationStatus)}
             </Text>
-          </View>
-          <Text variant="micro" accessibilityLiveRegion="polite" className={statusColor(locationStatus)}>
-            {statusLabel(locationStatus)}
+          </Pressable>
+
+          <Pressable
+            accessibilityLabel={`Notifications, ${statusLabel(notifStatus).toLowerCase()}`}
+            accessibilityHint="Views, streak breaks, DMs, and gym arrivals"
+            className="flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4"
+            onPress={handleNotifications}
+          >
+            <View className="h-12 w-12 items-center justify-center rounded-full border border-hairline-strong bg-glass-soft">
+              <Bell color={colors.white} size={icon.size.sm} strokeWidth={icon.stroke.thin} />
+            </View>
+            <View className="flex-1">
+              <Text variant="body-strong">Notifications</Text>
+              <Text variant="caption" className="mt-1 text-mist">
+                Views, streak breaks, DMs, and gym arrivals.
+              </Text>
+            </View>
+            <Text variant="micro" accessibilityLiveRegion="polite" className={statusColor(notifStatus)}>
+              {statusLabel(notifStatus)}
+            </Text>
+          </Pressable>
+        </View>
+
+        <Button
+          className="mt-10"
+          loading={busy}
+          onPress={() => {
+            void advanceOnboarding(userId, "home-gym");
+            fadeNavigate(() => router.push("/privacy"));
+          }}
+        >
+          Continue
+        </Button>
+        <Pressable
+          className="mt-4 self-center"
+          onPress={() => {
+            void advanceOnboarding(userId, "home-gym");
+            fadeNavigate(() => router.push("/privacy"));
+          }}
+        >
+          <Text variant="micro" className="text-mist">
+            DO IT LATER
           </Text>
         </Pressable>
-
-        <Pressable
-          accessibilityLabel={`Notifications, ${statusLabel(notifStatus).toLowerCase()}`}
-          accessibilityHint="Views, streak breaks, DMs, and gym arrivals"
-          className="flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4"
-          onPress={handleNotifications}
-        >
-          <View className="h-12 w-12 items-center justify-center rounded-full border border-hairline-strong bg-glass-soft">
-            <Bell color={colors.white} size={20} strokeWidth={1.8} />
-          </View>
-          <View className="flex-1">
-            <Text variant="body-strong">Notifications</Text>
-            <Text variant="caption" className="mt-1 text-mist">
-              Views, streak breaks, DMs, and gym arrivals.
-            </Text>
-          </View>
-          <Text variant="micro" accessibilityLiveRegion="polite" className={statusColor(notifStatus)}>
-            {statusLabel(notifStatus)}
-          </Text>
-        </Pressable>
-      </View>
-
-      <Button
-        className="mt-10"
-        loading={busy}
-        onPress={() => {
-          void advanceOnboarding(userId, "home-gym");
-          fadeNavigate(() => router.push("/privacy"));
-        }}
-      >
-        Continue
-      </Button>
-      <Pressable
-        className="mt-4 self-center"
-        onPress={() => {
-          void advanceOnboarding(userId, "home-gym");
-          fadeNavigate(() => router.push("/privacy"));
-        }}
-      >
-        <Text variant="micro" className="text-mist">
-          DO IT LATER
-        </Text>
-      </Pressable>
-    </Screen>
+      </Screen>
     </Animated.View>
   );
 }

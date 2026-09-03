@@ -4,7 +4,7 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { showToast } from "@/stores/ui";
 import { CANONICAL_IS_REPS, CANONICAL_LIFT, type Muscle } from "@/lib/workoutLibrary";
 import { rarityPctFor } from "@/lib/trophyRaritySeeds";
-import { LIFT_OPTION_BY_ID, type LiftExercise } from "@/lib/liftCatalog";
+import { getLiftOption, type LiftExercise } from "@/lib/liftCatalog";
 import type { TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import type { Json } from "@/types/database";
 
@@ -531,7 +531,7 @@ export function useSaveWorkout() {
       for (const [exercise, value] of Object.entries(sessionBest) as [LiftExercise, number][]) {
         const old = priorBest[exercise] ?? 0;
         if (value <= old) continue; // not a PR
-        const option = LIFT_OPTION_BY_ID[exercise];
+        const option = getLiftOption(exercise);
         await supabase
           .from("user_lifts")
           .insert({ user_id: input.userId, exercise, value, unit: option?.unit ?? "lb", post_id: null });
@@ -552,9 +552,9 @@ export function useSaveWorkout() {
       for (const row of rows) {
         if (seenFamily.has(row.out_family_id)) continue; // one animation per family
         seenFamily.add(row.out_family_id);
-        const option = LIFT_OPTION_BY_ID[row.out_family_id];
+        const option = getLiftOption(row.out_family_id);
         celebrations.push({
-          icon: option?.def.icon ?? "trophy",
+          icon: option?.def?.icon ?? "trophy",
           name: row.out_name,
           familyName: option?.name ?? row.out_family_id,
           earnedAt: new Date().toISOString(),

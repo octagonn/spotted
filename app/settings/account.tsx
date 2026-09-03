@@ -1,20 +1,24 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Platform, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { appAlert } from "@/components/ui/AppDialog";
-import { Screen } from "@/components/Screen";
-import { BackButton } from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/Button";
+import { PanelHeader } from "@/components/ui/PanelHeader";
+import { SettingNavRow, SettingRow, SettingSectionLabel } from "@/components/ui/SettingRow";
 import { Text } from "@/components/ui/Text";
 import { AppleSignInError, linkAppleToCurrentAccount } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
+import { colors } from "@/theme/colors";
+import { space } from "@/theme/tokens";
 
 export default function AccountSettingsScreen() {
+  const insets = useSafeAreaInsets();
   const session = useAuthStore((state) => state.session);
   const userId = useAuthStore((state) => state.userId);
   const signOut = useAuthStore((state) => state.signOut);
@@ -104,46 +108,41 @@ export default function AccountSettingsScreen() {
   }
 
   return (
-    <Screen>
-      <BackButton fallback="/settings" style={{ marginBottom: 18 }} />
-      <Text variant="display-sm">ACCOUNT</Text>
+    <View style={{ flex: 1, backgroundColor: colors.black }}>
+      <PanelHeader title="Account" sub={username ? `@${username}` : undefined} />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space[4] + 4, paddingBottom: insets.bottom + space[8] }}>
+        <SettingSectionLabel>Signed in as</SettingSectionLabel>
+        <SettingRow title={username ? `@${username}` : (email ?? "Signed in")} sub={email ?? undefined} />
+        <SettingRow
+          title="Sign-in methods"
+          sub={[hasEmailIdentity ? "Email" : null, appleLinked ? "Apple" : null].filter(Boolean).join(" · ") || "—"}
+        />
 
-      <View className="mt-8 border border-hairline-strong bg-ink p-4">
-        <Text variant="body-strong">{username ? `@${username}` : (email ?? "Signed in")}</Text>
-        {email ? (
-          <Text variant="caption" className="mt-2 text-mist">
-            {email}
-          </Text>
-        ) : null}
-        {appleLinked ? (
-          <Text variant="caption" className="mt-2 text-mist">
-             Apple sign-in connected
-          </Text>
-        ) : null}
-      </View>
-
-      <View className="mt-6 gap-3">
-        <Button variant="ghost" onPress={() => router.push("/edit-profile")}>
-          Edit profile
-        </Button>
+        <SettingSectionLabel>Manage</SettingSectionLabel>
+        <SettingNavRow
+          title="Edit profile"
+          sub="Name, photo, bio, links, home gym"
+          onPress={() => router.push("/edit-profile")}
+        />
         {hasEmailIdentity ? (
-          <Button variant="ghost" onPress={() => router.push("/settings/change-password")}>
-            Change password
-          </Button>
+          <SettingNavRow title="Change password" onPress={() => router.push("/settings/change-password")} />
         ) : null}
-        {Platform.OS === "ios" && !appleLinked && identitiesQuery.isSuccess ? (
-          <Button variant="ghost" loading={linkingApple} onPress={connectApple}>
-            Connect Apple sign-in
-          </Button>
-        ) : null}
-        <Button variant="ghost" loading={signingOut} onPress={handleSignOut}>
-          Sign Out
-        </Button>
-      </View>
 
-      <Text variant="caption" className="mt-10 text-fog">
-        Looking to delete your account? It moved to Settings → Danger Zone.
-      </Text>
-    </Screen>
+        <View style={{ marginTop: space[6], gap: space[3] }}>
+          {Platform.OS === "ios" && !appleLinked && identitiesQuery.isSuccess ? (
+            <Button variant="ghost" loading={linkingApple} onPress={connectApple}>
+              Connect Apple sign-in
+            </Button>
+          ) : null}
+          <Button variant="ghost" loading={signingOut} onPress={handleSignOut}>
+            Sign out
+          </Button>
+        </View>
+
+        <Text variant="meta" className="mt-10">
+          Looking to delete your account? It lives under Settings → Danger zone.
+        </Text>
+      </ScrollView>
+    </View>
   );
 }

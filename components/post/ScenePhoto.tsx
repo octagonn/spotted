@@ -1,3 +1,4 @@
+import { colors } from "@/theme/colors";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { View, type ViewStyle } from "react-native";
@@ -27,6 +28,9 @@ type ScenePhotoProps = {
   /** Accessibility label for the real photo (WCAG 1.1.1). Omit for decorative
    *  surfaces (insets, reactor thumbnails) so they stay silent to a screen reader. */
   accessibilityLabel?: string;
+  /** Reports the loaded image's intrinsic pixel size (drives dynamic post
+   *  frames without a second network fetch). */
+  onSize?: (width: number, height: number) => void;
   style?: ViewStyle;
 };
 
@@ -35,11 +39,19 @@ type ScenePhotoProps = {
  * (mockup `.ph`), with the spec legibility gradient
  * `linear-gradient(180deg, rgba(0,0,0,0.12), transparent 30%, transparent 62%, rgba(0,0,0,0.4))`.
  */
-export function ScenePhoto({ uri, scene = "s1", blurRadius, legibility = true, accessibilityLabel, style }: ScenePhotoProps) {
+export function ScenePhoto({
+  uri,
+  scene = "s1",
+  blurRadius,
+  legibility = true,
+  accessibilityLabel,
+  onSize,
+  style
+}: ScenePhotoProps) {
   const def = FEED_SCENES[scene];
   const points = gradientPoints(def.angle);
   return (
-    <View style={[{ flex: 1, overflow: "hidden", backgroundColor: "#1C1C1F" }, style]}>
+    <View style={[{ flex: 1, overflow: "hidden", backgroundColor: colors.charcoal }, style]}>
       {uri ? (
         <Image
           source={{ uri }}
@@ -53,6 +65,7 @@ export function ScenePhoto({ uri, scene = "s1", blurRadius, legibility = true, a
           contentFit="cover"
           cachePolicy="memory-disk"
           transition={150}
+          onLoad={onSize ? (e) => onSize(e.source.width, e.source.height) : undefined}
           accessible={accessibilityLabel ? true : undefined}
           accessibilityLabel={accessibilityLabel}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}

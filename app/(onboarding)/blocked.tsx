@@ -28,16 +28,16 @@ export default function BlockedScreen() {
 
   return (
     <Animated.View style={[{ flex: 1 }, fadeStyle]}>
-    <Screen transparent>
-      <View className="flex-1 items-center justify-center px-6">
-        <Text variant="display-sm" accessibilityRole="header" className="text-center">
-          ACCOUNT NOT AVAILABLE
-        </Text>
-        <Text variant="body" className="mt-4 text-center text-mist">
-          We can&apos;t create an account for you right now.
-        </Text>
-      </View>
-    </Screen>
+      <Screen transparent>
+        <View className="flex-1 items-center justify-center px-6">
+          <Text variant="display-sm" accessibilityRole="header" className="text-center">
+            ACCOUNT NOT AVAILABLE
+          </Text>
+          <Text variant="body" className="mt-4 text-center text-mist">
+            We can&apos;t create an account for you right now.
+          </Text>
+        </View>
+      </Screen>
     </Animated.View>
   );
 }

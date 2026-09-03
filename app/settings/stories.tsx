@@ -1,17 +1,19 @@
 import { Lock, Pencil, Plus } from "lucide-react-native";
-import { appAlert } from "@/components/ui/AppDialog";
 import { useState } from "react";
-import { ScrollView, TextInput, View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Screen } from "@/components/Screen";
+import { appAlert } from "@/components/ui/AppDialog";
 import { Avatar } from "@/components/ui/Avatar";
-import { BackButton } from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/Button";
 import { ChoiceRow } from "@/components/ui/ChoiceRow";
-import { Pressable } from "@/components/ui/Pressable";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ListRow } from "@/components/ui/ListRow";
+import { PanelHeader } from "@/components/ui/PanelHeader";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { Text } from "@/components/ui/Text";
+import { TextField } from "@/components/ui/TextField";
 import { useFriends } from "@/hooks/queries/useFriends";
 import {
   useCreatePrivateStory,
@@ -22,7 +24,7 @@ import {
 } from "@/hooks/queries/usePrivateStories";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
-import { radius, tokens } from "@/theme/tokens";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 type Draft = { id: string | null; name: string; memberIds: string[] };
 
@@ -32,6 +34,7 @@ type Draft = { id: string | null; name: string; memberIds: string[] };
  * camera's "Share to" picker; this is the standalone management surface.)
  */
 export default function StoriesSettingsScreen() {
+  const insets = useSafeAreaInsets();
   const lists = useMyPrivateStories();
   const createStory = useCreatePrivateStory();
   const updateStory = useUpdatePrivateStory();
@@ -93,110 +96,89 @@ export default function StoriesSettingsScreen() {
     );
   }
 
+  const rows = lists.data ?? [];
+
   return (
-    <Screen scroll={false}>
-      <View className="px-4" style={{ flex: 1 }}>
-        <BackButton fallback="/settings" style={{ marginBottom: 18 }} />
-        <Text variant="display-sm">STORIES</Text>
-        <Text variant="caption" className="mt-2 text-mist">
-          Private stories only show to the friends you put in them. Post to one from the camera&apos;s
-          &ldquo;Share to&rdquo; picker.
+    <View style={{ flex: 1, backgroundColor: colors.black }}>
+      <PanelHeader title="Stories" sub="Private stories" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: insets.bottom + space[10] }}
+      >
+        <Text variant="meta" className="pb-3">
+          Private stories only show to the friends you put in them. Post to one from the camera&apos;s &ldquo;Share
+          to&rdquo; picker.
         </Text>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 20, paddingBottom: 40 }}>
-          {lists.isLoading ? <SkeletonRows count={3} /> : null}
+        {lists.isLoading ? <SkeletonRows count={3} /> : null}
 
-          {!lists.isLoading && (lists.data ?? []).length === 0 ? (
-            <View className="items-center rounded-card border border-hairline-strong bg-ink p-6">
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: radius.pill,
-                  backgroundColor: tokens.bg.subtle,
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                <Lock size={22} color={colors.white} strokeWidth={1.9} />
-              </View>
-              <Text variant="body-strong" className="mt-4 text-white">
-                No private stories yet
-              </Text>
-              <Text variant="caption" className="mt-1 text-center text-fog">
-                Make one for your inner circle — only the friends you pick can see what you post to it.
-              </Text>
-            </View>
-          ) : null}
+        {!lists.isLoading && rows.length === 0 ? (
+          <EmptyState
+            icon={<Lock size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />}
+            title="No private stories yet"
+            body="Make one for your inner circle — only the friends you pick can see what you post to it."
+            paddingTop={space[6]}
+          />
+        ) : null}
 
-          {(lists.data ?? []).map((list) => (
-            <StoryCard
-              key={list.id}
-              list={list}
-              onEdit={() => setDraft({ id: list.id, name: list.name, memberIds: list.members.map((m) => m.userId) })}
-            />
-          ))}
+        {rows.map((list) => (
+          <StoryRow
+            key={list.id}
+            list={list}
+            onEdit={() => setDraft({ id: list.id, name: list.name, memberIds: list.members.map((m) => m.userId) })}
+          />
+        ))}
 
+        <View style={{ paddingTop: space[4] }}>
           <Button
-            className="mt-4"
-            icon={<Plus size={16} color={colors.black} />}
+            icon={<Plus size={icon.size.xs} color={colors.black} strokeWidth={icon.stroke.bold} />}
             onPress={() => setDraft({ id: null, name: "", memberIds: [] })}
           >
             New private story
           </Button>
-        </ScrollView>
-      </View>
-    </Screen>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-/** One private story: name, member count, avatar strip, edit affordance. */
-function StoryCard({ list, onEdit }: { list: PrivateStory; onEdit: () => void }) {
+/** One private story: lock tile · name · member count · avatar strip · edit glyph. */
+function StoryRow({ list, onEdit }: { list: PrivateStory; onEdit: () => void }) {
   const shown = list.members.slice(0, 5);
   return (
-    <Pressable onPress={onEdit} accessibilityLabel={`Edit ${list.name}`}>
-      <View className="mb-3 rounded-card border border-hairline-strong bg-ink p-4">
-        <View className="flex-row items-center gap-3">
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: radius.pill,
-              backgroundColor: tokens.bg.subtle,
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <Lock size={17} color={colors.white} strokeWidth={1.9} />
-          </View>
-          <View className="flex-1">
-            <Text variant="body-strong" className="text-white">
-              {list.name}
-            </Text>
-            <Text variant="caption" className="mt-0.5 text-fog">
-              {list.members.length} {list.members.length === 1 ? "person" : "people"}
-            </Text>
-          </View>
-          <Pencil size={16} color={colors.fog} strokeWidth={2} />
+    <ListRow
+      name={list.name}
+      sub={`${list.members.length} ${list.members.length === 1 ? "person" : "people"}`}
+      onPress={onEdit}
+      left={
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: radius.pill,
+            backgroundColor: tokens.bg.subtle,
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <Lock size={icon.size.xs + 1} color={colors.white} strokeWidth={icon.stroke.regular} />
         </View>
-        {shown.length > 0 ? (
-          <View className="mt-3 flex-row items-center">
-            {shown.map((m, i) => (
-              <View key={m.userId} style={{ marginLeft: i === 0 ? 0 : -10 }}>
-                <View style={{ borderWidth: 2, borderColor: colors.black, borderRadius: radius.pill }}>
-                  <Avatar name={m.displayName} uri={m.avatarUrl} size={30} />
+      }
+      right={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] + 2 }}>
+          {shown.length > 0 ? (
+            <View style={{ flexDirection: "row" }}>
+              {shown.map((m, i) => (
+                <View key={m.userId} style={{ marginLeft: i === 0 ? 0 : -8 }}>
+                  <Avatar name={m.displayName} uri={m.avatarUrl} size={24} borderColor={colors.black} borderWidth={2} />
                 </View>
-              </View>
-            ))}
-            {list.members.length > shown.length ? (
-              <Text variant="caption" className="ml-2 text-fog">
-                +{list.members.length - shown.length} more
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
+              ))}
+            </View>
+          ) : null}
+          <Pencil size={icon.size.xs} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
+        </View>
+      }
+    />
   );
 }
 
@@ -214,6 +196,7 @@ function EditorView({
   saving: boolean;
   onDelete?: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const friends = useFriends();
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
@@ -223,72 +206,49 @@ function EditorView({
   const toggle = (id: string) =>
     setDraft({
       ...draft,
-      memberIds: draft.memberIds.includes(id)
-        ? draft.memberIds.filter((m) => m !== id)
-        : [...draft.memberIds, id]
+      memberIds: draft.memberIds.includes(id) ? draft.memberIds.filter((m) => m !== id) : [...draft.memberIds, id]
     });
 
   return (
-    <Screen scroll={false}>
-      <View className="px-4" style={{ flex: 1 }}>
-        {/* Back returns to the list view, not the settings hub. */}
-        <Pressable
-          accessibilityLabel="Back to stories"
-          onPress={() => setDraft(null)}
-          style={{ alignSelf: "flex-start", marginBottom: 18 }}
+    <View style={{ flex: 1, backgroundColor: colors.black }}>
+      {/* Back returns to the list view, not the settings hub. */}
+      <PanelHeader title={draft.id ? "Edit story" : "New story"} onBack={() => setDraft(null)} />
+      <View style={{ flex: 1, paddingHorizontal: space[4] }}>
+        <Text variant="micro" className="mb-2">
+          Name
+        </Text>
+        <TextField
+          value={draft.name}
+          onChangeText={(name) => setDraft({ ...draft, name })}
+          placeholder="e.g. Gym Rats"
+          maxLength={40}
+          accessibilityLabel="Story name"
+        />
+
+        <View
+          style={{
+            marginTop: space[4] + 4,
+            marginBottom: space[2],
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between"
+          }}
         >
-          <View className="flex-row items-center gap-2 rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1.5">
-            <Text variant="micro" className="text-mist">
-              BACK
-            </Text>
-          </View>
-        </Pressable>
-        <Text variant="display-sm">{draft.id ? "EDIT STORY" : "NEW STORY"}</Text>
-
-        <View className="mt-5">
-          <Text variant="micro" className="mb-2 text-mist">
-            NAME
-          </Text>
-          <TextInput
-            value={draft.name}
-            onChangeText={(name) => setDraft({ ...draft, name })}
-            placeholder="e.g. Gym Rats"
-            placeholderTextColor={colors.fog}
-            maxLength={40}
-            style={{
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              borderRadius: radius.sm,
-              backgroundColor: tokens.bg.raised,
-              borderWidth: 1,
-              borderColor: tokens.border.default,
-              fontFamily: "Geist_400Regular",
-              fontSize: 15,
-              color: colors.white
-            }}
-          />
-        </View>
-
-        <View className="mt-5 mb-2 flex-row items-center justify-between">
-          <Text variant="micro" className="text-mist">
-            WHO CAN SEE IT
-          </Text>
-          <Text variant="micro" className="text-fog">
-            {draft.memberIds.length} SELECTED
-          </Text>
+          <Text variant="micro">Who can see it</Text>
+          <Text variant="mono">{`${draft.memberIds.length} selected`}</Text>
         </View>
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search friends" />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          style={{ flex: 1, marginTop: 8 }}
-          contentContainerStyle={{ paddingBottom: 12 }}
+          style={{ flex: 1, marginTop: space[2] }}
+          contentContainerStyle={{ paddingBottom: space[3] }}
         >
           {friends.isLoading ? (
             <SkeletonRows count={5} />
           ) : rows.length === 0 ? (
-            <Text variant="caption" className="pt-6 text-center text-fog">
+            <Text variant="meta" className="pt-6 text-center">
               {q ? "No friends match that name." : "No friends yet — add your crew first."}
             </Text>
           ) : (
@@ -305,19 +265,17 @@ function EditorView({
           )}
         </ScrollView>
 
-        <View style={{ paddingBottom: 24, gap: 8 }}>
+        <View style={{ paddingBottom: insets.bottom + space[3], gap: space[2] }}>
           <Button onPress={onSave} loading={saving} disabled={saving || !draft.name.trim()}>
             {draft.id ? "Save changes" : "Create private story"}
           </Button>
           {onDelete ? (
-            <Pressable accessibilityLabel="Delete private story" onPress={onDelete} style={{ alignItems: "center", paddingVertical: 8 }}>
-              <Text variant="caption" className="text-[#E5484D]">
-                Delete private story
-              </Text>
-            </Pressable>
+            <Button variant="danger" onPress={onDelete}>
+              Delete private story
+            </Button>
           ) : null}
         </View>
       </View>
-    </Screen>
+    </View>
   );
 }

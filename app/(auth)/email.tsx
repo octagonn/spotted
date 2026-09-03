@@ -1,21 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Check, Circle, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react-native";
+import { ArrowLeft, Mail } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  TextInput,
-  View
-} from "react-native";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeOut,
-  LinearTransition
-} from "react-native-reanimated";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
+import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { Screen } from "@/components/Screen";
+import { AuthField, PasswordField, PasswordRequirements } from "@/components/auth/AuthField";
+import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
@@ -34,26 +25,12 @@ import { getPasswordRequirements, passwordMeetsRequirements } from "@/lib/passwo
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { icon } from "@/theme/tokens";
 
 const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 type Stage = "email" | "password" | "verify" | "create-password";
-
-function Requirement({ met, label }: { met: boolean; label: string }) {
-  return (
-    <View
-      accessible
-      accessibilityLabel={`${label}, ${met ? "met" : "not met"}`}
-      className="flex-row items-center gap-1.5"
-    >
-      {met ? <Check color={colors.white} size={14} /> : <Circle color={colors.fog} size={12} />}
-      <Text variant="micro" className={met ? "text-white" : "text-fog"}>
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 export default function EmailAuthScreen() {
   const { legal } = useLocalSearchParams<{ legal?: string }>();
@@ -133,7 +110,9 @@ export default function EmailAuthScreen() {
   async function continueWithEmail() {
     if (!emailValid) return;
     setError(null);
-    if (!isSupabaseConfigured) {
+    // Demo-mode shortcut into onboarding is DEV-ONLY (see stores/auth hydrate):
+    // an unconfigured release bundle must stay on the auth screens.
+    if (!isSupabaseConfigured && __DEV__) {
       router.replace("/birthday");
       return;
     }
@@ -292,97 +271,96 @@ export default function EmailAuthScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <Animated.View style={[{ flex: 1 }, fadeStyle]}>
-      <Screen transparent>
-        <Pressable className="self-start" disabled={submitting} onPress={handleBack}>
-          <View className="flex-row items-center gap-2 rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1.5">
-            <ArrowLeft color={colors.mist} size={14} />
-            <Text variant="micro" className="text-mist">
-              BACK
-            </Text>
-          </View>
-        </Pressable>
+        <Screen transparent>
+          <Pressable className="self-start" disabled={submitting} onPress={handleBack}>
+            <View className="flex-row items-center gap-2 rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1.5">
+              <ArrowLeft color={colors.mist} size={icon.size.xs - 2} />
+              <Text variant="micro" className="text-mist">
+                BACK
+              </Text>
+            </View>
+          </Pressable>
 
-        <Animated.View layout={LinearTransition.duration(300)} className="mt-12 gap-6">
-          <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-            <Text variant="micro" className="text-mist">
-              {isVerify ? "VERIFY" : isCreatePassword ? (isReset ? "RESET PASSWORD" : "ACCOUNT SETUP") : "STEP 1 OF 5"}
-            </Text>
-          </View>
-          <Text variant={isCreatePassword ? "display-sm" : "display-md"}>
-            {isVerify ? "CHECK EMAIL." : isCreatePassword ? (isReset ? "NEW PASSWORD." : "MAKE A PASSWORD.") : "EMAIL."}
-          </Text>
-          <Text variant="body" className="text-silver">
-            {isVerify
-              ? `We sent a verification code to ${cleanEmail}.`
-              : isCreatePassword
-                ? "Use 8+ characters with at least one letter and one number."
-              : stage === "password"
-                ? "Enter your password to sign in."
-                : "Enter your email to continue."}
-          </Text>
+          <Animated.View layout={LinearTransition.duration(300)} className="mt-12 gap-6">
+            <OnboardingHeader
+              step={1}
+              label={
+                isVerify ? "VERIFY" : isCreatePassword ? (isReset ? "RESET PASSWORD" : "ACCOUNT SETUP") : undefined
+              }
+              compact={isCreatePassword}
+              title={
+                isVerify
+                  ? "CHECK EMAIL."
+                  : isCreatePassword
+                    ? isReset
+                      ? "NEW PASSWORD."
+                      : "MAKE A PASSWORD."
+                    : "EMAIL."
+              }
+              body={
+                isVerify
+                  ? `We sent a verification code to ${cleanEmail}.`
+                  : isCreatePassword
+                    ? "Use 8+ characters with at least one letter and one number."
+                    : stage === "password"
+                      ? "Enter your password to sign in."
+                      : "Enter your email to continue."
+              }
+            />
 
-          {!isVerify && !isCreatePassword ? (
-            <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.duration(300)}>
-              <View className="rounded-pill border border-hairline-strong bg-glass-soft px-4 py-3">
-                <View className="flex-row items-center gap-3">
-                  <Mail color={colors.fog} size={18} />
-                  <TextInput
-                    value={email}
-                    onChangeText={handleEmailChange}
-                    accessibilityLabel="Email"
-                    placeholder="you@gym.com"
-                    placeholderTextColor={colors.fog}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="email"
-                    inputMode="email"
-                    keyboardType="email-address"
-                    returnKeyType="next"
-                    onSubmitEditing={continueWithEmail}
-                    editable={!submitting}
-                    className="flex-1 font-sans text-[16px] text-white"
-                  />
-                </View>
-              </View>
-            </Animated.View>
-          ) : null}
+            {!isVerify && !isCreatePassword ? (
+              <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.duration(300)}>
+                <AuthField
+                  icon={<Mail color={colors.fog} size={icon.size.xs + 2} />}
+                  value={email}
+                  onChangeText={handleEmailChange}
+                  accessibilityLabel="Email"
+                  placeholder="you@gym.com"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  inputMode="email"
+                  keyboardType="email-address"
+                  returnKeyType="next"
+                  onSubmitEditing={continueWithEmail}
+                  editable={!submitting}
+                />
+              </Animated.View>
+            ) : null}
 
-          {isVerify ? (
-            <Animated.View
-              entering={FadeInDown.duration(280)}
-              exiting={FadeOut.duration(160)}
-              className="rounded-card border border-hairline-strong bg-glass-soft px-4 py-3"
-            >
-              <TextInput
-                value={code}
-                onChangeText={(value) => {
-                  setCode(value.replace(/\D/g, "").slice(0, 8));
-                  setError(null);
-                }}
-                accessibilityLabel="Verification code"
-                placeholder="••••••••"
-                placeholderTextColor={colors.fog}
-                inputMode="numeric"
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                autoComplete="one-time-code"
-                maxLength={8}
-                autoFocus
-                className="font-display text-center text-[36px] tracking-[8px] text-white"
-              />
-            </Animated.View>
-          ) : null}
-
-          {stage === "password" ? (
-            <Animated.View
-              entering={FadeInDown.duration(300)}
-              exiting={FadeOut.duration(140)}
-              layout={LinearTransition.duration(300)}
-              className="rounded-pill border border-hairline-strong bg-glass-soft px-4 py-3"
-            >
-              <View className="flex-row items-center gap-3">
-                <LockKeyhole color={colors.fog} size={18} />
+            {isVerify ? (
+              <Animated.View
+                entering={FadeInDown.duration(280)}
+                exiting={FadeOut.duration(160)}
+                className="rounded-card border border-hairline-strong bg-glass-soft px-4 py-3"
+              >
                 <TextInput
+                  value={code}
+                  onChangeText={(value) => {
+                    setCode(value.replace(/\D/g, "").slice(0, 8));
+                    setError(null);
+                  }}
+                  accessibilityLabel="Verification code"
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.fog}
+                  inputMode="numeric"
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                  maxLength={8}
+                  autoFocus
+                  className="font-display text-center text-[36px] tracking-[8px] text-white"
+                />
+              </Animated.View>
+            ) : null}
+
+            {stage === "password" ? (
+              <Animated.View
+                entering={FadeInDown.duration(300)}
+                exiting={FadeOut.duration(140)}
+                layout={LinearTransition.duration(300)}
+              >
+                <PasswordField
                   ref={passwordInputRef}
                   value={password}
                   onChangeText={(value) => {
@@ -391,188 +369,126 @@ export default function EmailAuthScreen() {
                   }}
                   accessibilityLabel="Password"
                   placeholder="Password"
-                  placeholderTextColor={colors.fog}
-                  autoCapitalize="none"
-                  autoCorrect={false}
                   autoComplete="password"
                   textContentType="password"
-                  secureTextEntry={!passwordVisible}
-                  maxLength={72}
                   returnKeyType="go"
                   onSubmitEditing={signIn}
-                  className="flex-1 font-sans text-[16px] text-white"
+                  visible={passwordVisible}
+                  onToggleVisible={() => setPasswordVisible((visible) => !visible)}
                 />
-                <Pressable
-                  haptic={false}
-                  accessibilityRole="button"
-                  accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
-                  onPress={() => setPasswordVisible((visible) => !visible)}
-                >
-                  {passwordVisible ? (
-                    <EyeOff color={colors.fog} size={18} />
-                  ) : (
-                    <Eye color={colors.fog} size={18} />
-                  )}
-                </Pressable>
-              </View>
-            </Animated.View>
-          ) : null}
+              </Animated.View>
+            ) : null}
 
-          {stage === "password" ? (
-            <Pressable
-              haptic={false}
-              accessibilityRole="button"
-              accessibilityLabel="Forgot password"
-              disabled={submitting}
-              onPress={() => void forgotPassword()}
-              className="self-end"
-            >
-              <Text variant="caption" className="text-mist underline">
-                Forgot password?
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {isCreatePassword ? (
-            <Animated.View
-              entering={FadeInDown.duration(300)}
-              exiting={FadeOut.duration(140)}
-              layout={LinearTransition.duration(300)}
-              className="gap-3"
-            >
-              <View className="rounded-pill border border-hairline-strong bg-glass-soft px-4 py-3">
-                <View className="flex-row items-center gap-3">
-                  <LockKeyhole color={colors.fog} size={18} />
-                  <TextInput
-                    ref={passwordInputRef}
-                    value={password}
-                    onChangeText={(value) => {
-                      setPassword(value);
-                      setError(null);
-                    }}
-                    accessibilityLabel="Create password"
-                    placeholder="Create password"
-                    placeholderTextColor={colors.fog}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="new-password"
-                    textContentType="newPassword"
-                    secureTextEntry={!passwordVisible}
-                    maxLength={72}
-                    returnKeyType="next"
-                    onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
-                    className="flex-1 font-sans text-[16px] text-white"
-                  />
-                  <Pressable
-                    haptic={false}
-                    accessibilityRole="button"
-                    accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
-                    onPress={() => setPasswordVisible((visible) => !visible)}
-                  >
-                    {passwordVisible ? (
-                      <EyeOff color={colors.fog} size={18} />
-                    ) : (
-                      <Eye color={colors.fog} size={18} />
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-
-              <View className="rounded-pill border border-hairline-strong bg-glass-soft px-4 py-3">
-                <View className="flex-row items-center gap-3">
-                  <LockKeyhole color={colors.fog} size={18} />
-                  <TextInput
-                    ref={confirmPasswordInputRef}
-                    value={confirmPassword}
-                    onChangeText={(value) => {
-                      setConfirmPassword(value);
-                      setError(null);
-                    }}
-                    accessibilityLabel="Confirm password"
-                    placeholder="Confirm password"
-                    placeholderTextColor={colors.fog}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="new-password"
-                    textContentType="newPassword"
-                    secureTextEntry={!confirmPasswordVisible}
-                    maxLength={72}
-                    returnKeyType="go"
-                    onSubmitEditing={createPassword}
-                    className="flex-1 font-sans text-[16px] text-white"
-                  />
-                  <Pressable
-                    haptic={false}
-                    accessibilityRole="button"
-                    accessibilityLabel={confirmPasswordVisible ? "Hide confirmed password" : "Show confirmed password"}
-                    onPress={() => setConfirmPasswordVisible((visible) => !visible)}
-                  >
-                    {confirmPasswordVisible ? (
-                      <EyeOff color={colors.fog} size={18} />
-                    ) : (
-                      <Eye color={colors.fog} size={18} />
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-
-              <View className="flex-row flex-wrap gap-x-4 gap-y-2 px-1 pt-1">
-                <Requirement met={passwordRequirements.longEnough} label="8+ CHARACTERS" />
-                <Requirement met={passwordRequirements.hasLetter} label="ONE LETTER" />
-                <Requirement met={passwordRequirements.hasNumber} label="ONE NUMBER" />
-              </View>
-
-              {confirmPassword.length > 0 && password !== confirmPassword ? (
-                <Text variant="caption" className="px-1 text-mist">
-                  Passwords do not match.
-                </Text>
-              ) : null}
-            </Animated.View>
-          ) : null}
-
-          {error ? (
-            <Animated.View
-              accessibilityLiveRegion="assertive"
-              entering={FadeIn.duration(180)}
-              exiting={FadeOut.duration(120)}
-            >
-              <Text variant="caption" className="text-mist">
-                {error}
-              </Text>
-            </Animated.View>
-          ) : null}
-
-          <Animated.View layout={LinearTransition.duration(300)}>
-            <Button onPress={action} loading={submitting} disabled={actionDisabled} animateLabel>
-              {actionLabel}
-            </Button>
-          </Animated.View>
-
-          {isVerify ? (
-            <Animated.View entering={FadeInDown.delay(80).duration(240)}>
+            {stage === "password" ? (
               <Pressable
-                disabled={resendRemaining > 0 || resending}
-                onPress={resendCode}
+                haptic={false}
                 accessibilityRole="button"
-                accessibilityLabel={resendRemaining > 0 ? `Resend code in ${resendRemaining} seconds` : "Resend code"}
+                accessibilityLabel="Forgot password"
+                disabled={submitting}
+                onPress={() => void forgotPassword()}
+                className="self-end"
               >
-                <View
-                  className="h-12 items-center justify-center rounded-card border border-hairline-strong bg-glass-soft"
-                  style={{ opacity: resendRemaining > 0 ? 0.55 : 1 }}
-                >
-                  {resending ? (
-                    <ActivityIndicator color={colors.mist} size="small" />
-                  ) : (
-                    <Text variant="micro" className="text-mist">
-                      {resendRemaining > 0 ? `RESEND CODE IN ${resendRemaining}S` : "RESEND CODE"}
-                    </Text>
-                  )}
-                </View>
+                <Text variant="caption" className="text-mist underline">
+                  Forgot password?
+                </Text>
               </Pressable>
+            ) : null}
+
+            {isCreatePassword ? (
+              <Animated.View
+                entering={FadeInDown.duration(300)}
+                exiting={FadeOut.duration(140)}
+                layout={LinearTransition.duration(300)}
+                className="gap-3"
+              >
+                <PasswordField
+                  ref={passwordInputRef}
+                  value={password}
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    setError(null);
+                  }}
+                  accessibilityLabel="Create password"
+                  placeholder="Create password"
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  returnKeyType="next"
+                  onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
+                  visible={passwordVisible}
+                  onToggleVisible={() => setPasswordVisible((visible) => !visible)}
+                />
+
+                <PasswordField
+                  ref={confirmPasswordInputRef}
+                  value={confirmPassword}
+                  onChangeText={(value) => {
+                    setConfirmPassword(value);
+                    setError(null);
+                  }}
+                  accessibilityLabel="Confirm password"
+                  placeholder="Confirm password"
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  returnKeyType="go"
+                  onSubmitEditing={createPassword}
+                  visible={confirmPasswordVisible}
+                  onToggleVisible={() => setConfirmPasswordVisible((visible) => !visible)}
+                  what="confirmed password"
+                />
+
+                <PasswordRequirements requirements={passwordRequirements} />
+
+                {confirmPassword.length > 0 && password !== confirmPassword ? (
+                  <Text variant="caption" className="px-1 text-mist">
+                    Passwords do not match.
+                  </Text>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
+            {error ? (
+              <Animated.View
+                accessibilityLiveRegion="assertive"
+                entering={FadeIn.duration(180)}
+                exiting={FadeOut.duration(120)}
+              >
+                <Text variant="caption" className="text-mist">
+                  {error}
+                </Text>
+              </Animated.View>
+            ) : null}
+
+            <Animated.View layout={LinearTransition.duration(300)}>
+              <Button onPress={action} loading={submitting} disabled={actionDisabled} animateLabel>
+                {actionLabel}
+              </Button>
             </Animated.View>
-          ) : null}
-        </Animated.View>
-      </Screen>
+
+            {isVerify ? (
+              <Animated.View entering={FadeInDown.delay(80).duration(240)}>
+                <Pressable
+                  disabled={resendRemaining > 0 || resending}
+                  onPress={resendCode}
+                  accessibilityRole="button"
+                  accessibilityLabel={resendRemaining > 0 ? `Resend code in ${resendRemaining} seconds` : "Resend code"}
+                >
+                  <View
+                    className="h-12 items-center justify-center rounded-card border border-hairline-strong bg-glass-soft"
+                    style={{ opacity: resendRemaining > 0 ? 0.55 : 1 }}
+                  >
+                    {resending ? (
+                      <ActivityIndicator color={colors.mist} size="small" />
+                    ) : (
+                      <Text variant="micro" className="text-mist">
+                        {resendRemaining > 0 ? `RESEND CODE IN ${resendRemaining}S` : "RESEND CODE"}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              </Animated.View>
+            ) : null}
+          </Animated.View>
+        </Screen>
       </Animated.View>
     </KeyboardAvoidingView>
   );

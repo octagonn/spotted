@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Camera, ChevronRight, MapPin } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HomeGymSheet } from "@/components/profile/HomeGymSheet";
@@ -16,6 +16,8 @@ import { useSheet } from "@/components/ui/Sheet";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { Pressable } from "@/components/ui/Pressable";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { Text } from "@/components/ui/Text";
+import { TextField } from "@/components/ui/TextField";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { compressReactionSelfie } from "@/lib/posts";
 import { logger } from "@/lib/logger";
@@ -24,6 +26,9 @@ import { uploadMediaObject } from "@/lib/r2";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { icon, space, tokens } from "@/theme/tokens";
+
+const GUTTER = space[4] + 2;
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -191,18 +196,25 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.black }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.black }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <PanelHeader title="Edit profile" />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerStyle={{ paddingBottom: keyboardVisible ? 12 : insets.bottom + 28 }}
       >
-        <View style={{ alignItems: "center", paddingTop: 12 }}>
+        <View style={{ alignItems: "center", paddingTop: space[3] }}>
           <Pressable onPress={() => void pickAvatar()} accessibilityLabel="Change photo">
             <View>
               {newAvatarLocal ? (
-                <Image source={{ uri: newAvatarLocal }} style={{ width: 92, height: 92, borderRadius: 46 }} contentFit="cover" />
+                <Image
+                  source={{ uri: newAvatarLocal }}
+                  style={{ width: 92, height: 92, borderRadius: 46 }}
+                  contentFit="cover"
+                />
               ) : (
                 <Avatar name={displayName || "?"} uri={avatarUri} size={92} />
               )}
@@ -221,143 +233,108 @@ export default function EditProfileScreen() {
                   justifyContent: "center"
                 }}
               >
-                <Camera size={15} color={colors.black} strokeWidth={2.2} />
+                <Camera size={icon.size.xs - 1} color={colors.black} strokeWidth={icon.stroke.bold} />
               </View>
             </View>
           </Pressable>
-          <Pressable onPress={() => void pickAvatar()} style={{ paddingTop: 8 }} haptic={false}>
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>Change photo</Text>
+          <Pressable
+            onPress={() => void pickAvatar()}
+            style={{ paddingTop: space[2] }}
+            haptic="none"
+            accessibilityLabel="Change photo"
+          >
+            <Text variant="meta-strong" className="text-white">
+              Change photo
+            </Text>
           </Pressable>
         </View>
 
         <SectionLabel>Name</SectionLabel>
-        <View style={{ paddingHorizontal: 18 }}>
-          <TextInput
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <TextField
             value={displayName}
             onChangeText={setDisplayName}
             accessibilityLabel="Display name"
             placeholder="Display name"
-            placeholderTextColor={colors.fog}
             maxLength={40}
-            style={inputStyle}
           />
         </View>
 
         <SectionLabel>Bio</SectionLabel>
-        <View style={{ paddingHorizontal: 18 }}>
-          <TextInput
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <TextField
             value={bio}
             onChangeText={setBio}
             accessibilityLabel="Bio"
             placeholder="Add a bio"
-            placeholderTextColor={colors.fog}
             multiline
             maxLength={200}
-            textAlignVertical="top"
-            style={[inputStyle, { minHeight: 80, paddingTop: 12 }]}
+            counter
           />
-          <Text style={{ alignSelf: "flex-end", paddingTop: 6, fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.fog }}>
-            {bio.length}/200
-          </Text>
         </View>
 
         <SectionLabel>Social links</SectionLabel>
-        <View style={{ paddingHorizontal: 18, gap: 10 }}>
+        <View style={{ paddingHorizontal: GUTTER, gap: space[2] + 2 }}>
           {SOCIAL_PLATFORMS.map((platform) => (
-            <View
+            <TextField
               key={platform.key}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                minHeight: 46,
-                borderWidth: 1,
-                borderColor: colors.iron,
-                borderRadius: 12,
-                backgroundColor: colors.graphite,
-                paddingHorizontal: 12
-              }}
-            >
-              <platform.icon size={17} color={colors.silver} strokeWidth={2} />
-              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 12, color: colors.fog }}>{platform.prefix}</Text>
-              <TextInput
-                value={social[platform.key] ?? ""}
-                onChangeText={(value) => setSocialField(platform.key, value)}
-                accessibilityLabel={platform.label}
-                placeholder={platform.placeholder}
-                placeholderTextColor={colors.fog}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType={platform.key === "website" ? "url" : "default"}
-                maxLength={200}
-                style={{ flex: 1, fontSize: 15, color: colors.white, paddingVertical: 12 }}
-              />
-            </View>
+              value={social[platform.key] ?? ""}
+              onChangeText={(value) => setSocialField(platform.key, value)}
+              accessibilityLabel={platform.label}
+              placeholder={platform.placeholder}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType={platform.key === "website" ? "url" : "default"}
+              maxLength={200}
+              left={
+                <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>
+                  <platform.icon size={icon.size.xs + 1} color={colors.silver} strokeWidth={icon.stroke.regular} />
+                  <Text variant="mono">{platform.prefix}</Text>
+                </View>
+              }
+            />
           ))}
         </View>
 
         <SectionLabel>Home gym</SectionLabel>
-        <View style={{ paddingHorizontal: 18 }}>
-          <Pressable accessibilityLabel="Edit home gym" onPress={openGymPicker} haptic={false}>
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Pressable accessibilityLabel="Edit home gym" onPress={openGymPicker} haptic="none">
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 10,
+                gap: space[2] + 2,
                 minHeight: 46,
-                borderWidth: 1,
-                borderColor: colors.iron,
                 borderRadius: 12,
-                backgroundColor: colors.graphite,
-                paddingHorizontal: 14
+                backgroundColor: tokens.bg.raised,
+                paddingHorizontal: space[3] + 2
               }}
             >
-              <MapPin size={16} color={colors.silver} strokeWidth={2} />
-              <Text
-                numberOfLines={1}
-                style={{ flex: 1, fontSize: 15, color: homeGym ? colors.white : colors.fog }}
-              >
+              <MapPin size={icon.size.xs} color={colors.silver} strokeWidth={icon.stroke.regular} />
+              <Text variant="body-sm" numberOfLines={1} className={`flex-1 ${homeGym ? "text-white" : "text-fog"}`}>
                 {homeGym ? homeGym.name : "Set your home gym"}
               </Text>
-              <ChevronRight size={16} color={colors.fog} />
+              <ChevronRight size={icon.size.xs} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
             </View>
           </Pressable>
         </View>
 
         <SectionLabel>Username</SectionLabel>
-        <View style={{ paddingHorizontal: 18 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              minHeight: 46,
-              borderWidth: 1,
-              borderColor: colors.iron,
-              borderRadius: 12,
-              backgroundColor: colors.graphite,
-              paddingHorizontal: 14
-            }}
-          >
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 13, color: colors.fog }}>@</Text>
-            <TextInput
-              value={username}
-              onChangeText={(value) => setUsername(value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-              accessibilityLabel="Username"
-              placeholder="username"
-              placeholderTextColor={colors.fog}
-              autoCapitalize="none"
-              autoCorrect={false}
-              maxLength={20}
-              style={{ flex: 1, fontSize: 15, color: colors.white, paddingVertical: 12 }}
-            />
-          </View>
-          <Text style={{ paddingTop: 6, fontSize: 11.5, lineHeight: 16, color: colors.fog }}>
-            You can change your username once every 30 days.
-          </Text>
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <TextField
+            value={username}
+            onChangeText={(value) => setUsername(value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+            accessibilityLabel="Username"
+            placeholder="username"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={20}
+            left={<Text variant="mono">@</Text>}
+            hint="You can change your username once every 30 days."
+          />
         </View>
 
-        <View style={{ paddingHorizontal: 18, paddingTop: 24 }}>
+        <View style={{ paddingHorizontal: GUTTER, paddingTop: space[6] }}>
           <Button onPress={() => void save()} loading={saving} disabled={saving}>
             Save
           </Button>
@@ -366,14 +343,3 @@ export default function EditProfileScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const inputStyle = {
-  minHeight: 46,
-  borderWidth: 1,
-  borderColor: colors.iron,
-  borderRadius: 12,
-  backgroundColor: colors.graphite,
-  paddingHorizontal: 14,
-  fontSize: 15,
-  color: colors.white
-} as const;

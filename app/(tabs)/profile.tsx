@@ -1,58 +1,78 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
-import { CalendarDays, Camera, ChevronDown, ChevronRight, Dumbbell, Flame, Globe, Grid3x3, Lock, MapPin, Menu, Plus, Tag, Trophy, Users } from "lucide-react-native";
+import {
+  CalendarDays,
+  Camera,
+  ChevronDown,
+  Dumbbell,
+  Globe,
+  Grid3x3,
+  Lock,
+  Menu,
+  Plus,
+  Tag,
+  Trophy,
+  Users
+} from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { LayoutAnimation, RefreshControl, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { CalendarTapHint } from "@/components/profile/CalendarTapHint";
-import { PostGridCell } from "@/components/profile/PostGridCell";
-import { StreakCalendar } from "@/components/profile/StreakCalendar";
-import { WeeklySplit } from "@/components/profile/WeeklySplit";
+import { FeaturedTrophies, type FeaturedTrophy } from "@/components/profile/FeaturedTrophies";
+import { ProfileContentTabs } from "@/components/profile/ProfileContentTabs";
+import { PROFILE_GUTTER, ProfileIdentity } from "@/components/profile/ProfileIdentity";
+import { ProfileMediaGrid } from "@/components/profile/ProfileMediaGrid";
+import { ProfileStatsRow } from "@/components/profile/ProfileStatsRow";
+import { StreakCalendarSection } from "@/components/profile/StreakCalendarSection";
 import { StreakPopup } from "@/components/profile/StreakPopup";
 import { VisibilityPicker, type Visibility } from "@/components/profile/VisibilityPicker";
-import { Avatar } from "@/components/ui/Avatar";
-import { SkeletonGrid } from "@/components/ui/Skeleton";
+import { WeeklySplit } from "@/components/profile/WeeklySplit";
+import { appAlert } from "@/components/ui/AppDialog";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
-import { Stat } from "@/components/ui/Stat";
+import { SettingNavRow } from "@/components/ui/SettingRow";
+import { Text } from "@/components/ui/Text";
 import { useFriends } from "@/hooks/queries/useFriends";
-import { useUserCounts } from "@/hooks/queries/useUserCounts";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { useHasActiveStory, useSetSplitPublic, useSetVisibility } from "@/hooks/queries/useProfileExtras";
-import { useWorkouts } from "@/hooks/queries/useWorkouts";
-import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
-import { useQueryClient } from "@tanstack/react-query";
-import { useRecordStreakHighWater, useStreak } from "@/hooks/queries/useStreak";
-import { appAlert } from "@/components/ui/AppDialog";
 import { restDayMessage, useMarkRestDay } from "@/hooks/queries/useRestDay";
-import { showToast } from "@/stores/ui";
+import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
+import { useRecordStreakHighWater, useStreak } from "@/hooks/queries/useStreak";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
-import { useGymStreak } from "@/hooks/useGymStreak";
 import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
+import { useUserCounts } from "@/hooks/queries/useUserCounts";
+import { useWorkouts } from "@/hooks/queries/useWorkouts";
+import { useGymStreak } from "@/hooks/useGymStreak";
 import { useTrophyProgress } from "@/hooks/useTrophyProgress";
 import { shareProfile as shareProfileLink } from "@/lib/share";
-import { SocialLinksRow } from "@/components/profile/SocialLinksRow";
+import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
-import { radius as R, tokens } from "@/theme/tokens";
+import { tabBarClearance } from "@/theme/layout";
+import { icon, space, tokens } from "@/theme/tokens";
 
-const NAV_H = 84;
-const RADIUS = 16;
 const CALENDAR_OPEN_KEY = "profile-calendar-open";
-// Vertical rhythm between sections — tightened 50% (partner feedback: too much
-// dead space between stats / calendar / trophies / tab bar).
-const SECTION = 15;
+/** Vertical rhythm between profile sections. */
+const SECTION = space[4];
 
+type GridTab = "posts" | "split" | "tagged";
+const GRID_TABS = [
+  { key: "posts" as const, label: "POSTS", icon: Grid3x3 },
+  { key: "split" as const, label: "SPLIT", icon: CalendarDays },
+  { key: "tagged" as const, label: "TAGGED", icon: Tag }
+];
+
+const VISIBILITY_ICON = { public: Globe, private: Lock, friends: Users } as const;
+
+/**
+ * Own profile. Orchestrates data + owner actions and composes the shared
+ * profile sections (identity → actions → stats → trophies → nav rows →
+ * streak calendar → content tabs). The other-user profile composes the same
+ * sections with relationship controls instead of owner controls.
+ */
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const gridCellW = Math.floor(width / 3); // exact third -> always 3 columns
-  // Adapt to narrow phones (SE-class ≈ 320–375) without breaking wide ones.
-  const compact = width < 360;
-  const H = compact ? 16 : 18;
-  const avatarOuter = compact ? 82 : 92;
-  const ring = avatarOuter - 4;
   const profile = useMyProfile().data;
   const friends = useFriends();
   const posts = useSignedUserPosts(profile?.id);
@@ -63,9 +83,9 @@ export default function ProfileScreen() {
   const setVisibility = useSetVisibility();
   const [streakOpen, setStreakOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [grid, setGrid] = useState<"posts" | "split" | "tagged">("posts");
-  // Collapsible calendar (spec #3) — hidden by default; the expanded choice
-  // sticks across sessions. Expand/collapse animates (LayoutAnimation).
+  const [grid, setGrid] = useState<GridTab>("posts");
+  // Collapsible calendar — hidden by default; the expanded choice sticks
+  // across sessions.
   const [calendarOpen, setCalendarOpen] = useState(false);
   useEffect(() => {
     void AsyncStorage.getItem(CALENDAR_OPEN_KEY).then((v) => {
@@ -73,18 +93,17 @@ export default function ProfileScreen() {
     });
   }, []);
   const toggleCalendar = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.create(260, "easeInEaseOut", "opacity"));
     setCalendarOpen((open) => {
       void AsyncStorage.setItem(CALENDAR_OPEN_KEY, open ? "0" : "1").catch(() => undefined);
       return !open;
     });
   };
 
-  // Weekly split data — straight from My Workouts (spec #6).
+  // Weekly split data — straight from My Workouts.
   const workouts = useWorkouts(profile?.id);
   const setSplitPublic = useSetSplitPublic();
 
-  // Pull-to-refresh (spec #20): force-update stats, streaks, posts, split.
+  // Pull-to-refresh: force-update stats, streaks, posts, split.
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -104,12 +123,10 @@ export default function ProfileScreen() {
 
   const name = profile?.display_name ?? "";
   const handle = profile?.username ?? "";
-  const bio = profile?.bio ?? null;
-  const gym = profile?.gym?.name ?? null;
   const visibility = (profile?.schedule_visibility ?? "friends") as Visibility;
+  const VisibilityIcon = VISIBILITY_ICON[visibility] ?? Users;
   const counts = useUserCounts(profile?.id);
   const friendCount = counts.data?.friends ?? friends.data?.length ?? 0;
-  const postCount = (posts.data ?? []).filter((p) => p.hasMedia).length;
   // Streak computed from the gym-day posts with a grace window for today, so it
   // never reads 0 the morning after a post.
   const gymStreak = useGymStreak(streakDays.data);
@@ -119,331 +136,185 @@ export default function ProfileScreen() {
   useRecordStreakHighWater(currentStreak, streak.data?.longest_streak ?? 0);
   const trophies = useTrophyProgress();
   const hasActiveStory = hasStory.data ?? false;
-  // Featured trophies pinned to the header (spec C).
-  const featuredTrophies = useMemo(() => {
+  const featuredTrophies = useMemo<FeaturedTrophy[]>(() => {
     const raw = profile?.featured_trophies;
-    return Array.isArray(raw) ? (raw as { icon: string; name: string; familyName: string | null }[]) : [];
+    return Array.isArray(raw) ? (raw as FeaturedTrophy[]) : [];
   }, [profile?.featured_trophies]);
 
   // One continuous grid of everything the user has posted.
-  const gridPosts = useMemo(() => (posts.data ?? []).filter((p) => p.hasMedia), [posts.data]);
+  const gridPosts = useMemo(
+    () =>
+      (posts.data ?? [])
+        .filter((p) => p.hasMedia)
+        .map((p) => ({
+          id: p.id,
+          mediaUrl: p.media_url,
+          thumbnailUrl: p.thumbnailUrl,
+          insetUrl: p.inset_url,
+          isVideo: p.mediaType === "video"
+        })),
+    [posts.data]
+  );
+  const taggedPosts = useMemo(
+    () =>
+      (tagged.data ?? []).map((p) => ({
+        id: p.id,
+        mediaUrl: p.media_url,
+        thumbnailUrl: p.thumbnail_url,
+        isVideo: p.media_type === "video"
+      })),
+    [tagged.data]
+  );
 
   const openAvatarStory = () => {
     if (hasActiveStory && profile) router.push(`/story?user=${profile.id}`);
     else router.push("/camera?mode=story");
   };
-
-  const shareProfile = () => {
-    shareProfileLink(handle);
-  };
+  const openTrophies = () => router.push("/profile-section/trophies" as Href);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.white} />}
-        contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: NAV_H + insets.bottom + 12 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.white} />
+        }
+        contentContainerStyle={{ paddingTop: insets.top + space[2], paddingBottom: tabBarClearance(insets.bottom) }}
       >
-        {/* Top bar: username + lock, add-story, menu */}
+        {/* Top bar: handle + visibility · add story · settings */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            paddingHorizontal: H,
-            paddingBottom: 18
+            paddingHorizontal: PROFILE_GUTTER,
+            paddingBottom: space[4]
           }}
         >
           <Pressable
             onPress={() => setPrivacyOpen(true)}
+            haptic="none"
             accessibilityLabel="Change who can see you"
             hitSlop={8}
-            style={{ flexDirection: "row", alignItems: "center", gap: 7 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: space[2], flexShrink: 1 }}
           >
-            {visibility === "public" ? (
-              <Globe size={16} color={colors.silver} strokeWidth={2.2} />
-            ) : visibility === "private" ? (
-              <Lock size={16} color={colors.silver} strokeWidth={2.2} />
-            ) : (
-              <Users size={16} color={colors.silver} strokeWidth={2.2} />
-            )}
-            <Text style={{ fontFamily: "Boldonse_400Regular", fontSize: 20, color: colors.white }}>
+            <VisibilityIcon size={icon.size.xs} color={tokens.text.secondary} strokeWidth={icon.stroke.regular} />
+            <Text variant="heading" numberOfLines={1} className="flex-shrink">
               {handle || "you"}
             </Text>
-            <ChevronDown size={16} color={colors.fog} strokeWidth={2.2} />
+            <ChevronDown size={icon.size.xs} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
           </Pressable>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
-            <Pressable onPress={() => router.push("/camera?mode=story")} accessibilityLabel="Add story" hitSlop={6}>
-              <Plus size={23} color={colors.white} strokeWidth={2} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space[4] }}>
+            <Pressable
+              onPress={() => router.push("/camera?mode=story")}
+              haptic="none"
+              accessibilityLabel="Add story"
+              hitSlop={6}
+            >
+              <Plus size={icon.size.md} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />
             </Pressable>
-            <Pressable onPress={() => router.push("/settings" as Href)} accessibilityLabel="Menu" hitSlop={6}>
-              <Menu size={23} color={colors.white} strokeWidth={2} />
+            <Pressable
+              onPress={() => router.push("/settings" as Href)}
+              haptic="none"
+              accessibilityLabel="Menu"
+              hitSlop={6}
+            >
+              <Menu size={icon.size.md} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />
             </Pressable>
           </View>
         </View>
 
-        {/* Avatar + stats */}
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: H }}>
-          <Pressable onPress={openAvatarStory} accessibilityLabel="Your story">
-            <View style={{ width: avatarOuter, height: avatarOuter, alignItems: "center", justifyContent: "center" }}>
-              <View
-                style={{
-                  width: ring,
-                  height: ring,
-                  borderRadius: ring / 2,
-                  borderWidth: hasActiveStory ? 2.5 : 0,
-                  borderColor: colors.white,
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                <Avatar name={name || "?"} uri={profile?.avatar_url} size={hasActiveStory ? avatarOuter - 14 : avatarOuter - 8} />
-              </View>
-              {/* Add-story: ALWAYS present (even with a story up) — the badge
-                  adds; tapping the avatar itself opens the active story. */}
-              <Pressable
-                onPress={() => router.push("/camera?mode=story")}
-                accessibilityLabel="Add to your story"
-                hitSlop={6}
-                style={{
-                  position: "absolute",
-                  right: 3,
-                  bottom: 3,
-                  width: 24,
-                  height: 24,
-                  borderRadius: 12,
-                  backgroundColor: colors.white,
-                  borderWidth: 3,
-                  borderColor: colors.black,
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                <Plus size={13} color={colors.black} strokeWidth={3} />
-              </Pressable>
-            </View>
-          </Pressable>
+        <ProfileIdentity
+          name={name}
+          handle={handle}
+          avatarUrl={profile?.avatar_url}
+          hasActiveStory={hasActiveStory}
+          onAvatarPress={openAvatarStory}
+          avatarAccessibilityLabel="Your story"
+          onAddStory={() => router.push("/camera?mode=story")}
+          postCount={gridPosts.length}
+          friendCount={friendCount}
+          onPressFriends={() => router.push("/people/friends" as Href)}
+          bio={profile?.bio}
+          gym={profile?.gym?.name}
+          // Tapping the home gym edits it — it used to be reachable only by
+          // guessing it lived inside Edit profile.
+          onPressGym={() => router.push("/edit-profile")}
+          socialLinks={profile?.social_links}
+        />
 
-          <View style={{ flex: 1, flexDirection: "row", paddingLeft: 8 }}>
-            <Stat value={postCount} label="posts" onPress={() => {}} />
-            <Stat value={friendCount} label="friends" onPress={() => router.push("/people/friends" as Href)} />
-          </View>
-        </View>
-
-        {/* Name, bio, gym, socials */}
-        <View style={{ paddingHorizontal: H, paddingTop: 16 }}>
-          {name ? (
-            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white }}>{name}</Text>
-          ) : null}
-          {bio ? (
-            <Text style={{ marginTop: 6, fontFamily: "Geist_400Regular", fontSize: 15, lineHeight: 15 * 1.4, color: colors.mist }}>
-              {bio}
-            </Text>
-          ) : null}
-          {/* Tap your home gym to change it. Changing it was only reachable by
-              guessing that it lived inside Edit profile — a tester spent a day
-              unable to get the wrong gym off their profile. */}
-          <Pressable
-            onPress={() => router.push("/edit-profile")}
-            accessibilityLabel={gym ? `Home gym ${gym}. Change home gym` : "Set your home gym"}
-            haptic={false}
-          >
-            <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <MapPin size={14} color={colors.silver} strokeWidth={2} />
-              <Text style={{ fontFamily: "Geist_400Regular", fontSize: 14, color: gym ? colors.silver : colors.fog }}>
-                {gym ?? "Set your home gym"}
-              </Text>
-              <ChevronRight size={13} color={colors.fog} strokeWidth={2} />
-            </View>
-          </Pressable>
-          <SocialLinksRow links={profile?.social_links} />
-        </View>
-
-        {/* Edit / Share — recessed, equal-width, 44pt outline buttons */}
-        <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: H, paddingTop: 18 }}>
-          <Button
-            variant="ghost"
-            style={{ flex: 1, height: 44, paddingVertical: 0, borderRadius: RADIUS, borderColor: colors.iron }}
-            onPress={() => router.push("/edit-profile" as Href)}
-          >
+        {/* Owner actions */}
+        <View style={{ flexDirection: "row", gap: space[2], paddingHorizontal: PROFILE_GUTTER, paddingTop: SECTION }}>
+          <Button variant="ghost" style={{ flex: 1 }} onPress={() => router.push("/edit-profile" as Href)}>
             Edit profile
           </Button>
-          <Button
-            variant="ghost"
-            style={{ flex: 1, height: 44, paddingVertical: 0, borderRadius: RADIUS, borderColor: colors.iron }}
-            onPress={shareProfile}
-          >
+          <Button variant="ghost" style={{ flex: 1 }} onPress={() => shareProfileLink(handle)}>
             Share profile
           </Button>
         </View>
 
-        {/* Inline stats — Instagram treatment, no backgrounds, no dividers */}
-        <View style={{ paddingHorizontal: H, paddingTop: SECTION }}>
-          <View style={{ flexDirection: "row" }}>
-            <Stat
-              value={currentStreak}
-              unit="days"
-              label="Gym streak"
-              icon={<Flame size={13} color={colors.gold} strokeWidth={2.2} />}
-              onPress={() => setStreakOpen(true)}
-            />
-            <Stat value={longestStreak} unit="days" label="Longest" />
-            <Stat
-              value={trophies.earnedCount}
-              label="Trophies"
-              icon={<Trophy size={13} color={tokens.accent.gold} strokeWidth={2} />}
-              onPress={() => router.push("/profile-section/trophies" as Href)}
-            />
-          </View>
-          {gymStreak.keepAlive ? (
-            <Text style={{ marginTop: 12, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.gold, textAlign: "center" }}>
-              {currentStreak} {currentStreak === 1 ? "day" : "days"} — keep it alive. Post today.
-            </Text>
-          ) : null}
-
-          {/* Featured trophies (spec C) — up to 3 pinned; tap opens the case. */}
-          {featuredTrophies.length > 0 ? (
-            <Pressable
-              onPress={() => router.push("/profile-section/trophies" as Href)}
-              accessibilityLabel="Featured trophies"
-              style={{ marginTop: 14, flexDirection: "row", justifyContent: "center", gap: 10 }}
-            >
-              {featuredTrophies.slice(0, 3).map((t, i) => (
-                <View
-                  key={`${t.name}-${i}`}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingVertical: 6,
-                    paddingHorizontal: 11,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: "rgba(232,180,76,0.4)",
-                    backgroundColor: tokens.accent.goldSubtle
-                  }}
-                >
-                  <Trophy size={12} color={tokens.accent.gold} strokeWidth={2} />
-                  <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 11.5, color: colors.gold, maxWidth: 90 }}>
-                    {t.name}
-                  </Text>
-                </View>
-              ))}
-            </Pressable>
-          ) : null}
-        </View>
-
-        {/* My Workouts — history + records moved here from the old dumbbell tab. */}
-        <View style={{ paddingHorizontal: H, paddingTop: SECTION }}>
-          <Pressable onPress={() => router.push("/my-workouts" as Href)} accessibilityLabel="My Workouts">
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 14,
-                paddingVertical: 16,
-                paddingHorizontal: 18,
-                borderRadius: R.md,
-                borderWidth: 1,
-                borderColor: "rgba(232,180,76,0.35)",
-                backgroundColor: tokens.accent.goldSubtle
-              }}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: tokens.accent.gold, alignItems: "center", justifyContent: "center" }}>
-                <Dumbbell size={21} color={tokens.accent.gold} strokeWidth={2} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>My Workouts</Text>
-                <Text style={{ marginTop: 2, fontSize: 12.5, color: colors.fog }}>History, records and in-progress sessions</Text>
-              </View>
-              <ChevronRight size={18} color={tokens.accent.gold} strokeWidth={2} />
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Streak calendar — the hero, the one contained surface. Collapsible;
-            the header row always shows so it can be reopened. */}
         <View style={{ paddingTop: SECTION }}>
-          <View
-            // Same bubble treatment as the Trophies button below, per spec.
-            style={{
-              marginHorizontal: H,
-              borderRadius: RADIUS,
-              backgroundColor: tokens.bg.raised,
-              borderWidth: 1,
-              borderColor: tokens.border.default,
-              paddingVertical: calendarOpen ? 16 : 4,
-              overflow: "hidden"
-            }}
-          >
-            <Pressable
-              accessibilityLabel={calendarOpen ? "Collapse streak calendar" : "Expand streak calendar"}
-              accessibilityState={{ expanded: calendarOpen }}
-              onPress={toggleCalendar}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                paddingHorizontal: 16,
-                paddingVertical: calendarOpen ? 0 : 10,
-                paddingBottom: calendarOpen ? 8 : 10
-              }}
-            >
-              <Flame size={13} color={colors.gold} strokeWidth={2.2} />
-              <Text style={{ flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 12.5, letterSpacing: 1, textTransform: "uppercase", color: colors.mist }}>
-                Streak calendar
-              </Text>
-              {calendarOpen ? (
-                <ChevronDown size={16} color={colors.fog} />
-              ) : (
-                <ChevronRight size={16} color={colors.fog} />
-              )}
-            </Pressable>
-            {calendarOpen ? (
-              <StreakCalendar
-                days={streakDays.data instanceof Map ? streakDays.data : new Map()}
-                createdAt={profile?.created_at}
-                onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
-                // Change of mind: today's rest cell taps through to cancel.
-                onRestDayPress={() =>
-                  appAlert("Cancel today's rest day?", "Your streak goes back to needing a post today.", [
-                    { text: "Keep resting", style: "cancel" },
-                    {
-                      text: "Cancel rest day",
-                      onPress: () =>
-                        markRestDay.mutate(false, {
-                          onSuccess: (result) => showToast(restDayMessage(result)),
-                          onError: () => showToast("Couldn't cancel — try again.")
-                        })
-                    }
-                  ])
-                }
-              />
-            ) : null}
-          </View>
-          {calendarOpen ? (
-            <View style={{ paddingHorizontal: H }}>
-              <CalendarTapHint />
-            </View>
-          ) : null}
-        </View>
-
-        {/* Trophies — recessed outline */}
-        <View style={{ paddingHorizontal: H, paddingTop: SECTION }}>
-          <AchievementButton
-            icon={Trophy}
-            label="Trophies"
-            onPress={() => router.push("/profile-section/trophies" as Href)}
+          <ProfileStatsRow
+            currentStreak={currentStreak}
+            longestStreak={longestStreak}
+            trophyCount={trophies.earnedCount}
+            onPressStreak={() => setStreakOpen(true)}
+            onPressTrophies={openTrophies}
+            keepAlive={gymStreak.keepAlive}
           />
         </View>
 
-        {/* Posts / Split / Tagged tab bar — below the calendar + trophies. */}
-        <View style={{ marginTop: SECTION, borderTopWidth: 1, borderTopColor: colors.graphite, flexDirection: "row" }}>
-          <ProfileTab active={grid === "posts"} icon={Grid3x3} label="POSTS" onPress={() => setGrid("posts")} />
-          <ProfileTab active={grid === "split"} icon={CalendarDays} label="SPLIT" onPress={() => setGrid("split")} />
-          <ProfileTab active={grid === "tagged"} icon={Tag} label="TAGGED" onPress={() => setGrid("tagged")} />
+        {featuredTrophies.length > 0 ? (
+          <View style={{ paddingTop: space[3] }}>
+            <FeaturedTrophies trophies={featuredTrophies} onPress={openTrophies} />
+          </View>
+        ) : null}
+
+        {/* Deep links — plain rows, not cards: the content below is the point. */}
+        <View style={{ paddingHorizontal: PROFILE_GUTTER, paddingTop: space[2] }}>
+          <SettingNavRow
+            icon={<Dumbbell size={icon.size.sm} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />}
+            title="My Workouts"
+            sub="History, records and in-progress sessions"
+            onPress={() => router.push("/my-workouts" as Href)}
+          />
+          <SettingNavRow
+            icon={<Trophy size={icon.size.sm} color={tokens.accent.gold} strokeWidth={icon.stroke.regular} />}
+            title="Trophies"
+            sub={trophies.earnedCount > 0 ? `${trophies.earnedCount} earned` : "Earn your first"}
+            onPress={openTrophies}
+          />
+        </View>
+
+        <View style={{ paddingTop: SECTION }}>
+          <StreakCalendarSection
+            open={calendarOpen}
+            onToggle={toggleCalendar}
+            days={streakDays.data instanceof Map ? streakDays.data : undefined}
+            createdAt={profile?.created_at}
+            onDayPress={(dateKey) => router.push(`/daily/${dateKey}` as Href)}
+            // Change of mind: today's rest cell taps through to cancel.
+            onRestDayPress={() =>
+              appAlert("Cancel today's rest day?", "Your streak goes back to needing a post today.", [
+                { text: "Keep resting", style: "cancel" },
+                {
+                  text: "Cancel rest day",
+                  onPress: () =>
+                    markRestDay.mutate(false, {
+                      onSuccess: (result) => showToast(restDayMessage(result)),
+                      onError: () => showToast("Couldn't cancel — try again.")
+                    })
+                }
+              ])
+            }
+            showHint
+          />
+        </View>
+
+        <View style={{ marginTop: SECTION }}>
+          <ProfileContentTabs tabs={GRID_TABS} value={grid} onChange={setGrid} />
         </View>
         {grid === "split" ? (
-          <View style={{ paddingTop: 14 }}>
+          <View style={{ paddingTop: space[3] }}>
             <WeeklySplit
               workouts={workouts.data ?? []}
               gymDays={streakDays.data instanceof Map ? streakDays.data : undefined}
@@ -454,62 +325,21 @@ export default function ProfileScreen() {
             />
           </View>
         ) : grid === "posts" ? (
-          gridPosts.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
-              {gridPosts.map((post) => (
-                <Pressable
-                  key={post.id}
-                  style={{ width: gridCellW, aspectRatio: 4 / 5, padding: 1 }}
-                  accessibilityLabel="Open post"
-                  onPress={() => router.push(`/profile-posts/${post.id}` as Href)}
-                >
-                  <PostGridCell
-                    mediaUrl={post.media_url}
-                    thumbnailUrl={post.thumbnailUrl}
-                    insetUrl={post.inset_url}
-                    isVideo={post.mediaType === "video"}
-                  />
-                </Pressable>
-              ))}
-            </View>
-          ) : posts.isLoading ? (
-            <View style={{ paddingTop: 2 }}>
-              <SkeletonGrid count={9} />
-            </View>
-          ) : (
-            <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-              <Camera size={26} color={tokens.text.tertiary} strokeWidth={1.8} />
-              <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-                No posts yet
-              </Text>
-            </View>
-          )
-        ) : tagged.data?.length ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", paddingTop: 2 }}>
-            {tagged.data.map((post) => (
-              <Pressable
-                key={post.id}
-                style={{ width: gridCellW, aspectRatio: 4 / 5, padding: 1 }}
-                accessibilityLabel="Open post"
-                // One swipeable feed over ALL tagged posts, landing on this
-                // one — the day viewer forced open/back/open per post.
-                onPress={() => router.push(`/tagged-posts/${post.id}?user=${profile?.id}` as Href)}
-              >
-                <PostGridCell mediaUrl={post.media_url} thumbnailUrl={post.thumbnail_url} isVideo={post.media_type === "video"} />
-              </Pressable>
-            ))}
-          </View>
-        ) : tagged.isLoading ? (
-          <View style={{ paddingTop: 2 }}>
-            <SkeletonGrid count={6} />
-          </View>
+          <ProfileMediaGrid
+            posts={gridPosts}
+            isLoading={posts.isLoading}
+            onPressPost={(id) => router.push(`/profile-posts/${id}` as Href)}
+            empty={{ icon: Camera, title: "No posts yet", body: "Your daily SPOTTED drops land here." }}
+          />
         ) : (
-          <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 40 }}>
-            <Tag size={26} color={tokens.text.tertiary} strokeWidth={1.8} />
-            <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 14, color: tokens.text.tertiary, textAlign: "center", lineHeight: 20 }}>
-              No tagged posts yet
-            </Text>
-          </View>
+          <ProfileMediaGrid
+            posts={taggedPosts}
+            isLoading={tagged.isLoading}
+            // One swipeable feed over ALL tagged posts, landing on this one.
+            onPressPost={(id) => router.push(`/tagged-posts/${id}?user=${profile?.id}` as Href)}
+            empty={{ icon: Tag, title: "No tagged posts yet" }}
+            skeletonCount={6}
+          />
         )}
       </ScrollView>
       <StreakPopup
@@ -530,70 +360,3 @@ export default function ProfileScreen() {
     </View>
   );
 }
-
-function AchievementButton({
-  icon: Icon,
-  label,
-  onPress
-}: {
-  icon: typeof Grid3x3;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={{ flex: 1 }} accessibilityLabel={label}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          height: 52,
-          borderRadius: R.md,
-          borderWidth: 1,
-          borderColor: tokens.border.default,
-          backgroundColor: tokens.bg.raised
-        }}
-      >
-        <Icon size={20} color={tokens.accent.gold} strokeWidth={2} />
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.text.primary }}>{label}</Text>
-        <ChevronRight size={18} color={tokens.text.tertiary} strokeWidth={2} style={{ position: "absolute", right: 16 }} />
-      </View>
-    </Pressable>
-  );
-}
-
-function ProfileTab({
-  active,
-  icon: Icon,
-  label,
-  onPress
-}: {
-  active: boolean;
-  icon: typeof Grid3x3;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={{ flex: 1 }} haptic={false} accessibilityLabel={label} accessibilityState={{ selected: active }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          paddingVertical: 12,
-          borderBottomWidth: 2,
-          borderBottomColor: active ? tokens.text.primary : "transparent"
-        }}
-      >
-        <Icon size={16} color={active ? tokens.text.primary : tokens.text.tertiary} strokeWidth={2} />
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, letterSpacing: 1, color: active ? tokens.text.primary : tokens.text.tertiary }}>
-          {label}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
-

@@ -1,14 +1,18 @@
 import { Image } from "expo-image";
 import { ShieldCheck } from "lucide-react-native";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
-import { Pressable } from "@/components/ui/Pressable";
 import { SkeletonMediaCard } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
 import { useIsAdmin, useReviewQueue, useReviewResolve } from "@/hooks/queries/useModeration";
+import { DEFAULT_POST_RATIO } from "@/lib/postFrame";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 /**
  * Admin moderation review queue. Flagged (borderline NSFW) posts land here;
@@ -20,17 +24,13 @@ export default function ReviewQueueScreen() {
   const isAdmin = useIsAdmin();
   const queue = useReviewQueue(isAdmin.data === true);
   const resolve = useReviewResolve();
+  const shield = <ShieldCheck size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />;
 
   if (isAdmin.data === false) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
         <PanelHeader title="Review queue" />
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40 }}>
-          <ShieldCheck size={26} color={colors.slate} strokeWidth={2} />
-          <Text style={{ marginTop: 14, fontSize: 13, color: colors.fog, textAlign: "center" }}>
-            Admins only.
-          </Text>
-        </View>
+        <EmptyState center icon={shield} title="Admins only" body="This queue is only visible to app admins." />
       </View>
     );
   }
@@ -39,48 +39,84 @@ export default function ReviewQueueScreen() {
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title="Review queue" sub={queue.data ? `${queue.data.length} flagged` : undefined} />
       {queue.isLoading ? (
-        <View style={{ paddingTop: 16 }}>
+        <View style={{ paddingTop: space[4] }}>
           <SkeletonMediaCard />
           <SkeletonMediaCard />
         </View>
       ) : (queue.data ?? []).length === 0 ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40 }}>
-          <ShieldCheck size={26} color={colors.slate} strokeWidth={2} />
-          <Text style={{ marginTop: 14, fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>Queue clear</Text>
-          <Text style={{ marginTop: 6, fontSize: 12.5, color: colors.fog, textAlign: "center" }}>Nothing awaiting review.</Text>
-        </View>
+        <EmptyState center icon={shield} title="Queue clear" body="Nothing awaiting review." />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 24 }}>
+        <ScrollView
+          contentContainerStyle={{ padding: space[4], gap: space[4], paddingBottom: insets.bottom + space[6] }}
+        >
           {(queue.data ?? []).map((item) => (
-            <View key={item.postId} style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.iron, overflow: "hidden", backgroundColor: colors.ink }}>
-              <View style={{ aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
-                {item.mediaUrl ? <Image accessibilityLabel="Flagged photo" source={{ uri: item.mediaUrl }} contentFit="cover" style={{ flex: 1 }} /> : null}
+            <View
+              key={item.postId}
+              style={{ borderRadius: radius.md, overflow: "hidden", backgroundColor: tokens.bg.raised }}
+            >
+              <View style={{ aspectRatio: DEFAULT_POST_RATIO, backgroundColor: colors.graphite }}>
+                {item.mediaUrl ? (
+                  <Image
+                    accessibilityLabel="Flagged photo"
+                    source={{ uri: item.mediaUrl }}
+                    contentFit="cover"
+                    style={{ flex: 1 }}
+                  />
+                ) : null}
                 {item.insetUrl ? (
-                  <View style={{ position: "absolute", top: 12, left: 12, width: "30%", aspectRatio: 3 / 4, borderRadius: 12, overflow: "hidden", borderWidth: 2, borderColor: colors.black }}>
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: space[3],
+                      left: space[3],
+                      width: "30%",
+                      aspectRatio: 3 / 4,
+                      borderRadius: radius.sm,
+                      overflow: "hidden",
+                      borderWidth: 2,
+                      borderColor: colors.black
+                    }}
+                  >
                     <Image source={{ uri: item.insetUrl }} contentFit="cover" style={{ flex: 1 }} />
                   </View>
                 ) : null}
-                <View style={{ position: "absolute", bottom: 10, right: 10, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.7)" }}>
-                  <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 11, color: colors.white }}>
-                    nsfw {item.score != null ? `${Math.round(item.score * 100)}%` : "?"}
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: space[2] + 2,
+                    right: space[2] + 2,
+                    paddingVertical: space[1],
+                    paddingHorizontal: space[2] + 2,
+                    borderRadius: radius.pill,
+                    backgroundColor: tokens.bg.scrim
+                  }}
+                >
+                  <Text variant="mono" className="text-white">
+                    {`nsfw ${item.score != null ? `${Math.round(item.score * 100)}%` : "?"}`}
                   </Text>
                 </View>
               </View>
-              <View style={{ flexDirection: "row", gap: 10, padding: 12 }}>
-                <Pressable
+              <View style={{ flexDirection: "row", gap: space[2] + 2, padding: space[3] }}>
+                <Button
+                  variant="ghost"
+                  style={{ flex: 1 }}
                   accessibilityLabel={`Approve flagged post by user ${item.userId}`}
-                  onPress={() => resolve.mutate({ postId: item.postId, approve: true }, { onSuccess: () => showToast("Approved") })}
-                  style={{ flex: 1, paddingVertical: 12, borderRadius: 999, borderWidth: 1, borderColor: colors.slate, alignItems: "center" }}
+                  onPress={() =>
+                    resolve.mutate({ postId: item.postId, approve: true }, { onSuccess: () => showToast("Approved") })
+                  }
                 >
-                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13.5, color: colors.white }}>Approve</Text>
-                </Pressable>
-                <Pressable
+                  Approve
+                </Button>
+                <Button
+                  variant="danger-solid"
+                  style={{ flex: 1 }}
                   accessibilityLabel={`Remove flagged post by user ${item.userId}`}
-                  onPress={() => resolve.mutate({ postId: item.postId, approve: false }, { onSuccess: () => showToast("Removed") })}
-                  style={{ flex: 1, paddingVertical: 12, borderRadius: 999, backgroundColor: "#E5484D", alignItems: "center" }}
+                  onPress={() =>
+                    resolve.mutate({ postId: item.postId, approve: false }, { onSuccess: () => showToast("Removed") })
+                  }
                 >
-                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13.5, color: colors.white }}>Remove</Text>
-                </Pressable>
+                  Remove
+                </Button>
               </View>
             </View>
           ))}

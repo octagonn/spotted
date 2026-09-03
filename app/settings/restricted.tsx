@@ -24,7 +24,10 @@ export default function RestrictedAccountsScreen() {
       confirmTitle="Unrestrict?"
       confirmBody={(name) => `${name}'s messages and taunts will reach you normally again.`}
       onAction={(id) =>
-        unrestrict.mutate(id, { onSuccess: () => showToast("Unrestricted"), onError: () => showToast("Couldn't update — try again") })
+        unrestrict.mutate(id, {
+          onSuccess: () => showToast("Unrestricted"),
+          onError: () => showToast("Couldn't update — try again")
+        })
       }
     />
   );

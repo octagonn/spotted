@@ -1,7 +1,4 @@
-import { Text } from "react-native";
-
-import { colors } from "@/theme/colors";
-import { tokens } from "@/theme/tokens";
+import { Text } from "@/components/ui/Text";
 
 function ago(iso: string): string {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -37,9 +34,9 @@ export function presenceStatus({
 }
 
 /**
- * The header sub-line under a chat title: "typing…" (#12) wins, else the
- * activity status (#13) — "Active now" when online, "Active {t} ago" from the
- * last-seen timestamp, or the plain @username when status is hidden/unknown.
+ * The header sub-line under a chat title: "typing…" wins, else the activity
+ * status — "Active now" when online, "Active {t} ago" from the last-seen
+ * timestamp, or the plain @username when status is hidden/unknown.
  */
 export function PresenceLine({
   username,
@@ -56,19 +53,20 @@ export function PresenceLine({
 }) {
   if (typing) {
     return (
-      <Text accessibilityLiveRegion="polite" numberOfLines={1} style={{ marginTop: 1, fontFamily: "Geist_600SemiBold", fontSize: 11.5, color: tokens.accent.gold }}>
+      <Text accessibilityLiveRegion="polite" numberOfLines={1} variant="label" className="text-silver">
         typing…
       </Text>
     );
   }
   let label = username ? `@${username}` : "";
+  const active = statusVisible && online;
   if (statusVisible) {
     if (online) label = "Active now";
     else if (lastSeenAt) label = `Active ${ago(lastSeenAt)}`;
   }
   if (!label) return null;
   return (
-    <Text accessibilityLiveRegion="polite" numberOfLines={1} style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 11, color: online && statusVisible ? "#22C55E" : colors.fog }}>
+    <Text accessibilityLiveRegion="polite" numberOfLines={1} variant="meta" className={active ? "text-success" : ""}>
       {label}
     </Text>
   );

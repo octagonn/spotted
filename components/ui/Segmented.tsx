@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-na
 
 import { Pressable } from "@/components/ui/Pressable";
 import { colors } from "@/theme/colors";
-import { easing } from "@/theme/motion";
+import { durations, easing } from "@/theme/motion";
 import { radius, tokens } from "@/theme/tokens";
 
 const PADDING = 3;
@@ -16,8 +16,15 @@ type SegmentedProps = {
   options: string[];
   value: string;
   onChange: (option: string) => void;
-  /** Override the spec default margin (10px 18px 14px). */
+  /** Override the default margin (12 / 16 / 16). */
   style?: ViewStyle;
+  /**
+   * `solid` (default): bordered graphite track, white thumb, 44pt — a primary
+   * control. `quiet`: borderless translucent track, glass thumb with white
+   * text, 36pt — for secondary filters that must not compete with content
+   * (feed Friends/Public).
+   */
+  variant?: "solid" | "quiet";
 };
 
 /**
@@ -25,13 +32,16 @@ type SegmentedProps = {
  * border, radius 12, 3px padding, graphite bg; the white thumb glides under
  * the active option instead of snapping.
  */
-export function Segmented({ options, value, onChange, style }: SegmentedProps) {
+export function Segmented({ options, value, onChange, style, variant = "solid" }: SegmentedProps) {
+  const quiet = variant === "quiet";
+  const border = quiet ? 0 : BORDER;
+  const innerH = quiet ? 36 - 2 * PADDING : INNER_H;
   const [innerWidth, setInnerWidth] = useState(0);
   const activeIndex = Math.max(0, options.indexOf(value));
   const position = useSharedValue(activeIndex);
 
   useEffect(() => {
-    position.value = withTiming(activeIndex, { duration: 220, easing: easing.standard });
+    position.value = withTiming(activeIndex, { duration: durations.toast, easing: easing.standard });
   }, [activeIndex, position]);
 
   const segmentWidth = options.length > 0 ? innerWidth / options.length : 0;
@@ -41,7 +51,7 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
   }));
 
   const measure = (event: LayoutChangeEvent) => {
-    setInnerWidth(Math.max(0, event.nativeEvent.layout.width - 2 * (PADDING + BORDER)));
+    setInnerWidth(Math.max(0, event.nativeEvent.layout.width - 2 * (PADDING + border)));
   };
 
   return (
@@ -53,11 +63,11 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
           marginTop: 12,
           marginBottom: 16,
           marginHorizontal: 16,
-          borderWidth: BORDER,
+          borderWidth: border,
           borderColor: tokens.border.default,
           borderRadius: radius.lg,
           padding: PADDING,
-          backgroundColor: colors.graphite,
+          backgroundColor: quiet ? colors.glassSoft : colors.graphite,
           overflow: "hidden"
         },
         style
@@ -74,7 +84,7 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
               left: PADDING,
               width: segmentWidth,
               borderRadius: radius.lg - PADDING,
-              backgroundColor: tokens.text.primary
+              backgroundColor: quiet ? colors.glassStrong : tokens.text.primary
             },
             thumbStyle
           ]}
@@ -94,7 +104,7 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
           >
             <View
               style={{
-                height: INNER_H,
+                height: innerH,
                 alignItems: "center",
                 justifyContent: "center"
               }}
@@ -103,19 +113,22 @@ export function Segmented({ options, value, onChange, style }: SegmentedProps) {
                 // Explicit line height + no font padding: every option's label
                 // renders on the SAME baseline (the selected pill's label used
                 // to sit a hair off the others).
-                // Always one line: a longer label ("Add Friends") must shrink
-                // to fit rather than wrap and clip in the fixed-height segment.
+                // One line, capped Dynamic Type. NOT `adjustsFontSizeToFit`: on
+                // iOS with a larger text setting it ignored `minimumFontScale`
+                // and shrank every label to a few points (friend's device).
                 numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.85}
+                maxFontSizeMultiplier={1.2}
                 style={{
+                  width: "100%",
+                  textAlign: "center",
+                  paddingHorizontal: 4,
                   fontFamily: "Geist_600SemiBold",
                   fontSize: 13,
                   lineHeight: 18,
                   includeFontPadding: false,
                   textAlignVertical: "center",
                   letterSpacing: 13 * 0.01,
-                  color: on ? colors.black : tokens.text.secondary
+                  color: quiet ? (on ? colors.white : tokens.text.tertiary) : on ? colors.black : tokens.text.secondary
                 }}
               >
                 {option}

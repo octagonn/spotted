@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { appAlert } from "@/components/ui/AppDialog";
-import { Avatar } from "@/components/ui/Avatar";
+import { RelButton } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
-import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SkeletonRows } from "@/components/ui/Skeleton";
+import { UserRow } from "@/components/ui/UserRow";
 import { colors } from "@/theme/colors";
+import { space } from "@/theme/tokens";
 
 type ModeratedRow = { id: string; displayName: string; username: string; avatarUrl: string | null };
 
@@ -70,29 +72,25 @@ export function ModeratedAccountsScreen<T extends ModeratedRow>({
       {isLoading ? (
         <SkeletonRows count={4} />
       ) : (data ?? []).length === 0 ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 44, paddingBottom: 80 }}>
-          {emptyIcon}
-          <Text style={{ marginTop: 14, fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>{emptyTitle}</Text>
-          <Text style={{ marginTop: 6, fontSize: 12.5, color: colors.fog, textAlign: "center" }}>{emptyBody}</Text>
-        </View>
+        <EmptyState center icon={emptyIcon} title={emptyTitle} body={emptyBody} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + space[6] }}>
           {(data ?? []).length > 20 ? (
-            <SearchBar value={q} onChangeText={setQ} placeholder={searchPlaceholder} containerStyle={{ marginHorizontal: 18, marginTop: 4, marginBottom: 8 }} />
+            <SearchBar
+              value={q}
+              onChangeText={setQ}
+              placeholder={searchPlaceholder}
+              containerStyle={{ marginHorizontal: space[4], marginTop: space[1], marginBottom: space[2] }}
+            />
           ) : null}
           {rows.map((r) => (
-            <View key={r.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 18 }}>
-              <Avatar name={r.displayName} uri={r.avatarUrl} size={46} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: colors.white }}>{r.displayName}</Text>
-                <Text style={{ marginTop: 2, fontSize: 12, color: colors.fog }}>{rowSub(r)}</Text>
-              </View>
-              <Pressable onPress={() => confirm(r.id, r.displayName)} accessibilityLabel={`${actionLabel} ${r.displayName}`}>
-                <View style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.slate }}>
-                  <Text style={{ fontSize: 12.5, fontFamily: "Geist_600SemiBold", color: colors.white }}>{actionLabel}</Text>
-                </View>
-              </Pressable>
-            </View>
+            <UserRow
+              key={r.id}
+              name={r.displayName}
+              avatarUrl={r.avatarUrl}
+              sub={rowSub(r)}
+              right={<RelButton label={actionLabel} kind="ghost" onPress={() => confirm(r.id, r.displayName)} />}
+            />
           ))}
         </ScrollView>
       )}

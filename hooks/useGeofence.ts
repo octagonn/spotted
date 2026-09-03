@@ -78,7 +78,8 @@ export function usePresenceSync() {
         const inside = isInsideGeofence(
           coordinate,
           { latitude: gym.latitude, longitude: gym.longitude },
-          gym.geofence_radius_meters
+          gym.geofence_radius_meters,
+          coordinate.accuracy ?? 0
         );
 
         if (inside && (!atGym || activeGymId !== gym.id)) {
@@ -86,7 +87,8 @@ export function usePresenceSync() {
             gym.id,
             coordinate,
             { latitude: gym.latitude, longitude: gym.longitude },
-            gym.geofence_radius_meters
+            gym.geofence_radius_meters,
+            coordinate.accuracy
           );
           setAtGym(true, gym.id, checkinId ?? null);
         } else if (!inside && atGym) {

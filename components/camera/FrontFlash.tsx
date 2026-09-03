@@ -54,9 +54,21 @@ export function FrontFlash() {
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
       {/* ---- the misty white ring (never blocks touches) ---- */}
-      <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }, ringStyle]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }, ringStyle]}
+      >
         {/* faint overall wash so the whole frame lifts */}
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(255,255,255,0.10)" }} />
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(255,255,255,0.10)"
+          }}
+        />
         <AnimatedGradient
           colors={["rgba(255,255,255,0.96)", "rgba(255,255,255,0)"]}
           style={{ position: "absolute", top: 0, left: 0, right: 0, height: EDGE }}

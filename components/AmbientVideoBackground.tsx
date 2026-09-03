@@ -1,7 +1,6 @@
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, View } from "react-native";
-
-import { AnimatedAuroraBackground } from "@/components/AnimatedAuroraBackground";
 
 // Guarded so builds without the expo-video native module (older TestFlight
 // binaries receiving an OTA update) fall back to the aurora background
@@ -22,8 +21,27 @@ try {
  * the scrim keeps white text and buttons readable on top.
  */
 export function AmbientVideoBackground() {
-  if (!ExpoVideo) return <AnimatedAuroraBackground />;
+  if (!ExpoVideo) return <StillLayer />;
   return <VideoLayer />;
+}
+
+/** Video module unavailable (older binaries): a moody gym still + the same scrim. */
+function StillLayer() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Image
+        source={require("../assets/images/auth-hero.jpg")}
+        contentFit="cover"
+        style={StyleSheet.absoluteFill}
+        accessible={false}
+      />
+      <LinearGradient
+        colors={["rgba(0,0,0,0.55)", "rgba(0,0,0,0.25)", "rgba(0,0,0,0.75)"]}
+        locations={[0, 0.45, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
 }
 
 function VideoLayer() {

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { mockStreak } from "@/lib/mockData";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { isDemoMode, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 
 export function useStreak() {
@@ -10,28 +10,29 @@ export function useStreak() {
   return useQuery({
     queryKey: ["streak", userId],
     queryFn: async () => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockStreak;
       }
       // Local session state — auth.getUser() is a network round-trip per call.
       const userId = useAuthStore.getState().userId;
+      const empty = {
+        user_id: userId ?? "",
+        current_streak: 0,
+        longest_streak: 0,
+        last_checkin_date: null,
+        freeze_tokens: 0
+      };
+      // No session = no streak. The fixture streak is dev-only (see isDemoMode).
       if (!userId) {
-        return mockStreak;
+        return empty;
       }
       const { data, error } = await supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle();
       if (error) {
         throw error;
       }
-      return (
-        data ?? {
-          user_id: userId,
-          current_streak: 0,
-          longest_streak: 0,
-          last_checkin_date: null,
-          freeze_tokens: 0
-        }
-      );
-    }
+      return data ?? empty;
+    },
+    enabled: isDemoMode || (isSupabaseConfigured && Boolean(userId))
   });
 }
 

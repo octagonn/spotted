@@ -113,18 +113,43 @@ export function LockOverlay({
         onPress={() => router.push("/inbox")}
         accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         hitSlop={10}
-        style={{ position: "absolute", top: insets.top + 8, right: 18, width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}
+        style={{
+          position: "absolute",
+          top: insets.top + 8,
+          right: 18,
+          width: 44,
+          height: 44,
+          alignItems: "flex-end",
+          justifyContent: "center"
+        }}
       >
         <View>
           <Bell size={24} color={colors.white} strokeWidth={2} />
           {unreadCount > 0 ? (
-            <View style={{ position: "absolute", top: -2, right: -3, width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30", borderWidth: 1.5, borderColor: colors.black }} />
+            <View
+              style={{
+                position: "absolute",
+                top: -2,
+                right: -3,
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                backgroundColor: tokens.status.danger,
+                borderWidth: 1.5,
+                borderColor: colors.black
+              }}
+            />
           ) : null}
         </View>
       </Pressable>
 
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 34, paddingBottom: 40 }}>
-        <Animated.View entering={playEntrance ? FadeInDown.duration(420).springify().damping(16) : undefined} style={{ alignItems: "center" }}>
+      <View
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 34, paddingBottom: 40 }}
+      >
+        <Animated.View
+          entering={playEntrance ? FadeInDown.duration(420).springify().damping(16) : undefined}
+          style={{ alignItems: "center" }}
+        >
           {/* Gold-ringed emblem with a soft glow. */}
           <View
             style={{
@@ -165,8 +190,18 @@ export function LockOverlay({
           </Text>
 
           {restToday ? (
-            <Text style={{ marginTop: 12, fontSize: 13.5, lineHeight: 19, color: colors.silver, textAlign: "center", maxWidth: 270 }}>
-              Your streak is safe for today. The feed still unlocks with a post — if you end up going, cancel the rest day below.
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 13.5,
+                lineHeight: 19,
+                color: colors.silver,
+                textAlign: "center",
+                maxWidth: 270
+              }}
+            >
+              Your streak is safe for today. The feed still unlocks with a post — if you end up going, cancel the rest
+              day below.
             </Text>
           ) : null}
 
@@ -188,12 +223,29 @@ export function LockOverlay({
                   </View>
                 ))}
               </View>
-              <Text style={{ flexShrink: 1, fontFamily: "Geist_500Medium", fontSize: 13, lineHeight: 18, color: colors.silver }}>
+              <Text
+                style={{
+                  flexShrink: 1,
+                  fontFamily: "Geist_500Medium",
+                  fontSize: 13,
+                  lineHeight: 18,
+                  color: colors.silver
+                }}
+              >
                 {posterLine(posters, friendsPostedToday)}
               </Text>
             </View>
           ) : restToday ? null : (
-            <Text style={{ marginTop: 12, fontSize: 13.5, lineHeight: 19, color: colors.silver, textAlign: "center", maxWidth: 260 }}>
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 13.5,
+                lineHeight: 19,
+                color: colors.silver,
+                textAlign: "center",
+                maxWidth: 260
+              }}
+            >
               Post a photo from your session to see everyone else&apos;s.
             </Text>
           )}
@@ -244,7 +296,18 @@ export function LockOverlay({
               router.push("/workout?daily=1");
             }}
             accessibilityLabel="Start a workout for your daily"
-            style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, alignSelf: "stretch", paddingVertical: 13, borderRadius: 999, borderWidth: 1, borderColor: colors.slate }}
+            style={{
+              marginTop: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              alignSelf: "stretch",
+              paddingVertical: 13,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.slate
+            }}
           >
             <Dumbbell size={16} color={colors.white} strokeWidth={2.2} />
             <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
@@ -266,11 +329,28 @@ export function LockOverlay({
               });
             }}
             accessibilityLabel={restToday ? "Cancel today's rest day" : "Log today as a rest day"}
-            style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, alignSelf: "stretch", paddingVertical: 13, borderRadius: 999, borderWidth: 1, borderColor: colors.slate }}
+            style={{
+              marginTop: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              alignSelf: "stretch",
+              paddingVertical: 13,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.slate
+            }}
           >
             <Moon size={16} color={colors.white} strokeWidth={2.2} />
             <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
-              {markRestDay.isPending ? (restToday ? "Cancelling…" : "Logging…") : restToday ? "Cancel rest day" : "Taking a rest day"}
+              {markRestDay.isPending
+                ? restToday
+                  ? "Cancelling…"
+                  : "Logging…"
+                : restToday
+                  ? "Cancel rest day"
+                  : "Taking a rest day"}
             </Text>
           </Pressable>
 

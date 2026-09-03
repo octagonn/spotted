@@ -82,3 +82,42 @@ viewer list, travel mode, flame color, streak revival, day-seven push.
 - `npm run ios:export`
 - `supabase test db` (pgTAP RLS suites)
 - Real-device: sign-in with Apple → onboarding → camera post → friend flow → paywall purchase (sandbox) → push received → streak visible → delete account.
+
+## OTA updates (expo-updates — configured in the 1.2.1 build)
+
+EAS Update ships JS/asset changes to installed apps without a store build or
+review. Configured 2026-08-31; first OTA-capable binary is 1.2.1.
+
+- `app.config.ts`: `updates.url = https://u.expo.dev/c64d03b4-83c0-48c9-863b-f225fb8de92d`
+  and `runtimeVersion: { policy: "appVersion" }` — every OTA is scoped to
+  binaries with the SAME `version` (1.2.1 updates only reach 1.2.1 builds), so
+  an update can never land on a binary missing native code it needs.
+- `eas.json`: build profile `production` pins channel `production`; `preview`
+  pins channel `preview` (TestFlight/internal can be updated independently).
+- **Publish ONLY with**: `npm run ota -- --channel production --message "what changed"`.
+  Users receive it across their next two launches (download on first, applied
+  on second).
+- **NEVER run a bare `eas update`.** Incident 2026-09-02: a bare
+  `eas update --channel production` exported the bundle with an EMPTY Supabase
+  config (eas-cli resolves the EAS-hosted `production` environment and ignores
+  `.env`; that environment had no variables). Every install that took the
+  update ran the offline demo mode and opened "signed in" as the mock
+  "Octavio" profile (no real session or data was involved — the client pointed
+  at example.supabase.co — but it looked like an account takeover). Fixed by
+  hotfix update `01a060a4-a887-774e-b3a2-f4746549a9e2`. Three guards now exist:
+  1. `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` live in the EAS `production` and
+     `preview` environments (`eas env:list --environment production`).
+  2. `app.config.ts` throws if they are missing (builds and updates both
+     evaluate it). `SPOTTED_ALLOW_UNCONFIGURED=1` is the explicit opt-in for
+     running the local demo mode.
+  3. `stores/auth.ts` never enters demo mode in a release bundle (`!__DEV__`
+     → signed-out), so even a bad bundle cannot impersonate.
+  `scripts/publish-update.mjs` (the `ota` script) sources `.env`, passes
+  `--environment`, then fetches the manifest EAS is serving and fails unless
+  it carries the real Supabase URL. Emergency rollback:
+  `npx eas-cli update:roll-back-to-embedded --channel production`.
+- **Native changes (new module, permission, plugin, SDK bump) still require a
+  real build + store review — and bump `version`, which starts a fresh
+  runtime so older binaries never receive the new JS.**
+- After bumping `version` for a store release, remember future OTAs target the
+  new version's runtime; the old binary keeps its last compatible update.

@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { Pressable } from "@/components/ui/Pressable";
 import { SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 /**
  * One option row in a bottom-sheet menu: fixed 20px icon slot + semibold
@@ -27,7 +28,7 @@ export function MenuRow({
           style={{
             fontFamily: "Geist_600SemiBold",
             fontSize: 15,
-            color: destructive ? "#EF4444" : label === "Cancel" ? colors.fog : colors.white
+            color: destructive ? tokens.status.danger : label === "Cancel" ? colors.fog : colors.white
           }}
         >
           {label}
@@ -59,7 +60,16 @@ export function ConfirmSheet({
   return (
     <View>
       <SheetTitle>{title}</SheetTitle>
-      <Text style={{ paddingHorizontal: 20, paddingTop: 2, paddingBottom: 10, fontSize: 13, lineHeight: 19, color: colors.silver }}>
+      <Text
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 2,
+          paddingBottom: 10,
+          fontSize: 13,
+          lineHeight: 19,
+          color: colors.silver
+        }}
+      >
         {body}
       </Text>
       <MenuRow

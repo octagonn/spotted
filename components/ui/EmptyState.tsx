@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { type ReactNode } from "react";
 import { Text, View } from "react-native";
 
@@ -15,6 +16,7 @@ import { colors } from "@/theme/colors";
  */
 export function EmptyState({
   icon,
+  art,
   tone = "default",
   title,
   body,
@@ -24,6 +26,8 @@ export function EmptyState({
 }: {
   /** Icon node rendered inside the circle (caller picks size/color). */
   icon?: ReactNode;
+  /** Illustration (see lib/emptyStateArt) rendered instead of the icon circle. */
+  art?: number;
   tone?: "default" | "gold";
   title: string;
   body?: string;
@@ -40,7 +44,9 @@ export function EmptyState({
           : { alignItems: "center", paddingTop, paddingHorizontal: 40 }
       }
     >
-      {icon ? (
+      {art ? (
+        <Image source={art} contentFit="contain" style={{ width: 116, height: 116 }} accessible={false} />
+      ) : icon ? (
         <View
           style={{
             width: 56,
@@ -56,7 +62,15 @@ export function EmptyState({
           {icon}
         </View>
       ) : null}
-      <Text style={{ marginTop: icon ? 16 : 0, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white, textAlign: "center" }}>
+      <Text
+        style={{
+          marginTop: art ? 10 : icon ? 16 : 0,
+          fontFamily: "Geist_700Bold",
+          fontSize: 15,
+          color: colors.white,
+          textAlign: "center"
+        }}
+      >
         {title}
       </Text>
       {body ? (

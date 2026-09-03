@@ -309,6 +309,13 @@ function escapeSql(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+/** Coordinates come from third-party JSON/HTML; only a finite number may be spliced into SQL unquoted. */
+function sqlNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error(`sqlNumber: not a finite number: ${String(value)}`);
+  return String(n);
+}
+
 function clean(text) {
   if (!text) return null;
   return text.replace(/\s+/g, " ").trim();
@@ -362,7 +369,7 @@ const lines = [
     (g) =>
       `insert into _seed_gyms (name, address, latitude, longitude) values (${escapeSql(g.name)}, ${escapeSql(
         g.address
-      )}, ${g.latitude}, ${g.longitude});`
+      )}, ${sqlNumber(g.latitude)}, ${sqlNumber(g.longitude)});`
   ),
   `insert into gyms (name, address, latitude, longitude) select name, address, latitude, longitude from _seed_gyms on conflict (name, latitude, longitude) do nothing;`,
   "drop table _seed_gyms;",

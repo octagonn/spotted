@@ -1,11 +1,13 @@
 import { useLocalSearchParams } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Privacy, Terms } from "@/components/LegalModal";
 import { PanelHeader } from "@/components/ui/PanelHeader";
+import { Text } from "@/components/ui/Text";
 import { PRIVACY_MD, TERMS_MD } from "@/lib/legalContent";
 import { colors } from "@/theme/colors";
+import { space } from "@/theme/tokens";
 
 /**
  * Minimal markdown-ish renderer for final legal copy: # / ## headings,
@@ -21,14 +23,14 @@ function MarkdownLite({ source }: { source: string }) {
         if (!trimmed) return null;
         if (trimmed.startsWith("## ")) {
           return (
-            <Text key={i} accessibilityRole="header" style={{ marginTop: 18, fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white }}>
+            <Text key={i} variant="username" accessibilityRole="header" className="mt-[18px]">
               {trimmed.slice(3)}
             </Text>
           );
         }
         if (trimmed.startsWith("# ")) {
           return (
-            <Text key={i} accessibilityRole="header" style={{ marginTop: 22, fontFamily: "Geist_700Bold", fontSize: 18, color: colors.white }}>
+            <Text key={i} variant="heading" accessibilityRole="header" className="mt-[22px]">
               {trimmed.slice(2)}
             </Text>
           );
@@ -38,8 +40,10 @@ function MarkdownLite({ source }: { source: string }) {
             <View key={i} style={{ marginTop: 8, gap: 6 }}>
               {trimmed.split("\n").map((line, j) => (
                 <View key={j} style={{ flexDirection: "row", gap: 8, paddingLeft: 6 }}>
-                  <Text style={{ fontSize: 13.5, color: colors.mist }}>·</Text>
-                  <Text style={{ flex: 1, fontSize: 13.5, lineHeight: 20, color: colors.bone }}>
+                  <Text variant="body-sm" className="text-mist">
+                    ·
+                  </Text>
+                  <Text variant="body-sm" className="flex-1">
                     {line.trim().slice(2)}
                   </Text>
                 </View>
@@ -48,7 +52,7 @@ function MarkdownLite({ source }: { source: string }) {
           );
         }
         return (
-          <Text key={i} style={{ marginTop: 8, fontSize: 13.5, lineHeight: 20, color: colors.bone }}>
+          <Text key={i} variant="body-sm" className="mt-2">
             {trimmed}
           </Text>
         );
@@ -71,7 +75,7 @@ export default function LegalDocScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title={isTerms ? "Terms of Service" : "Privacy Policy"} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 32 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space[4] + 4, paddingBottom: insets.bottom + space[8] }}>
         {override.trim() ? <MarkdownLite source={override} /> : isTerms ? <Terms /> : <Privacy />}
       </ScrollView>
     </View>

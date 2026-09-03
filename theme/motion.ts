@@ -47,7 +47,24 @@ export const durations = {
   challengeBar: 400,
   /** White flash ramp-in (linear); fully off ~150ms */
   flashIn: 90,
-  flashTotal: 150
+  flashTotal: 150,
+  /** Ambient pulse (live dot, breathing rings) — one half-cycle */
+  pulse: 800,
+  /** Celebration overlays (PR flash fade, count-ups) */
+  celebration: 1000
+} as const;
+
+/**
+ * Shared spring presets (Reanimated `withSpring` configs). Pick by feel, not
+ * by tuning numbers per screen:
+ * - snappy   press/selection feedback, small toggles
+ * - gentle   panels, sheets, cards settling into place
+ * - bouncy   celebratory moments only (PR, post published)
+ */
+export const springs = {
+  snappy: { damping: 18, stiffness: 280, mass: 1 },
+  gentle: { damping: 22, stiffness: 180, mass: 1 },
+  bouncy: { damping: 12, stiffness: 220, mass: 1 }
 } as const;
 
 /** Legacy shape kept for existing imports. */

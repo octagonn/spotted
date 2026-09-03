@@ -8,6 +8,7 @@ import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
 import { usePageFade } from "@/hooks/usePageFade";
@@ -16,7 +17,7 @@ import { uploadMediaObject } from "@/lib/r2";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
-import { tokens } from "@/theme/tokens";
+import { icon, tokens } from "@/theme/tokens";
 
 /**
  * Dedicated profile-photo step — prominent (a whole step, giant avatar) but
@@ -88,17 +89,11 @@ export default function OnboardingProfilePhotoScreen() {
           paddingBottom: insets.bottom + 24
         }}
       >
-        <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-          <Text variant="micro" className="text-mist">
-            STEP 4 OF 7
-          </Text>
-        </View>
-        <Text variant="display-md" className="mt-6">
-          PUT A FACE ON IT.
-        </Text>
-        <Text variant="body" className="mt-3">
-          Profiles with photos get added back way more. Optional — but worth it.
-        </Text>
+        <OnboardingHeader
+          step={4}
+          title="PUT A FACE ON IT."
+          body="Profiles with photos get added back way more. Optional — but worth it."
+        />
 
         {/* The photo is the hero of this screen. */}
         <View className="mt-10 items-center">
@@ -110,7 +105,7 @@ export default function OnboardingProfilePhotoScreen() {
               style={{
                 borderRadius: 999,
                 borderWidth: 3,
-                borderColor: photoUri ? tokens.accent.gold : "rgba(255,255,255,0.18)",
+                borderColor: photoUri ? tokens.accent.gold : colors.hairlineStrong,
                 padding: 5
               }}
             >
@@ -120,12 +115,12 @@ export default function OnboardingProfilePhotoScreen() {
         </View>
 
         <View className="mt-10 gap-3">
-          <Button icon={<Camera size={17} color={colors.black} />} onPress={() => void takePhoto()}>
+          <Button icon={<Camera size={icon.size.xs + 1} color={colors.black} />} onPress={() => void takePhoto()}>
             Take a photo
           </Button>
           <Button
             variant="ghost"
-            icon={<Images size={17} color={colors.white} />}
+            icon={<Images size={icon.size.xs + 1} color={colors.white} />}
             onPress={() => void pickFromLibrary()}
           >
             Choose from library
@@ -138,11 +133,7 @@ export default function OnboardingProfilePhotoScreen() {
             Looking good — continue
           </Button>
         ) : (
-          <Pressable
-            onPress={next}
-            accessibilityLabel="Skip adding a photo"
-            className="mt-8 items-center py-3"
-          >
+          <Pressable onPress={next} accessibilityLabel="Skip adding a photo" className="mt-8 items-center py-3">
             <Text variant="body-strong" className="text-mist">
               Skip for now
             </Text>

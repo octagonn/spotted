@@ -1,18 +1,19 @@
 import { router } from "expo-router";
-import { appAlert } from "@/components/ui/AppDialog";
 import { TriangleAlert } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/AppDialog";
+import { Button } from "@/components/ui/Button";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { Text } from "@/components/ui/Text";
 import { logger } from "@/lib/logger";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
-
-const RED = "#E5484D";
+import { icon, space, tokens } from "@/theme/tokens";
 
 type Mode = "grace" | "now";
 
@@ -96,28 +97,51 @@ export default function DeleteAccountScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title="Delete account" />
-      <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom + 24 }}>
-        <View style={{ alignSelf: "center", width: 56, height: 56, borderRadius: 28, borderWidth: 1.5, borderColor: RED, alignItems: "center", justifyContent: "center", marginTop: 12 }}>
-          <TriangleAlert size={24} color={RED} strokeWidth={2} />
+      <View
+        style={{
+          flex: 1,
+          paddingHorizontal: space[4] + 4,
+          paddingTop: space[4],
+          paddingBottom: insets.bottom + space[6]
+        }}
+      >
+        <View
+          style={{
+            alignSelf: "center",
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            borderWidth: 1.5,
+            borderColor: tokens.status.danger,
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: space[3]
+          }}
+        >
+          <TriangleAlert size={icon.size.md} color={tokens.status.danger} strokeWidth={icon.stroke.regular} />
         </View>
-        <Text style={{ marginTop: 18, fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white, textAlign: "center" }}>
+        <Text variant="subheading" className="mt-[18px] text-center">
           Delete your account
         </Text>
-        <Text style={{ marginTop: 12, fontSize: 13.5, lineHeight: 20, color: colors.mist, textAlign: "center" }}>
-          Either way, your profile, posts, photos, workouts, trophies, streaks, and friend graph are
-          erased. Messages you sent stay in your friends&apos; threads (they&apos;re their record too)
-          but are no longer linked to you.
+        <Text variant="body-sm" className="mt-3 text-center text-mist">
+          Either way, your profile, posts, photos, workouts, trophies, streaks, and friend graph are erased. Messages
+          you sent stay in your friends&apos; threads (they&apos;re their record too) but are no longer linked to you.
         </Text>
         {armed ? (
-          <View style={{ marginTop: 18, gap: 10 }}>
-            <Text style={{ fontSize: 12.5, lineHeight: 18, color: colors.silver }}>
-              <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>Delete in 30 days</Text> — your
-              account hides immediately and you can restore everything by logging back in any time before the
-              purge date.
+          <View style={{ marginTop: space[4] + 2, gap: space[2] + 2 }}>
+            <Text variant="meta" className="text-silver">
+              <Text variant="meta-strong" className="text-white">
+                Delete in 30 days
+              </Text>
+              {
+                " — your account hides immediately and you can restore everything by logging back in any time before the purge date."
+              }
             </Text>
-            <Text style={{ fontSize: 12.5, lineHeight: 18, color: colors.silver }}>
-              <Text style={{ fontFamily: "Geist_700Bold", color: RED }}>Delete permanently now</Text> — everything
-              is erased immediately and can never be recovered.
+            <Text variant="meta" className="text-silver">
+              <Text variant="meta-strong" className="text-danger">
+                Delete permanently now
+              </Text>
+              {" — everything is erased immediately and can never be recovered."}
             </Text>
           </View>
         ) : null}
@@ -125,60 +149,45 @@ export default function DeleteAccountScreen() {
         <View style={{ flex: 1 }} />
 
         {error ? (
-          <Text style={{ marginBottom: 12, fontSize: 12.5, color: RED, textAlign: "center" }}>{error}</Text>
+          <Text variant="meta" className="mb-3 text-center text-danger">
+            {error}
+          </Text>
         ) : null}
 
         {!armed ? (
-          <Pressable
-            accessibilityLabel="I understand, continue"
-            onPress={() => setArmed(true)}
-            style={{ borderWidth: 1, borderColor: RED, borderRadius: 999, paddingVertical: 15, alignItems: "center" }}
-          >
-            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: RED }}>
-              I understand — continue
-            </Text>
-          </Pressable>
+          <Button variant="danger" onPress={() => setArmed(true)} accessibilityLabel="I understand, continue">
+            I understand — continue
+          </Button>
         ) : (
-          <View style={{ gap: 10 }}>
-            <Pressable
-              accessibilityLabel="Delete in 30 days, restorable by logging back in"
+          <View style={{ gap: space[2] + 2 }}>
+            <Button
+              variant="danger"
               onPress={() => void handleGraceDelete()}
+              loading={deleting === "grace"}
               disabled={deleting !== null}
-              style={{ borderWidth: 1, borderColor: RED, borderRadius: 999, paddingVertical: 15, alignItems: "center" }}
+              accessibilityLabel="Delete in 30 days, restorable by logging back in"
             >
-              {deleting === "grace" ? (
-                <ActivityIndicator color={RED} />
-              ) : (
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: RED }}>
-                  Delete in 30 days (restorable)
-                </Text>
-              )}
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Delete my account permanently right now"
+              Delete in 30 days (restorable)
+            </Button>
+            <Button
+              variant="danger-solid"
               onPress={confirmHardDelete}
+              loading={deleting === "now"}
               disabled={deleting !== null}
-              style={{ backgroundColor: RED, borderRadius: 999, paddingVertical: 15, alignItems: "center" }}
+              accessibilityLabel="Delete my account permanently right now"
             >
-              {deleting === "now" ? (
-                <ActivityIndicator color={colors.white} />
-              ) : (
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white }}>
-                  Delete permanently now
-                </Text>
-              )}
-            </Pressable>
+              Delete permanently now
+            </Button>
           </View>
         )}
         <Pressable
           accessibilityLabel="Cancel"
           onPress={() => router.back()}
           disabled={deleting !== null}
-          style={{ marginTop: 12, paddingVertical: 13, alignItems: "center" }}
+          haptic="none"
+          style={{ marginTop: space[3], paddingVertical: space[3], alignItems: "center" }}
         >
-          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.silver }}>
-            Never mind — keep my account
-          </Text>
+          <Text variant="meta-strong">Never mind — keep my account</Text>
         </Pressable>
       </View>
     </View>

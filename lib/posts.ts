@@ -22,8 +22,10 @@ const MAX_UPLOAD_WIDTH = 1440;
 /** Grid/thumbnail width — grids only need a small image, not the full photo. */
 const THUMB_WIDTH = 320;
 /** 0.85 rings on the high-contrast edges of gym equipment and banding in flat
- *  gym lighting; 0.9 clears both for a modest size increase. */
-const JPEG_QUALITY = 0.9;
+ *  gym lighting. 0.95: this is the LAST encode in the chain (capture and any
+ *  edit re-encodes now run at ~1.0), so it sets the ceiling on what users see
+ *  — worth the ~40% size bump over 0.9 on a zero-egress-cost bucket. */
+const JPEG_QUALITY = 0.95;
 
 /**
  * Downscale (only if larger than the target) + re-encode before upload. A raw

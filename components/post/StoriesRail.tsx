@@ -2,18 +2,21 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Lock, Plus } from "lucide-react-native";
 import { useEffect } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Pressable } from "@/components/ui/Pressable";
+import { Text } from "@/components/ui/Text";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { useStories, type StoryGroup } from "@/hooks/queries/useStories";
 import { colors } from "@/theme/colors";
-import { radius, tokens } from "@/theme/tokens";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
-const AVATAR = 79;
-// Photo (79) + 3px gap (ring padding) + 3px ring stroke, both sides.
-const ITEM = AVATAR + 2 * 3 + 2 * 3;
+const AVATAR = 64;
+const RING = 2;
+const GAP = 2;
+// Photo + ring gap + ring stroke, both sides.
+const ITEM = AVATAR + 2 * GAP + 2 * RING;
 
 /** Instagram-style story rail at the top of the feed. */
 export function StoriesRail() {
@@ -45,47 +48,61 @@ export function StoriesRail() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 16, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 }}
+      contentContainerStyle={{
+        gap: space[3],
+        paddingHorizontal: space[4],
+        paddingTop: space[2],
+        paddingBottom: space[1]
+      }}
     >
       {/* Your story — tapping the avatar views your story (or opens the camera
           if you have none); the "+" badge ALWAYS opens the camera so you can add
           another story even after posting one. */}
-      <View style={{ width: ITEM, alignItems: "center", gap: 6 }}>
+      <View style={{ width: ITEM, alignItems: "center", gap: space[1] }}>
         <View style={{ width: ITEM, height: ITEM, alignItems: "center", justifyContent: "center" }}>
           <Pressable
             onPress={() => (me ? router.push(`/story?user=${me.userId}`) : router.push("/camera?mode=story"))}
+            haptic="none"
             accessibilityLabel={me ? "View your story" : "Add to your story"}
           >
             <Ring active={Boolean(me)} seen={false}>
               {profileReady ? (
                 <Avatar name={myName || "?"} uri={myAvatar} size={AVATAR} />
               ) : (
-                <View style={{ width: AVATAR, height: AVATAR, borderRadius: radius.pill, backgroundColor: tokens.bg.subtle }} />
+                <View
+                  style={{
+                    width: AVATAR,
+                    height: AVATAR,
+                    borderRadius: radius.pill,
+                    backgroundColor: tokens.bg.subtle
+                  }}
+                />
               )}
             </Ring>
           </Pressable>
           <Pressable
             onPress={() => router.push("/camera?mode=story")}
+            haptic="impact"
             accessibilityLabel="Add to your story"
             hitSlop={8}
             style={{
               position: "absolute",
-              right: 2,
-              bottom: 2,
-              width: 26,
-              height: 26,
+              right: 0,
+              bottom: 0,
+              width: 22,
+              height: 22,
               borderRadius: radius.pill,
               backgroundColor: tokens.accent.gold,
               borderWidth: 2,
-              borderColor: tokens.bg.base,
+              borderColor: colors.black,
               alignItems: "center",
               justifyContent: "center"
             }}
           >
-            <Plus size={15} color={colors.black} strokeWidth={3} />
+            <Plus size={13} color={colors.black} strokeWidth={3} />
           </Pressable>
         </View>
-        <Text numberOfLines={1} style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: tokens.text.secondary, maxWidth: ITEM }}>
+        <Text variant="label" numberOfLines={1} className="text-fog">
           Your story
         </Text>
       </View>
@@ -95,9 +112,7 @@ export function StoriesRail() {
           key={`${group.userId}:${group.privateStoryId ?? "main"}`}
           group={group}
           onPress={() =>
-            router.push(
-              `/story?user=${group.userId}${group.privateStoryId ? `&ps=${group.privateStoryId}` : ""}`
-            )
+            router.push(`/story?user=${group.userId}${group.privateStoryId ? `&ps=${group.privateStoryId}` : ""}`)
           }
         />
       ))}
@@ -113,8 +128,9 @@ function StoryBubble({ group, onPress }: { group: StoryGroup; onPress: () => voi
   const label = isPrivate && group.isMe ? (group.privateStoryName ?? "Private") : group.name.split(" ")[0];
   return (
     <Pressable
-      style={{ width: ITEM, alignItems: "center", gap: 6 }}
+      style={{ width: ITEM, alignItems: "center", gap: space[1] }}
       onPress={onPress}
+      haptic="none"
       accessibilityLabel={`${group.name}'s ${isPrivate ? "private story" : "story"}, ${group.hasUnseen ? "new" : "seen"}`}
     >
       <View>
@@ -125,26 +141,23 @@ function StoryBubble({ group, onPress }: { group: StoryGroup; onPress: () => voi
           <View
             style={{
               position: "absolute",
-              right: 2,
-              bottom: 2,
-              width: 24,
-              height: 24,
+              right: 0,
+              bottom: 0,
+              width: 22,
+              height: 22,
               borderRadius: radius.pill,
               backgroundColor: tokens.bg.subtle,
               borderWidth: 2,
-              borderColor: tokens.bg.base,
+              borderColor: colors.black,
               alignItems: "center",
               justifyContent: "center"
             }}
           >
-            <Lock size={12} color={colors.white} strokeWidth={2.2} />
+            <Lock size={11} color={colors.white} strokeWidth={icon.stroke.bold} />
           </View>
         ) : null}
       </View>
-      <Text
-        numberOfLines={1}
-        style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: tokens.text.secondary, maxWidth: ITEM }}
-      >
+      <Text variant="label" numberOfLines={1} className={group.hasUnseen && !group.isMe ? "text-white" : "text-fog"}>
         {label}
       </Text>
     </Pressable>
@@ -152,17 +165,19 @@ function StoryBubble({ group, onPress }: { group: StoryGroup; onPress: () => voi
 }
 
 /**
- * Story ring: a 3px stroke with a 3px transparent gap (ring padding) between it
- * and the photo. Unviewed → gold; viewed or inactive → border.strong.
+ * Story ring: a 2px stroke with a 2px gap between it and the photo. Unviewed →
+ * white (a "new" state, not an achievement — gold stays reserved for the add
+ * badge, so a rail of five new stories isn't five gold rings); viewed or
+ * inactive → border.strong.
  */
 function Ring({ active, seen, children }: { active: boolean; seen: boolean; children: React.ReactNode }) {
   return (
     <View
       style={{
-        padding: 3,
-        borderWidth: 3,
+        padding: GAP,
+        borderWidth: RING,
         borderRadius: radius.pill,
-        borderColor: active && !seen ? tokens.accent.gold : tokens.border.strong
+        borderColor: active && !seen ? tokens.text.primary : tokens.border.strong
       }}
     >
       {children}

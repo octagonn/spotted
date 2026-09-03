@@ -1,3 +1,4 @@
+import { colors } from "@/theme/colors";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
@@ -38,7 +39,7 @@ export function GlassSurface({
       style={[
         {
           borderRadius: radius,
-          shadowColor: "#000000",
+          shadowColor: colors.black,
           shadowOpacity: 0.5,
           shadowRadius: 18,
           shadowOffset: { width: 0, height: 8 },
@@ -48,11 +49,7 @@ export function GlassSurface({
       ]}
     >
       {Glass && liquidGlassAvailable ? (
-        <Glass.GlassView
-          glassEffectStyle="regular"
-          isInteractive
-          style={{ borderRadius: radius, overflow: "hidden" }}
-        >
+        <Glass.GlassView glassEffectStyle="regular" isInteractive style={{ borderRadius: radius, overflow: "hidden" }}>
           {children}
         </Glass.GlassView>
       ) : (

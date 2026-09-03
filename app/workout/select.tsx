@@ -1,11 +1,18 @@
 import { useRouter } from "expo-router";
-import { Activity, ArrowLeft, Check, Dumbbell, Flame, Plus, Search, Star, X } from "lucide-react-native";
+import { ArrowLeft, Check, Plus, Star } from "lucide-react-native";
 import { useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/ui/BackButton";
+import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
+import { Pressable } from "@/components/ui/Pressable";
+import { SearchBar } from "@/components/ui/SearchBar";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { Segmented } from "@/components/ui/Segmented";
-import { DISP, MED, NUM, SEMI, W } from "@/components/workout/wtheme";
+import { Text } from "@/components/ui/Text";
+import { ExerciseIcon } from "@/components/workout/ExerciseIcon";
 import { useCustomExercises, useSaveCustomExercise } from "@/hooks/queries/useCustomExercises";
 import { useExerciseFavorites, useToggleExerciseFavorite } from "@/hooks/queries/useExerciseFavorites";
 import {
@@ -17,50 +24,19 @@ import {
   type LiftSet,
   type WorkoutExercise
 } from "@/hooks/queries/useWorkouts";
-import { impactHaptic } from "@/lib/haptics";
+import { haptic } from "@/lib/haptics";
 import { fuzzyFilter, LIFT_ALIASES } from "@/lib/searchMatch";
 import { BASE_LIBRARY, isCardioItem, isSportsItem, MUSCLES, type LibraryItem, type Muscle } from "@/lib/workoutLibrary";
 import { useAuthStore } from "@/stores/auth";
-import { useWorkoutSession } from "@/stores/workoutSession";
 import { showToast } from "@/stores/ui";
+import { useWorkoutSession } from "@/stores/workoutSession";
 import { colors } from "@/theme/colors";
-import { radius, tokens } from "@/theme/tokens";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 let _id = Date.now() % 10_000_000;
 const uid = () => ++_id;
 
-function Micro({ children, style }: { children: React.ReactNode; style?: object }) {
-  return (
-    <Text
-      style={[
-        { fontFamily: MED, fontSize: 11, letterSpacing: 0.6, textTransform: "uppercase", color: W.faint },
-        style
-      ]}
-    >
-      {children}
-    </Text>
-  );
-}
-
-function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={{
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        borderRadius: radius.pill,
-        backgroundColor: selected ? W.text : W.card,
-        borderWidth: 1,
-        borderColor: selected ? W.text : W.line
-      }}
-    >
-      <Text style={{ fontFamily: SEMI, fontSize: 12, color: selected ? W.ink : W.muted }}>{label}</Text>
-    </Pressable>
-  );
-}
+type Kind = "All" | "Lifts" | "Cardio" | "Sports";
 
 /** Suggested opening weight: 75% of PR rounded to 5s (matches the logger). */
 function suggestWeight(bests: Record<string, number>, name: string, fallback: number) {
@@ -72,7 +48,11 @@ function suggestWeight(bests: Record<string, number>, name: string, fallback: nu
 /** Build a fresh session entry (one unchecked row) from a library item.
  *  "Same as last": last workout's final completed values win over defaults
  *  and over the 75%-of-PR guess — a lift opens at last session's numbers. */
-function toEntry(item: LibraryItem, bests: Record<string, number>, lastUsed: Record<string, LastUsedSet>): WorkoutExercise {
+function toEntry(
+  item: LibraryItem,
+  bests: Record<string, number>,
+  lastUsed: Record<string, LastUsedSet>
+): WorkoutExercise {
   const last = lastUsed[item.name];
   if (isCardioItem(item)) {
     const lastCardio = last?.kind === "cardio" ? last : null;
@@ -115,18 +95,80 @@ function toEntry(item: LibraryItem, bests: Record<string, number>, lastUsed: Rec
   };
 }
 
+/** One library row: icon · name + muscle · ✓ when selected · pin. Selected rows invert to white. */
+function LibraryRow({
+  item,
+  selected,
+  pinned,
+  onToggle,
+  onTogglePin
+}: {
+  item: LibraryItem;
+  selected: boolean;
+  pinned: boolean;
+  onToggle: () => void;
+  onTogglePin: () => void;
+}) {
+  const kind = isSportsItem(item) ? "sports" : isCardioItem(item) ? "cardio" : "lift";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${item.name}${selected ? ", selected" : ""}`}
+      onPress={onToggle}
+      haptic="selection"
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space[3],
+        marginBottom: space[2],
+        padding: space[2],
+        borderRadius: radius.md,
+        backgroundColor: selected ? colors.white : tokens.bg.raised
+      }}
+    >
+      <ExerciseIcon kind={kind} inverted={selected} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text variant="username" numberOfLines={1} className={selected ? "text-black" : ""}>
+          {item.name}
+        </Text>
+        <Text variant="meta" className={selected ? "text-ash" : ""}>
+          {item.muscle}
+          {item.custom ? " · Custom" : ""}
+        </Text>
+      </View>
+      {selected ? <Check size={icon.size.sm - 2} color={colors.black} strokeWidth={icon.stroke.bold} /> : null}
+      {/* pin/unpin — nested Pressable so it never toggles selection */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={pinned ? `Unpin ${item.name}` : `Pin ${item.name} to the top`}
+        onPress={onTogglePin}
+        haptic="selection"
+        hitSlop={10}
+        style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
+      >
+        <Star
+          size={icon.size.sm - 2}
+          color={pinned ? tokens.accent.gold : selected ? colors.ash : tokens.text.tertiary}
+          fill={pinned ? tokens.accent.gold : "transparent"}
+          strokeWidth={icon.stroke.regular}
+        />
+      </Pressable>
+    </Pressable>
+  );
+}
+
 /**
- * SELECT EXERCISES — WHOOP-style full screen in app styling: search + filter
- * chips, dashed "Add Custom Exercise" row, alphabetical sections, multi-select
- * (selected rows invert to white), floating ADD (n) bar. Adding pushes the
- * chosen exercises into the live session and pops back to the builder.
+ * SELECT EXERCISES — search + filter chips, "Add custom exercise" row,
+ * alphabetical sections with a Pinned section, multi-select, floating ADD (n)
+ * button. Adding pushes the chosen exercises into the live session and pops
+ * back to the logger.
  */
 export default function SelectExercisesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [query, setQuery] = useState("");
-  /** Gym vs cardio split — the old two-tile choice, as a segmented control. */
-  const [kind, setKind] = useState<"All" | "Lifts" | "Cardio" | "Sports">("All");
+  const [kind, setKind] = useState<Kind>("All");
   const [group, setGroup] = useState<"All" | Muscle>("All");
   const [selected, setSelected] = useState<Map<string, LibraryItem>>(new Map());
   const [custom, setCustom] = useState<{ name: string; muscle: Muscle; inc: boolean } | null>(null);
@@ -164,9 +206,13 @@ export default function SelectExercisesScreen() {
     const q = query.trim();
     const favs = favorites.data ?? new Set<string>();
     if (q) {
-      // Fuzzy-ranked, but pinned exercises float above the rest (stable within
-      // each partition so relevance order is preserved).
-      const ranked = fuzzyFilter(pool, q, (l) => l.name, (l) => LIFT_ALIASES[l.name]);
+      // Fuzzy-ranked, but pinned exercises float above the rest.
+      const ranked = fuzzyFilter(
+        pool,
+        q,
+        (l) => l.name,
+        (l) => LIFT_ALIASES[l.name]
+      );
       return [...ranked.filter((l) => favs.has(l.name)), ...ranked.filter((l) => !favs.has(l.name))];
     }
     return [...pool].sort((a, b) => a.name.localeCompare(b.name));
@@ -196,7 +242,6 @@ export default function SelectExercisesScreen() {
       else next.set(item.name, item);
       return next;
     });
-    void impactHaptic();
   };
 
   const addSelected = () => {
@@ -206,8 +251,8 @@ export default function SelectExercisesScreen() {
     state.setExercises((prev) => {
       const next = [...prev];
       for (const item of selected.values()) {
-        const kind = isCardioItem(item) ? "cardio" : "lift";
-        const idx = next.findIndex((e) => e.name === item.name && e.kind === kind);
+        const itemKind = isCardioItem(item) ? "cardio" : "lift";
+        const idx = next.findIndex((e) => e.name === item.name && e.kind === itemKind);
         if (idx >= 0) {
           // Already in the workout — append one cloned row instead.
           const existing = next[idx];
@@ -232,15 +277,14 @@ export default function SelectExercisesScreen() {
       }
       return next;
     });
-    void impactHaptic();
+    haptic("impact");
     if (router.canGoBack()) router.back();
     else router.replace("/workout" as never);
   };
 
   // The custom-exercise form renders INSIDE this screen, so backing out of it
-  // should return to the library rather than popping the whole picker (which
-  // silently threw away what you were typing). Also guarded against a
-  // double-tap popping two screens.
+  // returns to the library rather than popping the whole picker. Guarded
+  // against a double-tap popping two screens.
   const leaving = useRef(false);
   const goBack = () => {
     if (custom) {
@@ -278,121 +322,69 @@ export default function SelectExercisesScreen() {
     showToast(`${item.name} added to your selection`);
   };
 
-  const row = (item: LibraryItem) => {
-    const isSel = selected.has(item.name);
-    const isFav = favSet.has(item.name);
-    const Icon = isSportsItem(item) ? Activity : isCardioItem(item) ? Flame : Dumbbell;
-    return (
-      <Pressable
-        key={item.name}
-        accessibilityRole="button"
-        accessibilityState={{ selected: isSel }}
-        accessibilityLabel={`${item.name}${isSel ? ", selected" : ""}`}
-        onPress={() => toggle(item)}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          marginBottom: 10,
-          padding: 10,
-          borderRadius: radius.md,
-          backgroundColor: isSel ? W.text : W.card,
-          borderWidth: 1,
-          borderColor: isSel ? W.text : W.line
-        }}
-      >
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: radius.sm,
-            backgroundColor: isSel ? "rgba(0,0,0,0.1)" : W.card2,
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <Icon size={19} color={isSel ? W.ink : W.text} strokeWidth={1.8} />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ fontFamily: SEMI, fontSize: 15, color: isSel ? W.ink : W.text }}>
-            {item.name}
-          </Text>
-          <Text style={{ marginTop: 1, fontFamily: "Geist_400Regular", fontSize: 12, color: isSel ? "rgba(0,0,0,0.55)" : W.faint }}>
-            {item.muscle}
-            {item.custom ? " · Custom" : ""}
-          </Text>
-        </View>
-        {isSel ? <Check size={18} color={W.ink} strokeWidth={2.6} /> : null}
-        {/* pin/unpin — nested Pressable so it never toggles selection */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isFav ? `Unpin ${item.name}` : `Pin ${item.name} to the top`}
-          onPress={() => {
-            toggleFavorite.mutate({ name: item.name, favorite: !isFav });
-            void impactHaptic();
-          }}
-          hitSlop={10}
-          style={{ paddingLeft: 4, paddingVertical: 4 }}
-        >
-          <Star
-            size={18}
-            color={isFav ? tokens.accent.gold : isSel ? "rgba(0,0,0,0.4)" : W.faint}
-            fill={isFav ? tokens.accent.gold : "transparent"}
-            strokeWidth={2}
-          />
-        </Pressable>
-      </Pressable>
-    );
-  };
+  const renderRow = (item: LibraryItem) => (
+    <LibraryRow
+      key={item.name}
+      item={item}
+      selected={selected.has(item.name)}
+      pinned={favSet.has(item.name)}
+      onToggle={() => toggle(item)}
+      onTogglePin={() => toggleFavorite.mutate({ name: item.name, favorite: !favSet.has(item.name) })}
+    />
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: W.ink }}>
-      {/* header */}
+    <View style={{ flex: 1, backgroundColor: colors.black }}>
+      {/* header: back · title · live selection count */}
       <View
         style={{
-          paddingTop: insets.top + 8,
-          paddingHorizontal: 16,
-          paddingBottom: 12,
+          paddingTop: insets.top + space[2],
+          paddingHorizontal: space[4],
+          paddingBottom: space[3],
           flexDirection: "row",
           alignItems: "center"
         }}
       >
-        <Pressable
-          accessibilityLabel="Back"
-          onPress={goBack}
-          hitSlop={8}
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 17,
-            borderWidth: 1,
-            borderColor: W.line,
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <ArrowLeft size={17} color={W.muted} strokeWidth={2.2} />
-        </Pressable>
+        {custom ? (
+          <Pressable
+            accessibilityLabel="Back to library"
+            onPress={goBack}
+            haptic="none"
+            hitSlop={8}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: radius.pill,
+              borderWidth: 1,
+              borderColor: tokens.border.default,
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <ArrowLeft size={icon.size.xs + 2} color={colors.mist} strokeWidth={icon.stroke.bold} />
+          </Pressable>
+        ) : (
+          <BackButton fallback="/workout" />
+        )}
         <View style={{ flex: 1, alignItems: "center" }}>
-          <Text style={{ fontFamily: DISP, fontSize: 17, letterSpacing: 17 * -0.01, color: W.text }}>
-            Select exercises
-          </Text>
+          <Text variant="subheading">{custom ? "Custom exercise" : "Select exercises"}</Text>
         </View>
-        {/* balance the back button; shows live selection count */}
         <View style={{ width: 34, alignItems: "center" }}>
           {selected.size > 0 ? (
             <View
               style={{
                 minWidth: 24,
                 height: 24,
-                borderRadius: 12,
+                borderRadius: radius.pill,
                 paddingHorizontal: 6,
-                backgroundColor: W.text,
+                backgroundColor: colors.white,
                 alignItems: "center",
                 justifyContent: "center"
               }}
             >
-              <Text style={{ fontFamily: NUM, fontSize: 12, color: W.ink }}>{selected.size}</Text>
+              <Text variant="numeral-sm" className="text-black text-[12px] leading-[16px]">
+                {String(selected.size)}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -401,66 +393,64 @@ export default function SelectExercisesScreen() {
       {custom ? (
         /* ---------------------- custom exercise form ---------------------- */
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 24 }}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setCustom(null)}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 14 }}
-            >
-              <ArrowLeft size={14} color={W.muted} />
-              <Text style={{ fontFamily: SEMI, fontSize: 12, color: W.muted }}>Back to library</Text>
-            </Pressable>
-            <Text style={{ fontFamily: NUM, fontSize: 20, color: W.text }}>Custom exercise</Text>
-
-            <View style={{ marginTop: 16, marginBottom: 6 }}>
-              <Micro>Name</Micro>
-            </View>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: space[4],
+              paddingTop: space[2],
+              paddingBottom: insets.bottom + space[6]
+            }}
+          >
+            <SectionLabel style={{ marginBottom: space[2] }}>Name</SectionLabel>
             <TextInput
               value={custom.name}
               onChangeText={(name) => setCustom((c) => (c ? { ...c, name } : c))}
               placeholder="e.g. Zercher Squat"
-              placeholderTextColor={W.faint}
+              placeholderTextColor={tokens.text.tertiary}
               maxLength={48}
               autoFocus
+              accessibilityLabel="Exercise name"
               style={{
-                paddingHorizontal: 16,
-                paddingVertical: 12,
+                paddingHorizontal: space[4],
+                height: 48,
                 borderRadius: radius.sm,
-                backgroundColor: W.card,
+                backgroundColor: tokens.bg.raised,
                 borderWidth: 1,
-                borderColor: W.line,
+                borderColor: tokens.border.default,
                 fontFamily: "Geist_400Regular",
                 fontSize: 15,
-                color: W.text
+                color: tokens.text.primary
               }}
             />
 
-            <View style={{ marginTop: 16, marginBottom: 8 }}>
-              <Micro>Category</Micro>
-            </View>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            <SectionLabel style={{ marginTop: space[6], marginBottom: space[2] }}>Category</SectionLabel>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space[2] }}>
               {MUSCLES.map((m) => (
-                <Chip key={m} label={m} selected={custom.muscle === m} onPress={() => setCustom((c) => (c ? { ...c, muscle: m } : c))} />
+                <Chip
+                  key={m}
+                  selected={custom.muscle === m}
+                  onPress={() => setCustom((c) => (c ? { ...c, muscle: m } : c))}
+                >
+                  {m}
+                </Chip>
               ))}
             </View>
 
             {custom.muscle === "Cardio" ? (
               <>
-                <View style={{ marginTop: 16, marginBottom: 8 }}>
-                  <Micro>Incline</Micro>
-                </View>
-                <View style={{ flexDirection: "row", gap: 6 }}>
-                  <Chip label="Off" selected={!custom.inc} onPress={() => setCustom((c) => (c ? { ...c, inc: false } : c))} />
-                  <Chip
-                    label="On — track incline %"
-                    selected={custom.inc}
-                    onPress={() => setCustom((c) => (c ? { ...c, inc: true } : c))}
-                  />
+                <SectionLabel style={{ marginTop: space[6], marginBottom: space[2] }}>Incline</SectionLabel>
+                <View style={{ flexDirection: "row", gap: space[2] }}>
+                  <Chip selected={!custom.inc} onPress={() => setCustom((c) => (c ? { ...c, inc: false } : c))}>
+                    Off
+                  </Chip>
+                  <Chip selected={custom.inc} onPress={() => setCustom((c) => (c ? { ...c, inc: true } : c))}>
+                    Track incline %
+                  </Chip>
                 </View>
               </>
             ) : null}
 
-            <Text style={{ marginTop: 12, fontFamily: "Geist_400Regular", fontSize: 12.5, lineHeight: 18, color: W.muted }}>
+            <Text variant="meta" className="mt-4">
               {custom.muscle === "Cardio"
                 ? `Logged in minutes, miles${custom.inc ? ", and incline %" : ""}.`
                 : custom.muscle === "Sports"
@@ -470,100 +460,57 @@ export default function SelectExercisesScreen() {
           </ScrollView>
 
           {/* pinned save — always visible, above the keyboard */}
-          <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16 }}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={submitCustom}
-              disabled={!custom.name.trim()}
-              style={{
-                paddingVertical: 15,
-                borderRadius: radius.pill,
-                backgroundColor: custom.name.trim() ? colors.white : tokens.bg.subtle,
-                borderWidth: 1,
-                borderColor: custom.name.trim() ? colors.white : tokens.border.strong,
-                alignItems: "center"
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: NUM,
-                  fontSize: 14.5,
-                  letterSpacing: 0.14,
-                  color: custom.name.trim() ? colors.black : W.muted
-                }}
-              >
-                Save exercise
-              </Text>
-            </Pressable>
+          <View
+            style={{
+              paddingHorizontal: space[4],
+              paddingTop: space[2],
+              paddingBottom: insets.bottom > 0 ? insets.bottom + space[2] : space[4]
+            }}
+          >
+            <Button onPress={submitCustom} disabled={!custom.name.trim()}>
+              Save exercise
+            </Button>
           </View>
         </KeyboardAvoidingView>
       ) : (
         /* --------------------------- library list -------------------------- */
         <>
-          {/* search + filter */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 }}>
-            <View
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                paddingHorizontal: 14,
-                paddingVertical: 11,
-                borderRadius: radius.md,
-                backgroundColor: W.card,
-                borderWidth: 1,
-                borderColor: W.line
-              }}
-            >
-              <Search size={16} color={W.faint} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search for an exercise…"
-                placeholderTextColor={W.faint}
-                style={{ flex: 1, fontFamily: "Geist_400Regular", fontSize: 14.5, color: W.text, padding: 0 }}
-              />
-              {query ? (
-                <Pressable accessibilityLabel="Clear search" onPress={() => setQuery("")} hitSlop={8}>
-                  <X size={15} color={W.faint} />
-                </Pressable>
-              ) : null}
-            </View>
+          <View style={{ paddingHorizontal: space[4] }}>
+            <SearchBar value={query} onChangeText={setQuery} placeholder="Search for an exercise…" />
           </View>
 
-          {/* gym vs cardio — the old section split, as a segmented control */}
           <Segmented
             options={["All", "Lifts", "Cardio", "Sports"]}
             value={kind}
-            onChange={(v) => setKind(v as "All" | "Lifts" | "Cardio" | "Sports")}
-            style={{ marginTop: 12, marginBottom: 0 }}
+            onChange={(v) => setKind(v as Kind)}
+            variant="quiet"
+            style={{ marginTop: space[3], marginBottom: 0 }}
           />
 
-          {/* Muscle-group filters — always visible ("All" default), with a
-              small, EQUAL breath of space above and below. */}
+          {/* Muscle-group filters — always visible ("All" default). */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 6, paddingHorizontal: 16, alignItems: "center" }}
+            contentContainerStyle={{ gap: space[2], paddingHorizontal: space[4], alignItems: "center" }}
             // flexShrink 0 + explicit height: the column squeezed this row when
             // the list below needed space, clipping the chips vertically.
-            style={{ flexGrow: 0, flexShrink: 0, height: 36, marginVertical: 8 }}
+            style={{ flexGrow: 0, flexShrink: 0, height: 36, marginVertical: space[2] }}
           >
             {(["All", ...MUSCLES] as const).map((m) => (
-              <Chip key={m} label={m} selected={group === m} onPress={() => setGroup(m)} />
+              <Chip key={m} selected={group === m} onPress={() => setGroup(m)}>
+                {m}
+              </Chip>
             ))}
           </ScrollView>
 
           <ScrollView
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 0, paddingBottom: insets.bottom + 110 }}
+            contentContainerStyle={{ paddingHorizontal: space[4], paddingBottom: insets.bottom + 110 }}
           >
-            {/* custom exercise row (solid border — RN iOS won't render dashed
-                borders on rounded rects) */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add custom exercise"
+              haptic="none"
               onPress={() =>
                 setCustom({
                   name: query.trim(),
@@ -579,13 +526,12 @@ export default function SelectExercisesScreen() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 12,
-                padding: 10,
-                marginBottom: 16,
+                gap: space[3],
+                padding: space[2],
+                marginBottom: space[4],
                 borderRadius: radius.md,
-                backgroundColor: W.card,
                 borderWidth: 1,
-                borderColor: W.strong
+                borderColor: tokens.border.strong
               }}
             >
               <View
@@ -593,98 +539,77 @@ export default function SelectExercisesScreen() {
                   width: 44,
                   height: 44,
                   borderRadius: radius.sm,
-                  backgroundColor: W.card2,
+                  backgroundColor: tokens.bg.subtle,
                   alignItems: "center",
                   justifyContent: "center"
                 }}
               >
-                <Plus size={19} color={W.text} strokeWidth={2.2} />
+                <Plus size={icon.size.sm} color={tokens.text.primary} strokeWidth={icon.stroke.bold} />
               </View>
-              <Text style={{ flex: 1, fontFamily: SEMI, fontSize: 15, color: W.text }}>Add Custom Exercise</Text>
+              <Text variant="username" className="flex-1">
+                Add custom exercise
+              </Text>
             </Pressable>
 
             {sections
               ? sections.map(([letter, items]) => (
-                  <View key={letter} style={{ marginBottom: 8 }}>
-                    <View style={{ marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <View key={letter} style={{ marginBottom: space[2] }}>
+                    <View
+                      style={{ marginBottom: space[2], flexDirection: "row", alignItems: "center", gap: space[1] + 1 }}
+                    >
                       {letter === "Pinned" ? (
-                        <Star size={12} color={tokens.accent.gold} fill={tokens.accent.gold} strokeWidth={2} />
+                        <Star
+                          size={12}
+                          color={tokens.accent.gold}
+                          fill={tokens.accent.gold}
+                          strokeWidth={icon.stroke.regular}
+                        />
                       ) : null}
-                      <Text
-                        style={{
-                          fontFamily: SEMI,
-                          fontSize: 13,
-                          color: letter === "Pinned" ? tokens.accent.gold : W.muted
-                        }}
-                      >
+                      <Text variant="meta-strong" className={letter === "Pinned" ? "text-gold" : ""}>
                         {letter}
                       </Text>
                     </View>
-                    {items.map(row)}
+                    {items.map(renderRow)}
                   </View>
                 ))
-              : results.map(row)}
+              : results.map(renderRow)}
             {results.length === 0 ? (
-              <View style={{ paddingVertical: 24, alignItems: "center" }}>
-                <Text style={{ fontFamily: "Geist_400Regular", fontSize: 14, color: W.muted, textAlign: "center" }}>
+              <View style={{ paddingVertical: space[6], alignItems: "center" }}>
+                <Text variant="meta" className="text-center">
                   &ldquo;{query.trim()}&rdquo; isn&apos;t in the library — add it as a custom exercise above.
                 </Text>
               </View>
             ) : null}
           </ScrollView>
 
-          {/* floating ADD bubble — bottom right. The dark halo ring keeps the
-              white pill visible even directly over a white selected row. */}
+          {/* floating ADD — bottom right. The dark halo keeps the white pill
+              visible even directly over a white selected row. */}
           <View
             pointerEvents="box-none"
             style={{
               position: "absolute",
-              right: 16,
-              bottom: insets.bottom > 0 ? insets.bottom + 8 : 18,
+              right: space[4],
+              bottom: insets.bottom > 0 ? insets.bottom + space[2] : space[4],
               alignItems: "flex-end"
             }}
           >
-            <View
-              style={{
-                borderRadius: radius.pill,
-                padding: 4,
-                backgroundColor: "rgba(9,9,11,0.9)",
-                shadowColor: "#000000",
-                shadowOpacity: 0.45,
-                shadowRadius: 14,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 10
-              }}
-            >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={selected.size > 0 ? `Add ${selected.size} selected exercises` : "Add"}
-                onPress={addSelected}
+            <View style={{ borderRadius: radius.pill, padding: space[1], backgroundColor: tokens.bg.scrim }}>
+              <Button
+                icon={
+                  <Plus
+                    size={icon.size.xs}
+                    color={selected.size > 0 ? colors.black : colors.bone}
+                    strokeWidth={icon.stroke.bold}
+                  />
+                }
+                variant={selected.size > 0 ? "solid" : "ghost"}
                 disabled={selected.size === 0}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  paddingHorizontal: 24,
-                  paddingVertical: 14,
-                  borderRadius: radius.pill,
-                  backgroundColor: selected.size > 0 ? colors.white : tokens.bg.subtle
-                }}
+                onPress={addSelected}
+                accessibilityLabel={selected.size > 0 ? `Add ${selected.size} selected exercises` : "Add"}
+                style={{ borderRadius: radius.pill, paddingHorizontal: space[6] }}
               >
-                <Plus size={16} color={selected.size > 0 ? colors.black : W.muted} strokeWidth={2.6} />
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    fontFamily: NUM,
-                    fontSize: 14.5,
-                    letterSpacing: 0.14,
-                    color: selected.size > 0 ? colors.black : W.muted
-                  }}
-                >
-                  {selected.size > 0 ? `Add (${selected.size})` : "Add"}
-                </Text>
-              </Pressable>
+                {selected.size > 0 ? `Add (${selected.size})` : "Add"}
+              </Button>
             </View>
           </View>
         </>

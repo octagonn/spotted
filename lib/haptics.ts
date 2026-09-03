@@ -1,5 +1,17 @@
 import * as Haptics from "expo-haptics";
 
+/**
+ * Semantic haptic vocabulary (Spotted V2). Haptics are feedback for meaning,
+ * not decoration — most taps should be `"none"`.
+ *
+ * - none       routine taps: navigation, opening a sheet, scrolling controls
+ * - selection  picking among options: segmented tabs, chips, toggles, tab bar
+ * - impact     a physical-feeling commit: logging a set, sending, capturing
+ * - success    something was achieved: post published, PR, streak milestone
+ * - warning    destructive confirm / blocked action
+ */
+export type HapticKind = "none" | "selection" | "impact" | "success" | "warning";
+
 export async function selectionHaptic() {
   await Haptics.selectionAsync();
 }
@@ -14,6 +26,27 @@ export async function successHaptic() {
 
 export async function warningHaptic() {
   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+}
+
+/** Fire a haptic by semantic kind. Never throws (simulator / unsupported device). */
+export function haptic(kind: HapticKind): void {
+  switch (kind) {
+    case "selection":
+      void selectionHaptic().catch(() => {});
+      break;
+    case "impact":
+      void impactHaptic().catch(() => {});
+      break;
+    case "success":
+      void successHaptic().catch(() => {});
+      break;
+    case "warning":
+      void warningHaptic().catch(() => {});
+      break;
+    case "none":
+    default:
+      break;
+  }
 }
 
 /* ------------------------------ sequences ------------------------------ */

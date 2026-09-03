@@ -1,43 +1,40 @@
-import {
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-  useAudioPlayer,
-  useAudioPlayerStatus,
-  useAudioRecorder
-} from "expo-audio";
-import { Image } from "expo-image";
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
-import { useVideoPlayer, VideoView } from "expo-video";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Camera, ChevronLeft, CornerUpLeft, Eye, EyeOff, Flame, Forward, ImagePlus, Mic, Pause, Play, Send, Share2, Square, Trash2, X } from "lucide-react-native";
+import { CornerUpLeft, EyeOff, Forward, Trash2 } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable as RNPressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable as RNPressable, ScrollView, View } from "react-native";
 
+import { ChatComposer, type PendingMedia, type ReplyTarget } from "@/components/chat/ChatComposer";
+import { ChatHeader } from "@/components/chat/ChatHeader";
 import { MessageActionMenu, type MessageAction } from "@/components/chat/MessageActionMenu";
+import {
+  ChatMediaBubble,
+  ChatPhotoViewer,
+  ShareCard,
+  StoryReplyPreview,
+  ViewOnceBubble,
+  ViewOnceViewer
+} from "@/components/chat/MessageMedia";
 import { MessageBubble, TimeSeparator } from "@/components/friends/ChatBubbles";
-import { ForwardSheet } from "@/components/friends/ForwardSheet";
-import { groupDisplayName } from "@/lib/groupName";
-import { PresenceLine, presenceStatus } from "@/components/friends/PresenceLine";
 import { useMockChatStore } from "@/components/friends/chatStore";
+import { ForwardSheet } from "@/components/friends/ForwardSheet";
 import { isMockThreadId, MOCK_CONVERSATIONS } from "@/components/friends/mockConversations";
+import { PresenceLine, presenceStatus } from "@/components/friends/PresenceLine";
 import { useInboxThreadActions } from "@/components/friends/useInboxThreads";
 import { Avatar } from "@/components/ui/Avatar";
-import { CachedImage } from "@/components/ui/CachedImage";
-import { SkeletonChatBubbles } from "@/components/ui/Skeleton";
-import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { EMPTY_ART } from "@/lib/emptyStateArt";
 import { Pressable } from "@/components/ui/Pressable";
+import { useSheet } from "@/components/ui/Sheet";
+import { SkeletonChatBubbles } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
+import {
+  useActiveConversation,
+  useActivityStatus,
+  useChatPresence,
+  useHeartbeat
+} from "@/hooks/queries/useChatPresence";
 import {
   useConversation,
   useGroupInfo,
@@ -58,327 +55,13 @@ import {
   useUnsendMessage
 } from "@/hooks/queries/useMessagesExtras";
 import { useMarkConversationNotificationsRead } from "@/hooks/queries/useNotifications";
-import { useActiveConversation, useActivityStatus, useChatPresence, useHeartbeat } from "@/hooks/queries/useChatPresence";
 import { useProfileById } from "@/hooks/queries/useProfile";
-import { useSheet } from "@/components/ui/Sheet";
-import { signedMessageUrl, signedPostUrl } from "@/lib/supabase";
+import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
+import { groupDisplayName } from "@/lib/groupName";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
-import { tokens } from "@/theme/tokens";
 import { colors } from "@/theme/colors";
-
-/** Voice-note bubble: play/pause + progress + elapsed time. */
-function AudioBubble({ uri, mine }: { uri: string | null; mine: boolean }) {
-  const player = useAudioPlayer(uri ? { uri } : null);
-  const status = useAudioPlayerStatus(player);
-  const toggle = () => {
-    try {
-      if (status.playing) {
-        player.pause();
-      } else {
-        if (status.didJustFinish) player.seekTo(0).catch(() => {});
-        player.play();
-      }
-    } catch {
-      // Player torn down — ignore.
-    }
-  };
-  const duration = Math.max(1, Math.round(status.duration || 0));
-  const current = Math.min(duration, Math.round(status.currentTime || 0));
-  const fg = mine ? colors.black : colors.white;
-  return (
-    <Pressable
-      onPress={toggle}
-      accessibilityRole="button"
-      accessibilityLabel={`${status.playing ? "Pause" : "Play"} voice message, ${duration} seconds`}
-      haptic={false}
-    >
-      <View
-        style={{
-          alignSelf: mine ? "flex-end" : "flex-start",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          maxWidth: "78%",
-          borderRadius: 999,
-          paddingVertical: 10,
-          paddingHorizontal: 14,
-          backgroundColor: mine ? colors.white : colors.graphite,
-          borderWidth: mine ? 0 : 1,
-          borderColor: colors.iron
-        }}
-      >
-        {status.playing ? (
-          <Pause size={16} color={fg} strokeWidth={2.2} fill={fg} />
-        ) : (
-          <Play size={16} color={fg} strokeWidth={2.2} fill={fg} />
-        )}
-        <View
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityValue={{ min: 0, max: duration, now: current }}
-          style={{ width: 110, height: 3, borderRadius: 1.5, backgroundColor: mine ? "rgba(0,0,0,0.2)" : colors.iron }}
-        >
-          <View
-            style={{
-              width: `${Math.min(100, (current / duration) * 100)}%`,
-              height: 3,
-              borderRadius: 1.5,
-              backgroundColor: fg
-            }}
-          />
-        </View>
-        <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: fg }}>
-          {`0:${String(status.playing || current > 0 ? current : duration).padStart(2, "0")}`}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
-/** Image or voice message — resolves the private-bucket signed URL. */
-/** Thumbnail of the story a DM is replying to (story media lives in the posts bucket). */
-function StoryReplyPreview({ path, mine }: { path: string; mine: boolean }) {
-  const media = useQuery({
-    queryKey: ["story-reply-thumb", path],
-    staleTime: 50 * 60_000,
-    queryFn: () => signedPostUrl(path)
-  });
-  return (
-    <View style={{ alignSelf: mine ? "flex-end" : "flex-start", alignItems: mine ? "flex-end" : "flex-start", marginBottom: -4 }}>
-      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, color: colors.fog, marginBottom: 4, marginHorizontal: 4 }}>
-        {mine ? "You replied to their story" : "Replied to your story"}
-      </Text>
-      <View style={{ width: 54, height: 84, borderRadius: 12, overflow: "hidden", backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
-        {media.data ? <CachedImage source={{ uri: media.data }} style={{ width: 54, height: 84 }} contentFit="cover" /> : null}
-      </View>
-    </View>
-  );
-}
-
-/** Video message bubble — inline looping player. */
-function VideoBubble({ uri, mine }: { uri: string | null; mine: boolean }) {
-  const player = useVideoPlayer(uri ? { uri } : null, (p) => {
-    p.loop = true;
-    p.muted = false;
-  });
-  return (
-    <View
-      style={{
-        alignSelf: mine ? "flex-end" : "flex-start",
-        borderRadius: 16,
-        overflow: "hidden",
-        backgroundColor: colors.graphite,
-        borderWidth: mine ? 0 : 1,
-        borderColor: colors.iron
-      }}
-    >
-      {uri ? (
-        <VideoView player={player} style={{ width: 210, height: 270 }} contentFit="cover" nativeControls />
-      ) : (
-        <View style={{ width: 210, height: 270 }} />
-      )}
-    </View>
-  );
-}
-
-/** In-app share card (#8) — a tappable preview of a shared post/check-in/stream. */
-function ShareCard({
-  mine,
-  label,
-  sharedKind,
-  onOpen
-}: {
-  mine: boolean;
-  label: string;
-  sharedKind: string;
-  sharedId: string | null;
-  onOpen: () => void;
-}) {
-  const heading = sharedKind === "post" ? "Post" : sharedKind === "workout" ? "Workout" : sharedKind === "stream" ? "Gym stream" : "Gym check-in";
-  return (
-    <RNPressable onPress={onOpen} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: 240 }}>
-      <View style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: colors.iron, backgroundColor: colors.graphite }}>
-        <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.iron, flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Share2 size={13} color={tokens.accent.gold} strokeWidth={2} />
-          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase", color: colors.fog }}>{heading}</Text>
-        </View>
-        <Text style={{ paddingHorizontal: 12, paddingVertical: 10, fontFamily: "Geist_500Medium", fontSize: 13.5, color: colors.bone }}>{label}</Text>
-      </View>
-    </RNPressable>
-  );
-}
-
-/** Full-screen chat photo viewer — tap anywhere to dismiss. */
-function ChatPhotoViewer({ uri, onClose }: { uri: string; onClose: () => void }) {
-  // The X is the ONLY way out. Previously the whole photo was a close button
-  // (so any tap dismissed it) while the X was pointerEvents="none" and purely
-  // decorative — the exact inverse of what people expect, reported as "exiting
-  // images is buggy".
-  return (
-    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
-      <CachedImage source={{ uri }} style={{ flex: 1 }} contentFit="contain" />
-      <Pressable
-        onPress={onClose}
-        accessibilityLabel="Close photo"
-        hitSlop={12}
-        style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}
-      >
-        <X size={20} color={colors.white} strokeWidth={2.2} />
-      </Pressable>
-    </View>
-  );
-}
-
-function ChatMediaBubble({
-  path,
-  mine,
-  onOpen,
-  onLongPress
-}: {
-  path: string;
-  mine: boolean;
-  onOpen?: (uri: string) => void;
-  /** Reaction menu. A nested Pressable steals the responder from the row
-   *  wrapper, so without this a long-press on a photo never opened the menu —
-   *  reported as "can't react to images in group chats". */
-  onLongPress?: () => void;
-}) {
-  const media = useQuery({
-    queryKey: ["msg-media", path],
-    staleTime: 50 * 60_000,
-    queryFn: () => signedMessageUrl(path)
-  });
-  const lower = path.toLowerCase();
-  if (lower.endsWith(".m4a")) {
-    return <AudioBubble uri={media.data ?? null} mine={mine} />;
-  }
-  if (lower.endsWith(".mp4") || lower.endsWith(".mov")) {
-    return <VideoBubble uri={media.data ?? null} mine={mine} />;
-  }
-  return (
-    <View
-      style={{
-        alignSelf: mine ? "flex-end" : "flex-start",
-        borderRadius: 16,
-        overflow: "hidden",
-        backgroundColor: colors.graphite,
-        borderWidth: mine ? 0 : 1,
-        borderColor: colors.iron
-      }}
-    >
-      {media.data ? (
-        <RNPressable
-          onPress={() => onOpen?.(media.data as string)}
-          onLongPress={onLongPress}
-          delayLongPress={220}
-          accessibilityLabel="View photo"
-        >
-          <CachedImage source={{ uri: media.data }} style={{ width: 210, height: 270 }} contentFit="cover" />
-        </RNPressable>
-      ) : (
-        <View style={{ width: 210, height: 270 }} />
-      )}
-    </View>
-  );
-}
-
-/**
- * Snapchat-style view-once photo bubble. Sender sees a static "Photo" chip
- * (with an "Opened" state once the recipient burns it). The recipient gets a
- * tappable chip that opens the photo full-screen exactly once — closing it
- * marks the message viewed and collapses the chip to "Opened".
- */
-function ViewOnceBubble({
-  message,
-  mine,
-  onOpen
-}: {
-  message: ChatMessage;
-  mine: boolean;
-  onOpen: (message: ChatMessage) => void;
-}) {
-  const opened = Boolean(message.viewed_at);
-  const canOpen = !mine && !opened;
-  return (
-    <RNPressable
-      onPress={canOpen ? () => onOpen(message) : undefined}
-      accessibilityLabel={canOpen ? "View photo (view once)" : opened ? "Photo opened" : "Photo sent"}
-      style={{
-        alignSelf: mine ? "flex-end" : "flex-start",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 9,
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: canOpen ? tokens.accent.gold : colors.iron,
-        backgroundColor: canOpen ? "rgba(232,180,76,0.10)" : colors.graphite,
-        paddingVertical: 11,
-        paddingHorizontal: 15,
-        marginVertical: 2
-      }}
-    >
-      {opened ? (
-        <Eye size={16} color={colors.fog} strokeWidth={2} />
-      ) : (
-        <Flame size={16} color={canOpen ? tokens.accent.gold : colors.silver} strokeWidth={2} />
-      )}
-      <Text
-        style={{
-          fontFamily: "Geist_600SemiBold",
-          fontSize: 13.5,
-          color: opened ? colors.fog : canOpen ? tokens.accent.gold : colors.silver
-        }}
-      >
-        {opened ? "Opened" : mine ? "Photo — view once" : "Tap to view photo"}
-      </Text>
-    </RNPressable>
-  );
-}
-
-/**
- * Full-screen one-shot photo viewer. Consumes ON OPEN (7c): the moment the
- * signed image is in hand, onConsume marks it viewed server-side — which also
- * destroys the storage object — so killing the app mid-view still counts.
- * The already-fetched image stays visible until the viewer closes.
- */
-function ViewOnceViewer({ path, onConsume, onClose }: { path: string; onConsume: () => void; onClose: () => void }) {
-  const media = useQuery({
-    queryKey: ["msg-media", path],
-    staleTime: 50 * 60_000,
-    queryFn: () => signedMessageUrl(path)
-  });
-  const consumedRef = useRef(false);
-  useEffect(() => {
-    if (media.data && !consumedRef.current) {
-      consumedRef.current = true;
-      onConsume();
-    }
-  }, [media.data, onConsume]);
-  return (
-    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.black, zIndex: 40 }}>
-      {/* Tap anywhere to close. */}
-      <Pressable onPress={onClose} accessibilityLabel="Close photo" style={{ flex: 1 }}>
-        {media.data ? (
-          <Image source={{ uri: media.data }} style={{ flex: 1 }} contentFit="contain" />
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
-      </Pressable>
-      <View
-        pointerEvents="none"
-        style={{ position: "absolute", top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}
-      >
-        <X size={20} color={colors.white} strokeWidth={2.2} />
-      </View>
-      <View pointerEvents="none" style={{ position: "absolute", bottom: 46, left: 0, right: 0, alignItems: "center" }}>
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.silver }}>
-          View once — it disappears when you close it
-        </Text>
-      </View>
-    </View>
-  );
-}
+import { radius, space, tokens } from "@/theme/tokens";
 
 /**
  * Stable fallback for the sent-messages selector. Returning a fresh `[]` from
@@ -387,6 +70,14 @@ function ViewOnceViewer({ path, onConsume, onClose }: { path: string; onConsume:
  */
 const NO_SENT_MESSAGES: string[] = [];
 
+/** Unsend window (ms) for your own text messages. */
+const UNSEND_WINDOW_MS = 15 * 60_000;
+
+/**
+ * Chat thread. Owns the conversation data + send/record/pick logic and
+ * composes ChatHeader → message list → ChatComposer, with the full-screen
+ * viewers and the long-press action menu layered on top.
+ */
 export default function ChatScreen() {
   const { id, group } = useLocalSearchParams<{ id: string; group?: string }>();
   const router = useRouter();
@@ -395,7 +86,6 @@ export default function ChatScreen() {
   // single peer, so the profile/conversation-by-peer hooks stay disabled.
   const isGroup = group === "1";
   const realProfileId = mock || isGroup ? undefined : id;
-  const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const userId = useAuthStore((state) => state.userId);
   const scrollRef = useRef<ScrollView>(null);
@@ -416,22 +106,24 @@ export default function ChatScreen() {
   const sendReal = useSendMessage(conversationId);
   const sendMedia = useSendMediaMessage(conversationId);
 
-  // DM epic wiring.
-  const [replyTo, setReplyTo] = useState<{ id: string; text: string; mine: boolean } | null>(null);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   // Media staged in the composer (gallery pick or camera shot) — sent on Send,
   // never auto-sent. Camera shots go out as view-once.
-  const [pendingMedia, setPendingMedia] = useState<{ uri: string; kind: "image" | "video"; viewOnce: boolean } | null>(null);
+  const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const [viewOnceOpen, setViewOnceOpen] = useState<ChatMessage | null>(null);
   const [photoViewer, setPhotoViewer] = useState<string | null>(null);
   const markViewed = useMarkMessageViewed(conversationId);
-  const reactions = useMessageReactions(conversationId, (messages.data ?? []).map((m) => m.id));
+  const reactions = useMessageReactions(
+    conversationId,
+    (messages.data ?? []).map((m) => m.id)
+  );
   const react = useReactToMessage(conversationId);
   const unsend = useUnsendMessage(conversationId);
   const hides = useMessageHides();
   const hide = useHideMessage();
   const blocked = useBlockedUsers();
   const presence = useChatPresence(conversationId, realProfileId);
-  // Open thread → no push / no banner for its own messages.
+  // Open thread → no push / no banner for its own messages…
   useActiveConversation(conversationId);
   // …and its "sent you a message" notifications count as seen.
   const markConversationRead = useMarkConversationNotificationsRead(conversationId);
@@ -491,7 +183,11 @@ export default function ChatScreen() {
 
   const pickImage = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 0.8, videoMaxDuration: 60 });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.8,
+        videoMaxDuration: 60
+      });
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
       // Stage in the composer — the user confirms with Send.
@@ -513,18 +209,16 @@ export default function ChatScreen() {
   const memberById = useMemo(() => new Map(groupMembers.map((m) => [m.id, m])), [groupMembers]);
   // "Who actually added you" — the group creator, resolved from the member list.
   const groupCreatorName = groupInfo.data?.createdBy
-    ? memberById.get(groupInfo.data.createdBy)?.name?.split(" ")[0] ?? null
+    ? (memberById.get(groupInfo.data.createdBy)?.name?.split(" ")[0] ?? null)
     : null;
   const title = isGroup
     ? groupDisplayName(groupInfo.data?.title, groupMembers, userId)
-    : mockConversation?.title ?? profile.data?.display_name ?? "Conversation";
+    : (mockConversation?.title ?? profile.data?.display_name ?? "Conversation");
   const sub = isGroup
     ? groupMembers.length
       ? `${groupMembers.length} members`
       : undefined
-    : mockConversation?.sub ?? (profile.data?.username ? `@${profile.data.username}` : undefined);
-  // The header Pressable collapses its children, so PresenceLine is never
-  // announced on its own — fold the live presence into the header's label (4.1.3).
+    : (mockConversation?.sub ?? (profile.data?.username ? `@${profile.data.username}` : undefined));
   const headerPresence = presenceStatus({
     typing: presence.otherTyping,
     online: presence.otherOnline,
@@ -533,18 +227,12 @@ export default function ChatScreen() {
   });
 
   const realItems = useMemo(() => messages.data ?? [], [messages.data]);
-  // Hide messages the user deleted from their own view (#11); keep unsent ones
+  // Hide messages the user deleted from their own view; keep unsent ones
   // (rendered as a tombstone). Index by id for quote-reply lookups.
-  const visibleItems = useMemo(
-    () => realItems.filter((m) => !(hides.data?.has(m.id))),
-    [realItems, hides.data]
-  );
+  const visibleItems = useMemo(() => realItems.filter((m) => !hides.data?.has(m.id)), [realItems, hides.data]);
   const byId = useMemo(() => new Map(realItems.map((m) => [m.id, m])), [realItems]);
 
-  // Read receipt: only when MY message is the last one in the thread. If the
-  // other person has replied since, my message is buried above theirs and no
-  // receipt should show (otherwise both people see a stale "Seen" on an older
-  // message they sent). The receipt renders pinned to the bottom of the list.
+  // Read receipt: only when MY message is the last one in the thread.
   const lastItem = realItems.length ? realItems[realItems.length - 1] : undefined;
   const lastMine = lastItem?.sender_id === userId ? lastItem : undefined;
   const lastMineRead = Boolean(lastMine?.read_at);
@@ -557,6 +245,7 @@ export default function ChatScreen() {
   }, [lastMine?.read_at]);
 
   const sendReady = mock || Boolean(conversationId);
+  const scrollToEnd = () => requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
 
   const send = () => {
     const text = draft.trim();
@@ -573,7 +262,7 @@ export default function ChatScreen() {
       );
     }
     if (!text) {
-      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+      scrollToEnd();
       return;
     }
     setDraft("");
@@ -595,412 +284,348 @@ export default function ChatScreen() {
         }
       );
     }
-    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+    scrollToEnd();
   };
 
-  // Long-press menu on a message: iMessage-style emoji quick-bar (any emoji
-  // via the full picker) + actions — replaces the old alert with three
-  // hardcoded reactions.
+  // Long-press menu on a message: emoji quick-bar + actions.
   const [actionTarget, setActionTarget] = useState<{ message: ChatMessage; mine: boolean } | null>(null);
   const messageActions = (message: ChatMessage, mine: boolean) => setActionTarget({ message, mine });
   const actionMenuItems = (): MessageAction[] => {
     if (!actionTarget) return [];
     const { message, mine } = actionTarget;
-    const withinWindow = Date.now() - new Date(message.sent_at).getTime() < 15 * 60_000;
+    const withinWindow = Date.now() - new Date(message.sent_at).getTime() < UNSEND_WINDOW_MS;
     const items: MessageAction[] = [
-      { label: "Reply", icon: CornerUpLeft, onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine }) }
+      {
+        label: "Reply",
+        icon: CornerUpLeft,
+        onPress: () => setReplyTo({ id: message.id, text: message.content ?? "Media", mine })
+      }
     ];
     if (message.content) {
-      items.push({ label: "Forward", icon: Forward, onPress: () => sheet.open(<ForwardSheet content={message.content ?? ""} />) });
+      items.push({
+        label: "Forward",
+        icon: Forward,
+        onPress: () => sheet.open(<ForwardSheet content={message.content ?? ""} />)
+      });
     }
     if (mine && withinWindow && message.media_url === null) {
-      items.push({ label: "Unsend for everyone", icon: Trash2, destructive: true, onPress: () => unsend.mutate(message.id) });
+      items.push({
+        label: "Unsend for everyone",
+        icon: Trash2,
+        destructive: true,
+        onPress: () => unsend.mutate(message.id)
+      });
     }
     items.push({ label: "Delete for me", icon: EyeOff, destructive: true, onPress: () => hide.mutate(message.id) });
     return items;
   };
 
+  const openDetails = () => {
+    if (!conversationId) return;
+    router.push(
+      (isGroup ? `/chat-details/${conversationId}` : `/chat-details/${conversationId}?peer=${realProfileId}`) as Href
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      {/* Chat header — big avatar + name, whole block opens their profile. */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 4,
-          paddingTop: insets.top + 6,
-          paddingHorizontal: 8,
-          paddingBottom: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.graphite
-        }}
-      >
-        <Pressable onPress={() => router.back()} accessibilityLabel="Back" hitSlop={8} style={{ padding: 8 }}>
-          <ChevronLeft size={26} color={colors.white} strokeWidth={2.2} />
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            // IG DMs: the header opens the conversation details screen —
-            // rename/members (groups) or the person + block (1:1), plus the
-            // media gallery, mute, and report. The old ⋯ menu is gone.
-            if (!conversationId) return;
-            router.push(
-              (isGroup
-                ? `/chat-details/${conversationId}`
-                : `/chat-details/${conversationId}?peer=${realProfileId}`) as Href
-            );
-          }}
-          disabled={!conversationId || (!isGroup && !realProfileId)}
-          accessibilityLabel={`Open ${title} details${headerPresence ? `, ${headerPresence}` : ""}`}
-          style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingRight: 12 }}
-        >
-          <Avatar name={title} uri={isGroup ? null : profile.data?.avatar_url} size={44} />
-          <View style={{ flex: 1 }}>
-            <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 17.5, letterSpacing: 17.5 * -0.01, color: colors.white }}>
-              {title}
-            </Text>
-            {mock || isGroup ? (
-              sub ? (
-                <Text numberOfLines={1} style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>
-                  {sub}
-                </Text>
-              ) : null
-            ) : (
-              <PresenceLine
-                username={profile.data?.username}
-                typing={presence.otherTyping}
-                online={presence.otherOnline}
-                lastSeenAt={activity.data?.lastSeenAt ?? null}
-                statusVisible={activity.data?.visible ?? false}
-              />
-            )}
-          </View>
-        </Pressable>
-        {/* No ⋯ menu — mute/block/report all live on the details screen
-            behind the header tap (IG DMs). */}
-      </View>
+      <ChatHeader
+        title={title}
+        avatarUrl={isGroup ? null : profile.data?.avatar_url}
+        accessibilityHint={headerPresence || undefined}
+        onBack={() => router.back()}
+        onOpenDetails={conversationId && (isGroup || realProfileId) ? openDetails : undefined}
+        subtitle={
+          mock || isGroup ? (
+            sub ? (
+              <Text variant="meta" numberOfLines={1}>
+                {sub}
+              </Text>
+            ) : null
+          ) : (
+            <PresenceLine
+              username={profile.data?.username}
+              typing={presence.otherTyping}
+              online={presence.otherOnline}
+              lastSeenAt={activity.data?.lastSeenAt ?? null}
+              statusVisible={activity.data?.visible ?? false}
+            />
+          )
+        }
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? space[2] : 0}
       >
         <ScrollView
           ref={scrollRef}
           keyboardShouldPersistTaps="handled"
           // Dragging the thread down tucks the keyboard away (iOS Messages).
           keyboardDismissMode="interactive"
-          contentContainerStyle={{ flexGrow: 1, paddingTop: 8, paddingHorizontal: 16, paddingBottom: 16 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingTop: space[2],
+            paddingHorizontal: space[4],
+            paddingBottom: space[4]
+          }}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
-        {/* Tapping empty space in the thread dismisses the keyboard; bubbles
-            keep their own presses. */}
-        <RNPressable onPress={Keyboard.dismiss} style={{ flexGrow: 1, gap: 4 }} accessible={false}>
-          {mockConversation ? (
-            <>
-              {mockConversation.seed.map((item, index) => item.kind === "sep" ? (
-                <TimeSeparator key={`sep-${index}`} label={item.label} />
-              ) : (
-                <MessageBubble
-                  key={`msg-${index}`}
-                  mine={item.mine}
-                  text={item.text}
-                  senderFirst={mockConversation.group ? item.senderFirst : undefined}
-                />
-              ))}
-              {mockSent.map((text, index) => (
-                <MessageBubble key={`sent-${index}`} mine text={text} />
-              ))}
-            </>
-          ) : visibleItems.length ? (
-            <>
-              <TimeSeparator label="Today" />
-              {visibleItems.map((message) => {
-                const mine = message.sender_id === userId;
-                const rows = reactions.data?.[message.id] ?? [];
-                const emojis = Array.from(new Set(rows.map((r) => r.emoji)));
-                const parent = message.reply_to_id ? byId.get(message.reply_to_id) : null;
-                if (message.deleted_at) {
-                  return (
-                    <Text key={message.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", marginVertical: 3, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.iron, fontFamily: "Geist_400Regular", fontSize: 13, fontStyle: "italic", color: colors.fog }}>
-                      {mine ? "You unsent a message" : "Unsent a message"}
-                    </Text>
-                  );
-                }
-                // The reply/forward/unsend/delete/react actions live only behind
-                // a long-press menu — unreachable by a screen reader. Expose them
-                // as rotor actions routed to the same handlers (WCAG 2.1.1/2.5.1).
-                const withinWindow = Date.now() - new Date(message.sent_at).getTime() < 15 * 60_000;
-                const canUnsend = mine && withinWindow && message.media_url === null;
-                const a11yActions = [
-                  { name: "react", label: "React" },
-                  { name: "reply", label: "Reply" },
-                  ...(message.content ? [{ name: "forward", label: "Forward" }] : []),
-                  ...(canUnsend ? [{ name: "unsend", label: "Unsend for everyone" }] : []),
-                  { name: "delete", label: "Delete for me" }
-                ];
-                return (
-                  <RNPressable
-                    key={message.id}
-                    onLongPress={() => messageActions(message, mine)}
-                    delayLongPress={220}
-                    accessibilityActions={a11yActions}
-                    onAccessibilityAction={(event) => {
-                      switch (event.nativeEvent.actionName) {
-                        case "react":
-                          messageActions(message, mine);
-                          break;
-                        case "reply":
-                          setReplyTo({ id: message.id, text: message.content ?? "Media", mine });
-                          break;
-                        case "forward":
-                          if (message.content) sheet.open(<ForwardSheet content={message.content ?? ""} />);
-                          break;
-                        case "unsend":
-                          if (canUnsend) unsend.mutate(message.id);
-                          break;
-                        case "delete":
-                          hide.mutate(message.id);
-                          break;
-                      }
-                    }}
-                  >
-                    {parent ? (
-                      <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "78%", marginBottom: -2, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.slate }}>
-                        <Text numberOfLines={1} style={{ fontSize: 11.5, color: colors.fog }}>
-                          {parent.content ?? "Media"}
+          {/* Tapping empty space in the thread dismisses the keyboard; bubbles
+              keep their own presses. */}
+          <RNPressable onPress={Keyboard.dismiss} style={{ flexGrow: 1, gap: space[1] }} accessible={false}>
+            {mockConversation ? (
+              <>
+                {mockConversation.seed.map((item, index) =>
+                  item.kind === "sep" ? (
+                    <TimeSeparator key={`sep-${index}`} label={item.label} />
+                  ) : (
+                    <MessageBubble
+                      key={`msg-${index}`}
+                      mine={item.mine}
+                      text={item.text}
+                      senderFirst={mockConversation.group ? item.senderFirst : undefined}
+                    />
+                  )
+                )}
+                {mockSent.map((text, index) => (
+                  <MessageBubble key={`sent-${index}`} mine text={text} />
+                ))}
+              </>
+            ) : visibleItems.length ? (
+              <>
+                <TimeSeparator label="Today" />
+                {visibleItems.map((message) => {
+                  const mine = message.sender_id === userId;
+                  const rows = reactions.data?.[message.id] ?? [];
+                  const emojis = Array.from(new Set(rows.map((r) => r.emoji)));
+                  const parent = message.reply_to_id ? byId.get(message.reply_to_id) : null;
+                  if (message.deleted_at) {
+                    return (
+                      <View
+                        key={message.id}
+                        style={{
+                          alignSelf: mine ? "flex-end" : "flex-start",
+                          marginVertical: 3,
+                          paddingHorizontal: space[3] + 2,
+                          paddingVertical: space[2],
+                          borderRadius: radius.md,
+                          borderWidth: 1,
+                          borderColor: tokens.border.default
+                        }}
+                      >
+                        <Text variant="meta" className="italic">
+                          {mine ? "You unsent a message" : "Unsent a message"}
                         </Text>
                       </View>
-                    ) : null}
-                    {/* Received messages show the sender's avatar to the left (#7).
-                        Groups resolve each sender from the member list. */}
-                    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}>
-                      {!mine ? (
-                        <Avatar
-                          name={isGroup ? memberById.get(message.sender_id)?.name ?? "?" : title}
-                          uri={isGroup ? memberById.get(message.sender_id)?.avatarUrl ?? null : profile.data?.avatar_url}
-                          size={26}
-                        />
+                    );
+                  }
+                  // The long-press actions are unreachable by a screen reader —
+                  // expose them as rotor actions routed to the same handlers.
+                  const withinWindow = Date.now() - new Date(message.sent_at).getTime() < UNSEND_WINDOW_MS;
+                  const canUnsend = mine && withinWindow && message.media_url === null;
+                  const a11yActions = [
+                    { name: "react", label: "React" },
+                    { name: "reply", label: "Reply" },
+                    ...(message.content ? [{ name: "forward", label: "Forward" }] : []),
+                    ...(canUnsend ? [{ name: "unsend", label: "Unsend for everyone" }] : []),
+                    { name: "delete", label: "Delete for me" }
+                  ];
+                  const senderMember = isGroup ? memberById.get(message.sender_id) : undefined;
+                  return (
+                    <RNPressable
+                      key={message.id}
+                      onLongPress={() => messageActions(message, mine)}
+                      delayLongPress={220}
+                      accessibilityActions={a11yActions}
+                      onAccessibilityAction={(event) => {
+                        switch (event.nativeEvent.actionName) {
+                          case "react":
+                            messageActions(message, mine);
+                            break;
+                          case "reply":
+                            setReplyTo({ id: message.id, text: message.content ?? "Media", mine });
+                            break;
+                          case "forward":
+                            if (message.content) sheet.open(<ForwardSheet content={message.content ?? ""} />);
+                            break;
+                          case "unsend":
+                            if (canUnsend) unsend.mutate(message.id);
+                            break;
+                          case "delete":
+                            hide.mutate(message.id);
+                            break;
+                        }
+                      }}
+                    >
+                      {parent ? (
+                        <View
+                          style={{
+                            alignSelf: mine ? "flex-end" : "flex-start",
+                            maxWidth: "78%",
+                            marginBottom: -2,
+                            paddingLeft: space[2] + 2,
+                            borderLeftWidth: 2,
+                            borderLeftColor: tokens.border.strong
+                          }}
+                        >
+                          <Text variant="meta" numberOfLines={1}>
+                            {parent.content ?? "Media"}
+                          </Text>
+                        </View>
                       ) : null}
-                      <View style={{ flex: 1 }}>
-                        {message.reply_story_media ? (
-                          <StoryReplyPreview path={message.reply_story_media} mine={mine} />
+                      {/* Received messages show the sender's avatar to the left;
+                          groups resolve each sender from the member list. */}
+                      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: space[1] + 3 }}>
+                        {!mine ? (
+                          <Avatar
+                            name={isGroup ? (senderMember?.name ?? "?") : title}
+                            uri={isGroup ? (senderMember?.avatarUrl ?? null) : profile.data?.avatar_url}
+                            size={26}
+                          />
                         ) : null}
-                        {message.kind === "share" && message.shared_kind ? (
-                          <ShareCard
-                            mine={mine}
-                            label={message.content ?? "Shared"}
-                            sharedKind={message.shared_kind}
-                            sharedId={message.shared_id}
-                            onOpen={() => {
-                              if (message.shared_kind === "post" && message.shared_id) router.push(`/post/${message.shared_id}`);
-                              else if ((message.shared_kind === "checkin" || message.shared_kind === "stream") && message.shared_id) router.push(`/gym/${message.shared_id}`);
-                            }}
-                          />
-                        ) : message.view_once ? (
-                          <ViewOnceBubble message={message} mine={mine} onOpen={setViewOnceOpen} />
-                        ) : message.media_url ? (
-                          <ChatMediaBubble
-                            path={message.media_url}
-                            mine={mine}
-                            onOpen={setPhotoViewer}
-                            onLongPress={() => messageActions(message, mine)}
-                          />
-                        ) : (
-                          <MessageBubble
-                            mine={mine}
-                            text={message.content ?? ""}
-                            senderName={isGroup ? memberById.get(message.sender_id)?.name ?? "Member" : title}
-                            senderFirst={
-                              isGroup && !mine
-                                ? (memberById.get(message.sender_id)?.name ?? "Member").split(" ")[0]
-                                : undefined
-                            }
-                          />
-                        )}
+                        <View style={{ flex: 1 }}>
+                          {message.reply_story_media ? (
+                            <StoryReplyPreview path={message.reply_story_media} mine={mine} />
+                          ) : null}
+                          {message.kind === "share" && message.shared_kind ? (
+                            <ShareCard
+                              mine={mine}
+                              label={message.content ?? "Shared"}
+                              sharedKind={message.shared_kind}
+                              onOpen={() => {
+                                if (message.shared_kind === "post" && message.shared_id)
+                                  router.push(`/post/${message.shared_id}`);
+                                else if (
+                                  (message.shared_kind === "checkin" || message.shared_kind === "stream") &&
+                                  message.shared_id
+                                )
+                                  router.push(`/gym/${message.shared_id}`);
+                              }}
+                            />
+                          ) : message.view_once ? (
+                            <ViewOnceBubble message={message} mine={mine} onOpen={setViewOnceOpen} />
+                          ) : message.media_url ? (
+                            <ChatMediaBubble
+                              path={message.media_url}
+                              mine={mine}
+                              onOpen={setPhotoViewer}
+                              onLongPress={() => messageActions(message, mine)}
+                            />
+                          ) : (
+                            <MessageBubble
+                              mine={mine}
+                              text={message.content ?? ""}
+                              senderName={isGroup ? (senderMember?.name ?? "Member") : title}
+                              senderFirst={
+                                isGroup && !mine ? (senderMember?.name ?? "Member").split(" ")[0] : undefined
+                              }
+                            />
+                          )}
+                        </View>
                       </View>
-                    </View>
-                    {emojis.length ? (
-                      <View style={{ alignSelf: mine ? "flex-end" : "flex-start", flexDirection: "row", gap: 3, marginTop: -2, marginBottom: 2, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
-                        {emojis.map((e) => (
-                          <Text key={e} style={{ fontSize: 12 }}>{e}</Text>
-                        ))}
-                      </View>
-                    ) : null}
-                  </RNPressable>
-                );
-              })}
-              {/* Delivery status under my most recent message (#5/#6):
-                  "Delivered" until opened, then "Seen {t}". Hidden in groups —
-                  the shared read stamp can't say WHO saw it. */}
-              {lastMine && !lastMine.deleted_at && !isGroup ? (
-                <Text style={{ alignSelf: "flex-end", paddingRight: 4, paddingTop: 2, fontFamily: "GeistMono_400Regular", fontSize: 9.5, color: colors.fog }}>
-                  {lastMineRead ? `Seen ${seenLabel}` : "Delivered"}
-                </Text>
-              ) : null}
-            </>
-          ) : conversation.isError ? (
-            <View style={{ flex: 1, minHeight: 260, alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>
-                COULDN&apos;T OPEN THIS CHAT
-              </Text>
-              <Pressable onPress={() => void conversation.refetch()} accessibilityRole="button">
-                <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.white }}>
-                  TRY AGAIN
-                </Text>
-              </Pressable>
-            </View>
-          ) : messages.isLoading || conversation.isLoading ? (
-            <SkeletonChatBubbles />
-          ) : (
-            // Empty thread after a friend-add: system-style prompt to start the DM.
-            <View style={{ flex: 1, minHeight: 260, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
-              <View
-                style={{
-                  alignItems: "center",
-                  gap: 6,
-                  paddingVertical: 16,
-                  paddingHorizontal: 22,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: colors.iron,
-                  backgroundColor: colors.graphite
-                }}
-              >
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white, textAlign: "center" }}>
-                  {isGroup
+                      {emojis.length ? (
+                        <View
+                          style={{
+                            alignSelf: mine ? "flex-end" : "flex-start",
+                            flexDirection: "row",
+                            gap: 3,
+                            marginTop: -2,
+                            marginBottom: 2,
+                            paddingHorizontal: space[2],
+                            paddingVertical: 2,
+                            borderRadius: radius.pill,
+                            backgroundColor: tokens.bg.raised,
+                            borderWidth: 1,
+                            borderColor: tokens.border.default
+                          }}
+                        >
+                          {emojis.map((e) => (
+                            <Text key={e} variant="label">
+                              {e}
+                            </Text>
+                          ))}
+                        </View>
+                      ) : null}
+                    </RNPressable>
+                  );
+                })}
+                {/* Delivery status under my most recent message. Hidden in
+                    groups — the shared read stamp can't say WHO saw it. */}
+                {lastMine && !lastMine.deleted_at && !isGroup ? (
+                  <Text variant="mono" className="self-end pr-1 pt-[2px] text-[10px]">
+                    {lastMineRead ? `Seen ${seenLabel}` : "Delivered"}
+                  </Text>
+                ) : null}
+              </>
+            ) : conversation.isError ? (
+              <EmptyState title="Couldn't open this chat" center paddingTop={space[12]}>
+                <Pressable
+                  onPress={() => void conversation.refetch()}
+                  haptic="none"
+                  accessibilityRole="button"
+                  accessibilityLabel="Try again"
+                >
+                  <Text variant="meta-strong" className="text-white">
+                    Try again
+                  </Text>
+                </Pressable>
+              </EmptyState>
+            ) : messages.isLoading || conversation.isLoading ? (
+              <SkeletonChatBubbles />
+            ) : (
+              // Empty thread after a friend-add: system-style prompt to start the DM.
+              <EmptyState
+                art={EMPTY_ART.chat}
+                title={
+                  isGroup
                     ? groupCreatorName
                       ? groupInfo.data?.createdBy === userId
                         ? "You created this group."
                         : `${groupCreatorName} added you.`
                       : "You're in this group."
-                    : `${profile.data?.display_name ?? title} added you.`}
-                </Text>
-                <Text style={{ fontFamily: "Geist_400Regular", fontSize: 12.5, color: colors.silver, textAlign: "center" }}>
-                  Start a message now.
-                </Text>
-              </View>
-            </View>
-          )}
-        </RNPressable>
-        </ScrollView>
-
-        <View style={{ position: "relative", paddingHorizontal: 16, paddingTop: 10, paddingBottom: keyboardVisible ? 10 : insets.bottom + 14, backgroundColor: colors.black }}>
-          {/* Staged media preview — confirm with Send, X to discard. */}
-          {pendingMedia ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <View style={{ borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: pendingMedia.viewOnce ? tokens.accent.gold : colors.iron }}>
-                <Image source={{ uri: pendingMedia.uri }} style={{ width: 52, height: 66 }} contentFit="cover" />
-              </View>
-              <Text style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
-                {pendingMedia.viewOnce
-                  ? "View-once photo — they can open it one time"
-                  : pendingMedia.kind === "video"
-                    ? "Video ready to send"
-                    : "Photo ready to send"}
-              </Text>
-              <Pressable onPress={() => setPendingMedia(null)} accessibilityLabel="Remove attachment" hitSlop={8}>
-                <X size={16} color={colors.fog} strokeWidth={2} />
-              </Pressable>
-            </View>
-          ) : null}
-          {/* Quote-reply preview (#10) */}
-          {replyTo ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: tokens.accent.gold }}>
-              <CornerUpLeft size={14} color={colors.fog} strokeWidth={2} />
-              <Text numberOfLines={1} style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
-                Replying to {replyTo.mine ? "yourself" : title}: {replyTo.text}
-              </Text>
-              <Pressable onPress={() => setReplyTo(null)} accessibilityLabel="Cancel reply" hitSlop={8}>
-                <X size={16} color={colors.fog} strokeWidth={2} />
-              </Pressable>
-            </View>
-          ) : null}
-          <View
-            style={{
-              minHeight: 46,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              borderWidth: 1,
-              borderColor: colors.iron,
-              borderRadius: 999,
-              backgroundColor: colors.graphite,
-              paddingLeft: 16,
-              paddingRight: 5,
-              paddingVertical: 5
-            }}
-          >
-            {!mock && sendReady ? (
-              <Pressable
-                onPress={() => conversationId && router.push(`/chat-camera?conversation=${conversationId}` as Href)}
-                accessibilityLabel="Take a view-once photo"
-                hitSlop={6}
-                disabled={sendMedia.isPending || !conversationId}
-              >
-                <Camera size={20} color={sendMedia.isPending ? colors.iron : colors.silver} strokeWidth={2} />
-              </Pressable>
-            ) : null}
-            {!mock && sendReady ? (
-              <Pressable onPress={() => void pickImage()} accessibilityLabel="Attach a photo" hitSlop={6} disabled={sendMedia.isPending}>
-                <ImagePlus size={20} color={sendMedia.isPending ? colors.iron : colors.silver} strokeWidth={2} />
-              </Pressable>
-            ) : null}
-            {!mock && sendReady ? (
-              <Pressable
-                onPress={() => void toggleRecord()}
-                accessibilityLabel={recording ? "Stop and send voice message" : "Record a voice message"}
-                hitSlop={6}
-              >
-                {recording ? (
-                  <Square size={18} color={colors.white} strokeWidth={2} fill={colors.white} />
-                ) : (
-                  <Mic size={20} color={colors.silver} strokeWidth={2} />
-                )}
-              </Pressable>
-            ) : null}
-            {recording ? (
-              <Text style={{ flex: 1, paddingVertical: 7, fontFamily: "GeistMono_400Regular", fontSize: 13, color: colors.white }}>
-                {`\u25cf Recording\u2026 0:${String(recordSecs).padStart(2, "0")}`}
-              </Text>
-            ) : (
-              <TextInput
-                value={draft}
-                onChangeText={(v) => {
-                  setDraft(v);
-                  if (!mock) presence.notifyTyping();
-                }}
-                placeholder={isBlocked ? "You blocked this person" : `Message\u2026`}
-                placeholderTextColor={colors.fog}
-                editable={!isBlocked}
-                returnKeyType="send"
-                onSubmitEditing={send}
-                style={{ flex: 1, paddingVertical: 7, fontSize: 14, color: colors.bone }}
+                    : `${profile.data?.display_name ?? title} added you.`
+                }
+                body="Start a message now."
+                center
+                paddingTop={space[12]}
               />
             )}
-            <Pressable
-              onPress={send}
-              disabled={(!draft.trim() && !pendingMedia) || !sendReady || sendReal.isPending || recording}
-              accessibilityRole="button"
-              accessibilityLabel="Send message"
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: (draft.trim() || pendingMedia) && !recording ? colors.white : colors.iron
-                }}
-              >
-                <Send color={(draft.trim() || pendingMedia) && !recording ? colors.black : colors.fog} size={16} strokeWidth={2.2} />
-              </View>
-            </Pressable>
-          </View>
-        </View>
+          </RNPressable>
+        </ScrollView>
+
+        <ChatComposer
+          draft={draft}
+          onChangeDraft={(v) => {
+            setDraft(v);
+            if (!mock) presence.notifyTyping();
+          }}
+          onSend={send}
+          canSend={Boolean(draft.trim() || pendingMedia) && sendReady}
+          sending={sendReal.isPending}
+          placeholder={isBlocked ? "You blocked this person" : "Message…"}
+          editable={!isBlocked}
+          keyboardVisible={keyboardVisible}
+          replyTo={replyTo}
+          replyToName={title}
+          onCancelReply={() => setReplyTo(null)}
+          pendingMedia={pendingMedia}
+          onRemoveMedia={() => setPendingMedia(null)}
+          mediaActions={
+            !mock && sendReady
+              ? {
+                  disabled: sendMedia.isPending || !conversationId,
+                  onCamera: () => conversationId && router.push(`/chat-camera?conversation=${conversationId}` as Href),
+                  onPickImage: () => void pickImage(),
+                  onToggleRecord: () => void toggleRecord(),
+                  recording,
+                  recordSecs
+                }
+              : undefined
+          }
+        />
       </KeyboardAvoidingView>
 
-      {/* One-shot view-once photo overlay — closing marks it viewed. */}
       {photoViewer ? <ChatPhotoViewer uri={photoViewer} onClose={() => setPhotoViewer(null)} /> : null}
 
       {viewOnceOpen?.media_url ? (
@@ -1011,7 +636,6 @@ export default function ChatScreen() {
         />
       ) : null}
 
-      {/* iMessage-style reaction + action menu (long-press on a message). */}
       <MessageActionMenu
         visible={actionTarget !== null}
         onClose={() => setActionTarget(null)}
@@ -1021,7 +645,10 @@ export default function ChatScreen() {
         actions={actionMenuItems()}
         preview={
           actionTarget
-            ? { text: actionTarget.message.content ?? (actionTarget.message.media_url ? "Photo" : null), mine: actionTarget.mine }
+            ? {
+                text: actionTarget.message.content ?? (actionTarget.message.media_url ? "Photo" : null),
+                mine: actionTarget.mine
+              }
             : null
         }
       />

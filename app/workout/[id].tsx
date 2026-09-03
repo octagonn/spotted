@@ -1,51 +1,37 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { appAlert } from "@/components/ui/AppDialog";
-import { Bookmark, ChevronLeft, Dumbbell, Flame, Pencil, Repeat, SquarePen, Trash2, Trophy } from "lucide-react-native";
+import { Bookmark, Pencil, Repeat, SquarePen, Trash2, Trophy } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/AppDialog";
+import { BackButton } from "@/components/ui/BackButton";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { Pressable } from "@/components/ui/Pressable";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { SkeletonHeaderDetail, SkeletonWorkoutRow } from "@/components/ui/Skeleton";
-import { useDeleteWorkout, useRenameWorkout, useWorkout, type CardioSet, type LiftSet } from "@/hooks/queries/useWorkouts";
-import { showToast } from "@/stores/ui";
-import { useAuthStore } from "@/stores/auth";
+import { Stat } from "@/components/ui/Stat";
+import { Text } from "@/components/ui/Text";
+import { ExerciseIcon, exerciseKind } from "@/components/workout/ExerciseIcon";
+import { PrBadge } from "@/components/workout/PrBadge";
 import { useSaveRoutine } from "@/hooks/queries/useRoutines";
-import { repeatableExercises } from "@/lib/repeatWorkout";
-import { fmtClock } from "@/lib/workoutLibrary";
+import {
+  useDeleteWorkout,
+  useRenameWorkout,
+  useWorkout,
+  type CardioSet,
+  type LiftSet
+} from "@/hooks/queries/useWorkouts";
 import { relDay } from "@/lib/relDay";
+import { repeatableExercises } from "@/lib/repeatWorkout";
+import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
-import { radius, tokens } from "@/theme/tokens";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
-const DISP = "Geist_700Bold";
-const NUM = "GeistMono_500Medium";
-const CARDIO = "#FF8A4C";
-const CARDIO_TINT = "rgba(255,138,76,0.14)";
-
-function Micro({
-  children,
-  style,
-  accessibilityRole
-}: {
-  children: React.ReactNode;
-  style?: object;
-  accessibilityRole?: "header";
-}) {
-  return (
-    <Text accessibilityRole={accessibilityRole} style={[{ fontFamily: "Geist_600SemiBold", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: tokens.text.tertiary }, style]}>
-      {children}
-    </Text>
-  );
-}
-
-function PrBadge() {
-  return (
-    <View style={{ backgroundColor: tokens.accent.gold, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-      <Text style={{ fontFamily: DISP, fontSize: 10, letterSpacing: 1, color: colors.black }}>PR</Text>
-    </View>
-  );
-}
-
-/** Read-only session detail (prototype SESSION DETAIL) — self or friend (RLS). */
+/** Read-only session detail — self or friend (RLS). */
 export default function WorkoutDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -84,9 +70,8 @@ export default function WorkoutDetailScreen() {
 
   if (workout.isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: tokens.bg.base, paddingTop: insets.top + 12 }}>
+      <View style={{ flex: 1, backgroundColor: colors.black, paddingTop: insets.top + space[3] }}>
         <SkeletonHeaderDetail />
-        <SkeletonWorkoutRow />
         <SkeletonWorkoutRow />
         <SkeletonWorkoutRow />
         <SkeletonWorkoutRow />
@@ -95,164 +80,169 @@ export default function WorkoutDetailScreen() {
   }
   if (!workout.data) {
     return (
-      <View style={{ flex: 1, backgroundColor: tokens.bg.base, paddingTop: insets.top + 12 }}>
-        <Pressable accessibilityLabel="Back" onPress={() => router.back()} hitSlop={10} style={{ paddingHorizontal: 18 }}>
-          <ChevronLeft size={26} color={tokens.text.secondary} />
-        </Pressable>
-        <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
-          This workout is no longer available.
-        </Text>
+      <View style={{ flex: 1, backgroundColor: colors.black, paddingTop: insets.top + space[3] }}>
+        <View style={{ paddingHorizontal: space[4] }}>
+          <BackButton />
+        </View>
+        <EmptyState title="This workout is no longer available." center />
       </View>
     );
   }
 
   const w = workout.data;
+  const mine = w.userId === myId;
   const timeLabel = new Date(w.startedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const when = `${relDay(w.startedAt)} · ${timeLabel}`;
-  const stats = [
-    { v: `${w.totalSets}`, l: "Sets" },
-    { v: `${w.exerciseCount}`, l: "Exercises" },
-    { v: fmtClock(w.durationSeconds), l: "Duration" },
-    { v: `${w.prs.length}`, l: w.prs.length === 1 ? "PR" : "PRs" }
-  ];
+
+  const commitRename = () => {
+    setEditing(false);
+    const next = nameDraft.trim();
+    if (next && next !== w.name) {
+      rename.mutate({ workoutId: w.id, name: next }, { onError: () => showToast("Couldn't rename — try again") });
+    }
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: tokens.bg.base }}>
-      {/* header */}
-      <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 24, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: tokens.border.default }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Pressable accessibilityLabel="Back" onPress={() => router.back()} hitSlop={10} style={{ marginLeft: -6, padding: 2 }}>
-            <ChevronLeft size={28} color={tokens.text.secondary} />
-          </Pressable>
-          {editing ? (
-            <TextInput
-              autoFocus
-              value={nameDraft}
-              onChangeText={setNameDraft}
-              maxLength={60}
-              onSubmitEditing={() => {
-                setEditing(false);
-                const next = nameDraft.trim();
-                if (next && next !== w.name) {
-                  rename.mutate({ workoutId: w.id, name: next }, { onError: () => showToast("Couldn't rename — try again") });
-                }
-              }}
-              onBlur={() => setEditing(false)}
-              style={{ flex: 1, fontFamily: DISP, fontSize: 24, color: tokens.text.primary, borderBottomWidth: 1, borderBottomColor: tokens.accent.gold, paddingVertical: 2 }}
-            />
-          ) : (
+    <View style={{ flex: 1, backgroundColor: colors.black }}>
+      {/* header: back · name (owner: tap to rename) · edit · delete */}
+      <View
+        style={{
+          paddingTop: insets.top + space[2],
+          paddingHorizontal: space[4],
+          paddingBottom: space[3],
+          borderBottomWidth: 1,
+          borderBottomColor: tokens.border.default
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
+          <BackButton />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {editing ? (
+              <TextInput
+                autoFocus
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                maxLength={60}
+                onSubmitEditing={commitRename}
+                onBlur={commitRename}
+                accessibilityLabel="Workout name"
+                style={{
+                  fontFamily: "Geist_700Bold",
+                  fontSize: 20,
+                  color: tokens.text.primary,
+                  borderBottomWidth: 1,
+                  borderBottomColor: tokens.border.strong,
+                  paddingVertical: 2
+                }}
+              />
+            ) : (
+              <Pressable
+                disabled={!mine}
+                haptic="none"
+                accessibilityLabel={mine ? "Rename workout" : w.name}
+                onPress={() => {
+                  setNameDraft(w.name);
+                  setEditing(true);
+                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}
+              >
+                <Text variant="heading" numberOfLines={1} className="flex-shrink">
+                  {w.name}
+                </Text>
+                {mine ? <Pencil size={13} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} /> : null}
+              </Pressable>
+            )}
+            <Text variant="meta" className="mt-[2px]">
+              {when}
+            </Text>
+          </View>
+          {mine ? (
             <>
-              <Text accessibilityRole="header" numberOfLines={1} style={{ flexShrink: 1, fontFamily: DISP, fontSize: 26, letterSpacing: -0.6, color: tokens.text.primary }}>
-                {w.name}
-              </Text>
-              {w.userId === myId ? (
-                <Pressable
-                  accessibilityLabel="Rename workout"
-                  onPress={() => {
-                    setNameDraft(w.name);
-                    setEditing(true);
-                  }}
-                  hitSlop={10}
-                >
-                  <Pencil size={17} color={tokens.text.tertiary} strokeWidth={2} />
-                </Pressable>
-              ) : null}
-              <View style={{ flex: 1 }} />
-              {w.userId === myId ? (
-                <>
-                  <Pressable
-                    accessibilityLabel="Edit workout"
-                    onPress={() => router.push(`/workout?edit=${w.id}`)}
-                    hitSlop={10}
-                    style={{ padding: 4 }}
-                  >
-                    <SquarePen size={19} color={tokens.text.secondary} strokeWidth={2} />
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel="Delete workout"
-                    onPress={() => confirmDelete(w.id, Boolean(w.postId))}
-                    hitSlop={10}
-                    style={{ padding: 4 }}
-                  >
-                    <Trash2 size={19} color="#E5484D" strokeWidth={2} />
-                  </Pressable>
-                </>
-              ) : null}
+              <IconButton
+                variant="plain"
+                size={36}
+                icon={<SquarePen size={icon.size.sm} color={tokens.text.secondary} strokeWidth={icon.stroke.regular} />}
+                accessibilityLabel="Edit workout"
+                onPress={() => router.push(`/workout?edit=${w.id}`)}
+              />
+              <IconButton
+                variant="plain"
+                size={36}
+                icon={<Trash2 size={icon.size.sm} color={tokens.status.danger} strokeWidth={icon.stroke.regular} />}
+                accessibilityLabel="Delete workout"
+                haptic="warning"
+                onPress={() => confirmDelete(w.id, Boolean(w.postId))}
+              />
             </>
-          )}
+          ) : null}
         </View>
-        <Text style={{ paddingLeft: 36, marginTop: 4, fontSize: 14, color: tokens.text.tertiary }}>{when}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: insets.bottom + 28 }}>
-        {/* stat grid */}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-          {stats.map((st) => (
-            <View
-              key={st.l}
-              style={{ width: "48%", flexGrow: 1, borderWidth: 1, borderColor: tokens.border.default, backgroundColor: tokens.bg.raised, borderRadius: radius.md, padding: 16 }}
-            >
-              <Text style={{ fontFamily: NUM, fontSize: 26, lineHeight: 28, color: tokens.text.primary }}>{st.v}</Text>
-              <Micro style={{ marginTop: 6, letterSpacing: 1.5 }}>{st.l}</Micro>
-            </View>
-          ))}
+      <ScrollView contentContainerStyle={{ paddingTop: space[4], paddingBottom: insets.bottom + space[6] }}>
+        {/* stats — one flat row, no cards */}
+        <View style={{ flexDirection: "row", paddingHorizontal: space[4] }}>
+          <Stat value={w.totalSets} label="Sets" size="sm" />
+          <Stat value={w.exerciseCount} label={w.exerciseCount === 1 ? "Exercise" : "Exercises"} size="sm" />
+          <Stat value={Math.round(w.durationSeconds / 60)} unit="min" label="Duration" size="sm" />
+          <Stat value={w.prs.length} label={w.prs.length === 1 ? "PR" : "PRs"} size="sm" />
         </View>
 
-        {/* trophies earned */}
+        {/* PRs earned — achievement, so this is where gold lives */}
         {w.prs.length > 0 ? (
-          <View style={{ marginTop: 22 }}>
-            <Micro accessibilityRole="header" style={{ letterSpacing: 3, marginBottom: 12, marginHorizontal: 2 }}>Trophies earned</Micro>
-            <View style={{ gap: 12 }}>
+          <View style={{ marginTop: space[6], paddingHorizontal: space[4] }}>
+            <SectionLabel style={{ marginBottom: space[2] }}>Personal records</SectionLabel>
+            <View style={{ gap: space[2] }}>
               {w.prs.map((pr) => (
                 <View
                   key={pr.name}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 14,
-                    borderWidth: 1,
-                    borderColor: "rgba(232,180,76,0.35)",
+                    gap: space[3],
                     backgroundColor: tokens.accent.goldSubtle,
                     borderRadius: radius.md,
-                    paddingVertical: 15,
-                    paddingHorizontal: 16
+                    paddingVertical: space[3],
+                    paddingHorizontal: space[4]
                   }}
                 >
-                  <Trophy size={34} color={tokens.accent.gold} strokeWidth={1.6} />
+                  <Trophy size={icon.size.md} color={tokens.accent.gold} strokeWidth={icon.stroke.thin} />
                   <View style={{ flex: 1 }}>
-                    <Micro style={{ color: tokens.accent.gold }}>New PR</Micro>
-                    <Text style={{ marginTop: 1, fontFamily: DISP, fontSize: 17, color: tokens.text.primary }}>{pr.name}</Text>
+                    <Text variant="username">{pr.name}</Text>
+                    <Text variant="meta" className="text-gold">
+                      {pr.was}
+                    </Text>
                   </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ fontFamily: NUM, fontSize: 19, color: tokens.text.primary }}>{pr.value}</Text>
-                    <Text style={{ fontSize: 11, color: "#9A8A5A" }}>{pr.was}</Text>
-                  </View>
+                  <Text variant="numeral">{pr.value}</Text>
                 </View>
               ))}
             </View>
           </View>
         ) : null}
 
-        {/* exercises + sets */}
-        <View style={{ marginTop: 22 }}>
-          <Micro accessibilityRole="header" style={{ letterSpacing: 3, marginBottom: 12, marginHorizontal: 2 }}>Exercises</Micro>
-          <View style={{ gap: 14 }}>
+        {/* exercises + sets: one raised card per exercise, flat set rows inside */}
+        <View style={{ marginTop: space[6], paddingHorizontal: space[4] }}>
+          <SectionLabel style={{ marginBottom: space[2] }}>Exercises</SectionLabel>
+          <View style={{ gap: space[3] }}>
             {w.exercises.map((ex) => {
               const isCardio = ex.kind === "cardio";
-              const sets = ex.sets.filter((s) => s.done);
+              const logged = ex.sets.filter((s) => s.done);
+              const sets = logged.length ? logged : ex.sets;
               return (
-                <View key={ex.id} style={{ borderWidth: 1, borderColor: tokens.border.default, backgroundColor: tokens.bg.raised, borderRadius: radius.md, padding: 15 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                    <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: isCardio ? CARDIO_TINT : tokens.accent.goldSubtle, alignItems: "center", justifyContent: "center" }}>
-                      {isCardio ? <Flame size={18} color={CARDIO} strokeWidth={1.7} /> : <Dumbbell size={19} color={tokens.accent.gold} strokeWidth={1.8} />}
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={{ fontFamily: DISP, fontSize: 17, color: tokens.text.primary }}>{ex.name}</Text>
+                <View
+                  key={ex.id}
+                  style={{ backgroundColor: tokens.bg.raised, borderRadius: radius.md, padding: space[3] }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
+                    <ExerciseIcon kind={exerciseKind(ex.kind, ex.muscle)} size={40} />
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: space[2], flex: 1, minWidth: 0 }}>
+                      <Text variant="username" numberOfLines={1} className="flex-shrink">
+                        {ex.name}
+                      </Text>
                       {sets.some((s) => s.pr) ? <PrBadge /> : null}
                     </View>
                   </View>
-                  <View style={{ gap: 8 }}>
-                    {(sets.length ? sets : ex.sets).map((s, i) => {
+                  <View style={{ marginTop: space[2] }}>
+                    {sets.map((s, i) => {
                       const pr = Boolean(s.pr);
                       const text = isCardio
                         ? `${(s as CardioSet).mi} mi · ${(s as CardioSet).min} min`
@@ -266,21 +256,22 @@ export default function WorkoutDetailScreen() {
                           style={{
                             flexDirection: "row",
                             alignItems: "center",
-                            gap: 12,
-                            backgroundColor: pr ? tokens.accent.goldSubtle : tokens.bg.subtle,
-                            borderWidth: 1,
-                            borderColor: pr ? "rgba(232,180,76,0.4)" : tokens.border.default,
-                            borderRadius: 13,
-                            paddingVertical: 12,
-                            paddingHorizontal: 15
+                            gap: space[3],
+                            paddingVertical: space[2],
+                            borderTopWidth: i === 0 ? 0 : 1,
+                            borderTopColor: tokens.border.subtle
                           }}
                         >
-                          <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: tokens.bg.base, alignItems: "center", justifyContent: "center" }}>
-                            <Text style={{ fontFamily: NUM, fontSize: 13, color: tokens.text.secondary }}>{i + 1}</Text>
-                          </View>
-                          <Text style={{ flex: 1, fontFamily: "Geist_600SemiBold", fontSize: 16, color: tokens.text.primary }}>{text}</Text>
+                          <Text variant="numeral-sm" className="w-6 text-fog">
+                            {String(i + 1)}
+                          </Text>
+                          <Text variant="body-sm-strong" className="flex-1">
+                            {text}
+                          </Text>
                           {pr ? <PrBadge /> : null}
-                          <Text style={{ fontFamily: NUM, fontSize: 13, color: tokens.text.tertiary }}>{sub}</Text>
+                          <Text variant="meta" className="font-mono">
+                            {sub}
+                          </Text>
                         </View>
                       );
                     })}
@@ -289,65 +280,30 @@ export default function WorkoutDetailScreen() {
               );
             })}
             {w.exercises.length === 0 ? (
-              <Text style={{ paddingTop: 10, textAlign: "center", fontSize: 13, color: colors.fog }}>No exercises were logged.</Text>
+              <EmptyState title="No exercises were logged." center paddingTop={space[2]} />
             ) : null}
           </View>
         </View>
 
-        {/* Run it again — starts a NEW session with the same exercises and last
-            time's numbers as targets. Your own workouts only; a friend's
-            workout is a record, not a routine you can start. */}
-        {w.userId === myId && w.exercises.length > 0 ? (
-          <Pressable
-            accessibilityLabel={`Do ${w.name} again`}
-            onPress={() => router.push(`/workout?repeat=${w.id}`)}
-            style={{
-              marginTop: 26,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              paddingVertical: 15,
-              borderRadius: radius.md,
-              backgroundColor: tokens.text.primary
-            }}
-          >
-            <Repeat size={17} color={tokens.bg.base} strokeWidth={2.4} />
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: tokens.bg.base }}>
+        {/* Your own workouts only: a friend's workout is a record, not a routine you can start. */}
+        {mine && w.exercises.length > 0 ? (
+          <View style={{ marginTop: space[6], paddingHorizontal: space[4], gap: space[2] }}>
+            <Button
+              icon={<Repeat size={icon.size.xs} color={colors.black} strokeWidth={icon.stroke.bold} />}
+              onPress={() => router.push(`/workout?repeat=${w.id}`)}
+            >
               Do this workout again
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {/* Keep it as a named routine. Unlike the "do it again" shortcut, a
-            routine is pinned: it stays in your list no matter how many
-            sessions you log after it. Saved with nothing checked off — it's a
-            plan, not a copy of this session. */}
-        {w.userId === myId && w.exercises.length > 0 ? (
-          <Pressable
-            accessibilityLabel={`Save ${w.name} as a routine`}
-            onPress={() =>
-              saveRoutine.mutate({ name: w.name, exercises: repeatableExercises(w.exercises) })
-            }
-            disabled={saveRoutine.isPending}
-            style={{
-              marginTop: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              paddingVertical: 15,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              borderColor: tokens.border.default,
-              opacity: saveRoutine.isPending ? 0.5 : 1
-            }}
-          >
-            <Bookmark size={16} color={tokens.text.secondary} strokeWidth={2.2} />
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: tokens.text.secondary }}>
+            </Button>
+            <Button
+              variant="ghost"
+              icon={<Bookmark size={icon.size.xs} color={colors.bone} strokeWidth={icon.stroke.regular} />}
+              disabled={saveRoutine.isPending}
+              loading={saveRoutine.isPending}
+              onPress={() => saveRoutine.mutate({ name: w.name, exercises: repeatableExercises(w.exercises) })}
+            >
               Save as routine
-            </Text>
-          </Pressable>
+            </Button>
+          </View>
         ) : null}
       </ScrollView>
     </View>

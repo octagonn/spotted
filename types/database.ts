@@ -969,6 +969,7 @@ export type Database = {
           latitude: number
           longitude: number
           name: string
+          pin_locked: boolean
           source: string | null
         }
         Insert: {
@@ -983,6 +984,7 @@ export type Database = {
           latitude: number
           longitude: number
           name: string
+          pin_locked?: boolean
           source?: string | null
         }
         Update: {
@@ -997,6 +999,7 @@ export type Database = {
           latitude?: number
           longitude?: number
           name?: string
+          pin_locked?: boolean
           source?: string | null
         }
         Relationships: []
@@ -2480,6 +2483,16 @@ export type Database = {
           p_latitude: number
           p_longitude: number
           p_verified?: boolean
+          p_accuracy_m?: number
+        }
+        Returns: string
+      }
+      fix_gym_pin: {
+        Args: {
+          p_gym_id: string
+          p_latitude: number
+          p_longitude: number
+          p_accuracy_m?: number
         }
         Returns: string
       }
@@ -2537,10 +2550,6 @@ export type Database = {
       join_gym_community: { Args: { p_gym_id: string }; Returns: string }
       community_presence_now: { Args: { p_community_id: string }; Returns: Json }
       community_board: { Args: { p_community_id: string }; Returns: Json }
-      refine_gym_location: {
-        Args: { p_gym_id: string; p_latitude: number; p_longitude: number }
-        Returns: boolean
-      }
       shares_community_post: {
         Args: { p_owner: string; p_viewer: string }
         Returns: boolean

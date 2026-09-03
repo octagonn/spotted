@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { mockProfileSignals, mockSkipSignals } from "@/lib/mockData";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { isDemoMode, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import type { ProfileSignal } from "@/types/domain";
 
@@ -9,9 +9,9 @@ export function useProfileSignals() {
   const profileId = useAuthStore((state) => state.profileId);
   return useQuery({
     queryKey: ["profile-signals", profileId],
-    enabled: !isSupabaseConfigured || Boolean(profileId),
+    enabled: isDemoMode || Boolean(profileId),
     queryFn: async (): Promise<ProfileSignal[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockProfileSignals;
       }
       if (!profileId) {
@@ -70,9 +70,9 @@ export function useSkipSignals() {
   const userId = useAuthStore((state) => state.userId);
   return useQuery({
     queryKey: ["skip-signals", userId],
-    enabled: !isSupabaseConfigured || Boolean(userId),
+    enabled: isDemoMode || Boolean(userId),
     queryFn: async (): Promise<SkipSignal[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return [...mockSkipSignals];
       }
       if (!userId) {
@@ -106,9 +106,9 @@ export function useGymDaysCount() {
   const userId = useAuthStore((state) => state.userId);
   return useQuery({
     queryKey: ["gym-days", userId],
-    enabled: !isSupabaseConfigured || Boolean(userId),
+    enabled: isDemoMode || Boolean(userId),
     queryFn: async (): Promise<number> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return 38;
       }
       if (!userId) {

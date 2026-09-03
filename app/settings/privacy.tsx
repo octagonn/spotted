@@ -1,18 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, type Href } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PanelHeader } from "@/components/ui/PanelHeader";
-import { Pressable } from "@/components/ui/Pressable";
-import { SettingNavRow as NavRow, SettingRow as Row, SettingSectionLabel as SectionLabel, SettingToggle as Toggle } from "@/components/ui/SettingRow";
+import {
+  SettingChoice,
+  SettingNavRow as NavRow,
+  SettingRow as Row,
+  SettingSectionLabel as SectionLabel,
+  SettingToggle as Toggle
+} from "@/components/ui/SettingRow";
 import { SkeletonToggleRows } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
 import { ANALYTICS_CONSENT_VERSION, setAnalyticsSession } from "@/lib/analytics";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { space } from "@/theme/tokens";
 import type { Database } from "@/types/database";
 
 type ScheduleVisibility = Database["public"]["Enums"]["schedule_visibility"];
@@ -54,63 +61,6 @@ const VISIBILITY_OPTIONS: { key: ScheduleVisibility; label: string }[] = [
   { key: "private", label: "Private" }
 ];
 
-// --- Shared visual language, matched to the Notifications screen ---------------
-
-
-
-
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onSelect
-}: {
-  options: { key: T; label: string }[];
-  value: T;
-  onSelect: (key: T) => void;
-}) {
-  return (
-    <View style={{ flexDirection: "row", gap: 5 }}>
-      {options.map((option) => {
-        const selected = value === option.key;
-        return (
-          <Pressable
-            key={option.key}
-            onPress={() => onSelect(option.key)}
-            haptic={false}
-            accessibilityLabel={option.label}
-            accessibilityState={{ selected }}
-            hitSlop={8}
-          >
-            <View
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 999,
-                backgroundColor: selected ? colors.white : "transparent",
-                borderWidth: 1,
-                borderColor: selected ? colors.white : colors.iron
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "Geist_600SemiBold",
-                  fontSize: 11.5,
-                  color: selected ? colors.black : colors.silver
-                }}
-              >
-                {option.label}
-              </Text>
-            </View>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-// ------------------------------------------------------------------------------
-
 export default function PrivacySettingsScreen() {
   const insets = useSafeAreaInsets();
   const userId = useAuthStore((state) => state.userId);
@@ -127,7 +77,9 @@ export default function PrivacySettingsScreen() {
       }
       const { data, error } = await supabase
         .from("profiles")
-        .select("is_private, posts_private, friends_list_hidden, discoverable, schedule_visibility, show_activity, dm_preview_enabled")
+        .select(
+          "is_private, posts_private, friends_list_hidden, discoverable, schedule_visibility, show_activity, dm_preview_enabled"
+        )
         .eq("id", userId as string)
         .maybeSingle();
       if (error) {
@@ -239,12 +191,7 @@ export default function PrivacySettingsScreen() {
   const settings = settingsQuery.data ?? defaultSettings;
   const analyticsEnabled = analyticsQuery.data?.product_analytics_enabled ?? false;
 
-  type BoolKey =
-    | "posts_private"
-    | "friends_list_hidden"
-    | "discoverable"
-    | "show_activity"
-    | "dm_preview_enabled";
+  type BoolKey = "posts_private" | "friends_list_hidden" | "discoverable" | "show_activity" | "dm_preview_enabled";
   const toggle = (key: BoolKey) => updateSettings.mutate({ [key]: !settings[key] });
 
   return (
@@ -253,7 +200,9 @@ export default function PrivacySettingsScreen() {
       {settingsQuery.isLoading ? (
         <SkeletonToggleRows count={8} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 32 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: space[4] + 4, paddingBottom: insets.bottom + space[8] }}
+        >
           <SectionLabel>Visibility</SectionLabel>
           <Row
             title="Private account"
@@ -299,7 +248,7 @@ export default function PrivacySettingsScreen() {
             title="Schedule visibility"
             sub="Friends by default. Public if you mean it."
             right={
-              <Segmented
+              <SettingChoice
                 options={VISIBILITY_OPTIONS}
                 value={settings.schedule_visibility}
                 onSelect={(option) => updateSettings.mutate({ schedule_visibility: option })}
@@ -340,9 +289,7 @@ export default function PrivacySettingsScreen() {
           <Row
             title="Sharing with third parties"
             sub="Spotted does not sell or share your analytics data. If that ever changes, we will ask for your explicit permission first."
-            right={
-              <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 12, color: colors.fog }}>Off</Text>
-            }
+            right={<Text variant="mono">Off</Text>}
           />
         </ScrollView>
       )}

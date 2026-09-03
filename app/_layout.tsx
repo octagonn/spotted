@@ -48,7 +48,9 @@ import { useRestoreOnLogin } from "@/hooks/useRestoreOnLogin";
 import { usePendingPostUploader } from "@/hooks/usePendingPostUploader";
 import { useTimezoneSync } from "@/hooks/useTimezoneSync";
 import { clearPendingPosts } from "@/lib/offlineQueue";
-import { clearSignedUrlCache, isSupabaseConfigured } from "@/lib/supabase";
+import { ConfigBlocker } from "@/components/ConfigBlocker";
+import { useOtaSelfHeal } from "@/hooks/useOtaSelfHeal";
+import { clearSignedUrlCache, isBrokenRelease, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { useRelationshipsStore } from "@/stores/relationships";
 import { useUiStore } from "@/stores/ui";
@@ -219,8 +221,25 @@ export default function RootLayout() {
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
   }, []);
 
+  // Pull EAS Updates on every foreground (not only cold start) so a device
+  // holding a bad bundle heals itself. Mounted above the broken-release gate
+  // on purpose: it is the way OUT of that screen.
+  useOtaSelfHeal();
+
   if (!loaded) {
     return null;
+  }
+
+  // A release bundle with no backend config never mounts the app. The
+  // 2026-09-02 OTA shipped one and every device rendered the DEV fixture
+  // data (mock "Octavio" signed in). Nothing below this line can run now.
+  if (isBrokenRelease) {
+    return (
+      <GestureHandlerRootView className="flex-1 bg-black">
+        <ConfigBlocker />
+        <StatusBar style="light" />
+      </GestureHandlerRootView>
+    );
   }
 
   return (
@@ -241,7 +260,12 @@ export default function RootLayout() {
                 screenOptions={{
                   headerShown: false,
                   contentStyle: { backgroundColor: colors.black },
-                  animation: "slide_from_right"
+                  animation: "slide_from_right",
+                  // Pushed screens dismiss with a finger-tracking swipe from
+                  // ANYWHERE on the page (IG/Snap), not only the left edge.
+                  // Screens that slide up opt into a vertical gesture instead.
+                  gestureEnabled: true,
+                  fullScreenGestureEnabled: true
                 }}
               >
                 <Stack.Screen name="index" />
@@ -271,9 +295,10 @@ export default function RootLayout() {
                   name="workout"
                   options={{
                     animation: "slide_from_bottom",
-                    gestureEnabled: true,
-                    gestureDirection: "vertical",
-                    animationMatchesGesture: true
+                    // No dismiss gesture: the full-screen vertical swipe fought
+                    // the exercise list's scroll (scroll "stuck") and let a
+                    // flick-down abandon a live workout. Back arrow only.
+                    gestureEnabled: false
                   }}
                 />
                 <Stack.Screen name="workout/[id]" />
@@ -290,20 +315,32 @@ export default function RootLayout() {
                   }}
                 />
                 <Stack.Screen name="gym/[id]" options={{ presentation: "modal" }} />
-                <Stack.Screen name="user/[username]" />
                 <Stack.Screen name="chat/[id]" />
                 <Stack.Screen name="chat-details/[id]" />
-                <Stack.Screen name="drafts" options={{ animation: "slide_from_bottom" }} />
+                <Stack.Screen
+                  name="drafts"
+                  options={{ animation: "slide_from_bottom", gestureDirection: "vertical", animationMatchesGesture: true }}
+                />
                 <Stack.Screen name="inbox" />
                 <Stack.Screen name="message-requests" />
                 <Stack.Screen name="edit-profile" />
                 <Stack.Screen name="people/[type]" />
-                <Stack.Screen name="profile-posts/[postId]" />
+                {/* Long scrolling grid: the anywhere-on-page dismiss swipe kept
+                    firing on diagonal scroll thumbs, closing the trophy case.
+                    Standard left-edge swipe-back only. */}
+                <Stack.Screen name="profile-section/[section]" options={{ fullScreenGestureEnabled: false }} />
+                {/* Same for the profile's post feed: "2-3 scrolls and it swipes
+                    me out" (tester, 2026-09-02). Left-edge swipe or back arrow. */}
+                <Stack.Screen name="profile-posts/[postId]" options={{ fullScreenGestureEnabled: false }} />
+                <Stack.Screen name="user/[username]" options={{ fullScreenGestureEnabled: false }} />
                 <Stack.Screen name="community/[id]/members" />
                 {/* Regular card, not a native modal: native modals render above the
                     root-level toast host, so create errors/successes were invisible,
                     and the sheet offset left dead space above the wizard header. */}
-                <Stack.Screen name="community-new" options={{ animation: "slide_from_bottom" }} />
+                <Stack.Screen
+                  name="community-new"
+                  options={{ animation: "slide_from_bottom", gestureDirection: "vertical", animationMatchesGesture: true }}
+                />
                 <Stack.Screen
                   name="story"
                   options={{ presentation: "fullScreenModal", animation: "fade" }}

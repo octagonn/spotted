@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { ChoiceRow } from "@/components/ui/ChoiceRow";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SheetSub, SheetTitle } from "@/components/ui/Sheet";
+import { SkeletonRows } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { showToast } from "@/stores/ui";
-import { colors } from "@/theme/colors";
+import { space } from "@/theme/tokens";
 
 /**
  * Shared "pick a friend and fire something at them" sheet body — search over
@@ -37,9 +39,7 @@ export function PickFriendSheet({
   const [sent, setSent] = useState<Set<string>>(new Set());
 
   const q = query.trim().toLowerCase();
-  const rows = (friends.data ?? []).filter(
-    (f) => !q || `${f.display_name} ${f.username}`.toLowerCase().includes(q)
-  );
+  const rows = (friends.data ?? []).filter((f) => !q || `${f.display_name} ${f.username}`.toLowerCase().includes(q));
 
   const pick = (id: string, name: string) => {
     setSent((prev) => new Set(prev).add(id));
@@ -60,12 +60,14 @@ export function PickFriendSheet({
     <View>
       <SheetTitle>{title}</SheetTitle>
       <SheetSub>{sub}</SheetSub>
-      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+      <View style={{ paddingHorizontal: space[4] + 4, paddingBottom: space[2] }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder="Search friends" />
       </View>
       <View style={{ height: 320 }}>
-        {rows.length === 0 ? (
-          <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
+        {friends.isLoading ? (
+          <SkeletonRows count={3} />
+        ) : rows.length === 0 ? (
+          <Text variant="meta" className="pt-7 text-center">
             {q ? "No friends match that name." : emptyText}
           </Text>
         ) : (

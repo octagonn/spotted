@@ -51,16 +51,30 @@ export function MediaFrame({
   const frameRef = useRef<View>(null);
   const useOverlay = Boolean(zoomUri);
 
+  // True from pinch start until finalize. measureInWindow's callback lands
+  // async: a fast pinch can finish (and hide) BEFORE the measure returns, and
+  // showing then would strand the overlay above the app with nothing left to
+  // hide it (it's invisible while aligned at scale 1, then "sticks" over the
+  // next screen after navigating).
+  const pinchActive = useRef(false);
+
   const beginZoom = () => {
     if (!zoomUri) return;
+    pinchActive.current = true;
     frameRef.current?.measureInWindow((x, y, width, height) => {
+      if (!pinchActive.current) return;
       if (width > 0 && height > 0) {
         useZoomPreview.getState().show(zoomUri, { x, y, width, height });
       }
     });
   };
 
+  const markPinchEnded = () => {
+    pinchActive.current = false;
+  };
+
   const endZoom = () => {
+    pinchActive.current = false;
     useZoomPreview.getState().hide();
   };
 
@@ -85,6 +99,9 @@ export function MediaFrame({
     // app until a refresh. onFinalize runs on every way a gesture can stop.
     .onFinalize(() => {
       if (useOverlay) {
+        // Stop a still-in-flight measure callback from re-showing the overlay
+        // after this release already hid it.
+        runOnJS(markPinchEnded)();
         zoomTx.value = withSpring(0);
         zoomTy.value = withSpring(0);
         // Hide even when the spring was interrupted (finished === false):

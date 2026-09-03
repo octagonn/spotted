@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MOCK_CONVERSATION_ID, mockMessages } from "@/lib/mockData";
 import { compressStoryPhoto } from "@/lib/posts";
 import { removePostObjects, uploadMediaObject } from "@/lib/r2";
-import { isSupabaseConfigured, signedMessageUrl, supabase } from "@/lib/supabase";
+import { isDemoMode, isSupabaseConfigured, signedMessageUrl, supabase } from "@/lib/supabase";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
@@ -28,12 +28,12 @@ export function useConversation(otherUserId?: string) {
   const userId = useAuthStore((state) => state.userId);
   return useQuery({
     queryKey: ["conversation", userId, otherUserId],
-    enabled: Boolean(otherUserId) && (!isSupabaseConfigured || Boolean(userId)),
+    enabled: Boolean(otherUserId) && (isDemoMode || Boolean(userId)),
     queryFn: async (): Promise<string | null> => {
       if (!otherUserId) {
         return null;
       }
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return MOCK_CONVERSATION_ID;
       }
       if (!userId) {
@@ -92,7 +92,7 @@ export function useMessages(conversationId?: string | null) {
       if (!conversationId) {
         return [];
       }
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return [...mockMessages];
       }
       // Deleted-for-me: my participant row's cleared_at hides everything at or
@@ -136,7 +136,7 @@ export function useSendMessage(conversationId?: string | null) {
       if (!conversationId || trimmed.length === 0) {
         return;
       }
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         const local: ChatMessage = {
           id: `local-${Date.now()}`,
           conversation_id: conversationId,

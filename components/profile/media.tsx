@@ -138,7 +138,7 @@ export function FbInset({
         backgroundColor: colors.charcoal,
         ...(shadow
           ? {
-              shadowColor: "#000000",
+              shadowColor: colors.black,
               shadowOffset: { width: 0, height: 6 },
               shadowOpacity: 0.55,
               shadowRadius: 20,

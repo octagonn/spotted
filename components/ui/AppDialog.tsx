@@ -3,6 +3,7 @@ import { create } from "zustand";
 
 import { Pressable } from "@/components/ui/Pressable";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 /**
  * Spotted-themed replacement for the native iOS Alert. Same call signature as
@@ -72,7 +73,7 @@ function DialogButton({ button, onDone, wide }: { button: AppDialogButton; onDon
           style={{
             fontFamily: "Geist_700Bold",
             fontSize: 14,
-            color: destructive ? "#EF4444" : cancel ? colors.mist : colors.black
+            color: destructive ? tokens.status.danger : cancel ? colors.mist : colors.black
           }}
         >
           {button.text}
@@ -103,7 +104,13 @@ export function AppDialogHost() {
         }}
         accessibilityLabel="Dismiss"
         haptic={false}
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center", padding: 32 }}
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.65)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 32
+        }}
       >
         <Pressable onPress={() => {}} haptic={false} accessibilityLabel={dialog.title} style={{ alignSelf: "stretch" }}>
           <View

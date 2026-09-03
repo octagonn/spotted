@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { mockProfiles, mockSuggestions } from "@/lib/mockData";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { uuidFilterList, uuidFilterValue } from "@/lib/pgFilter";
+import { isDemoMode, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
@@ -14,7 +15,7 @@ export function useFriends() {
     // Keyed by userId so a different account can't read this one's cached list.
     queryKey: ["friends", userId],
     queryFn: async (): Promise<Profile[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockProfiles.slice(1);
       }
       // Local session state — auth.getUser() is a network round-trip per call.
@@ -28,7 +29,7 @@ export function useFriends() {
           "user_id, friend_id, status, friend:friend_id(id, username, display_name, avatar_url, avatar_blurred_url, bio, home_gym_id, created_at), inviter:user_id(id, username, display_name, avatar_url, avatar_blurred_url, bio, home_gym_id, created_at)"
         )
         .eq("status", "accepted")
-        .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+        .or(`user_id.eq.${uuidFilterValue(userId)},friend_id.eq.${uuidFilterValue(userId)}`);
       if (error) {
         throw error;
       }
@@ -74,7 +75,7 @@ export function useFriendSuggestions() {
   return useQuery({
     queryKey: ["friend-suggestions", userId],
     queryFn: async (): Promise<FriendSuggestion[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockSuggestions;
       }
       // Ask for a POOL, not a screenful. At limit 8 the client held exactly
@@ -150,7 +151,7 @@ export function useIncomingRequests() {
   return useQuery({
     queryKey: ["friend-requests", userId],
     queryFn: async (): Promise<IncomingRequest[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return [];
       }
       // Local session state — auth.getUser() is a network round-trip per call.
@@ -181,7 +182,7 @@ export function useRespondToRequest() {
   const authUserId = useAuthStore((state) => state.userId);
   return useMutation({
     mutationFn: async ({ requesterId, accept }: { requesterId: string; accept: boolean }) => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return;
       }
       // Local auth state — supabase.auth.getUser() here was a full network
@@ -247,7 +248,7 @@ export function useSendFriendRequest() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (friendId: string) => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return;
       }
       // Local session state — auth.getUser() is a network round-trip per call.
@@ -308,12 +309,12 @@ export function useFriendshipStates(ids: string[]) {
     enabled: isSupabaseConfigured && Boolean(userId) && sorted.length > 0,
     staleTime: 15_000,
     queryFn: async (): Promise<Map<string, RelationshipState>> => {
-      const me = userId as string;
-      const list = sorted.slice(0, 200);
+      const me = uuidFilterValue(userId as string);
+      const list = uuidFilterList(sorted.slice(0, 200));
       const { data, error } = await supabase
         .from("friendships")
         .select("user_id, friend_id, status")
-        .or(`and(user_id.eq.${me},friend_id.in.(${list.join(",")})),and(friend_id.eq.${me},user_id.in.(${list.join(",")}))`);
+        .or(`and(user_id.eq.${me},friend_id.in.(${list})),and(friend_id.eq.${me},user_id.in.(${list}))`);
       if (error) throw error;
       const out = new Map<string, RelationshipState>();
       for (const row of (data ?? []) as { user_id: string; friend_id: string; status: string }[]) {
@@ -372,10 +373,12 @@ export function useRemoveFriend() {
   return useMutation({
     mutationFn: async (friendId: string) => {
       if (!isSupabaseConfigured || !userId) return;
+      const me = uuidFilterValue(userId);
+      const them = uuidFilterValue(friendId);
       const { error } = await supabase
         .from("friendships")
         .delete()
-        .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`);
+        .or(`and(user_id.eq.${me},friend_id.eq.${them}),and(user_id.eq.${them},friend_id.eq.${me})`);
       if (error) throw error;
       trackAnalyticsEvent("friend_removed");
     },

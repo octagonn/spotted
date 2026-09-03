@@ -1,6 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect } from "react";
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming
+} from "react-native-reanimated";
 
 /**
  * Subtle animated glint that sweeps across a Diamond-tier surface every few
@@ -23,7 +32,10 @@ export function DiamondGlint({ width, height }: { width: number; height: number 
   }, [reduced, width, x]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }, { rotate: "18deg" }] }));
   return (
-    <Animated.View pointerEvents="none" style={[{ position: "absolute", top: -height * 0.3, left: 0, width: width * 0.45, height: height * 1.6 }, style]}>
+    <Animated.View
+      pointerEvents="none"
+      style={[{ position: "absolute", top: -height * 0.3, left: 0, width: width * 0.45, height: height * 1.6 }, style]}
+    >
       <LinearGradient
         colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.55)", "rgba(155,231,255,0.35)", "rgba(255,255,255,0)"]}
         start={{ x: 0, y: 0.5 }}

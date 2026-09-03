@@ -91,10 +91,17 @@ export function TrophyEarnHost() {
       ? {
           icon: def.icon,
           name: def.name,
-          familyName: def.family && def.rule_type === "threshold" ? (def.tier ? `${def.tier[0].toUpperCase()}${def.tier.slice(1)} tier` : null) : null,
+          familyName:
+            def.family && def.rule_type === "threshold"
+              ? def.tier
+                ? `${def.tier[0].toUpperCase()}${def.tier.slice(1)} tier`
+                : null
+              : null,
           earnedAt: current.earned_at,
           rarityPct: rarityPctFor(
-            def.family && def.rule_type === "threshold" ? rarityKey(def.family, Number(def.rule_params?.value ?? 0) || 0) : rarityKey(def.key),
+            def.family && def.rule_type === "threshold"
+              ? rarityKey(def.family, Number(def.rule_params?.value ?? 0) || 0)
+              : rarityKey(def.key),
             live
           ),
           medal: def.tier,
@@ -110,7 +117,10 @@ export function TrophyEarnHost() {
         .eq("user_id", userId)
         .eq("trophy_id", current.trophy_id)
         .eq("instance_key", current.instance_key)
-        .then(() => undefined, () => undefined);
+        .then(
+          () => undefined,
+          () => undefined
+        );
     }
     setQueue((q) => q.slice(1));
   };

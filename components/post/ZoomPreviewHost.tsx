@@ -1,3 +1,5 @@
+import { usePathname } from "expo-router";
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { Extrapolation, interpolate, makeMutable, useAnimatedStyle } from "react-native-reanimated";
 import { create } from "zustand";
@@ -38,6 +40,17 @@ export const useZoomPreview = create<ZoomPreviewState>((set) => ({
 export function ZoomPreviewHost() {
   const uri = useZoomPreview((state) => state.uri);
   const rect = useZoomPreview((state) => state.rect);
+  const pathname = usePathname();
+
+  // A zoom preview never legitimately outlives the screen it started on —
+  // clear any stray overlay (e.g. from a race that showed it after its hide)
+  // whenever navigation happens.
+  useEffect(() => {
+    useZoomPreview.getState().hide();
+    zoomScale.value = 1;
+    zoomTx.value = 0;
+    zoomTy.value = 0;
+  }, [pathname]);
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(zoomScale.value, [1, 1.8], [0, 0.92], Extrapolation.CLAMP)

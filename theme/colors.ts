@@ -1,29 +1,23 @@
-export const colors = {
-  black: "#000000",
-  ink: "#0A0A0A",
-  graphite: "#131315",
-  charcoal: "#1C1C1F",
-  iron: "#27272A",
-  slate: "#3F3F46",
-  ash: "#52525B",
-  // Raised from #71717A to meet WCAG AA (4.5:1) as body/label text on the app's
-  // dark surfaces — the old value failed (3.1–4.35:1) everywhere it was used for
-  // sub-text, placeholders, timestamps, and small labels. Kept dimmer than
-  // `silver` (#A1A1AA) so the primary/secondary/tertiary text hierarchy holds.
-  fog: "#909099",
-  silver: "#A1A1AA",
-  mist: "#D4D4D8",
-  bone: "#E4E4E7",
-  white: "#FAFAFA",
-  pure: "#FFFFFF",
-  // Warm gold accent — used to mark milestones like the account's first day.
-  gold: "#E8B44C",
-  goldSoft: "rgba(232,180,76,0.18)",
-  glass: "rgba(255,255,255,0.06)",
-  glassStrong: "rgba(255,255,255,0.10)",
-  glassSoft: "rgba(255,255,255,0.04)",
-  hairline: "rgba(255,255,255,0.08)",
-  hairlineStrong: "rgba(255,255,255,0.14)"
-} as const;
+import palette from "./palette.json";
+
+/**
+ * Raw Spotted palette — a monochrome ramp (black → pure) plus ONE brand accent
+ * (gold) and a few translucent white overlays.
+ *
+ * Source of truth is `theme/palette.json`; this module only adds typing. The
+ * same JSON feeds `tailwind.config.js`, so `colors.fog` and the `text-fog`
+ * class always describe the same pixels (see tests/theme.test.ts).
+ *
+ * Notes on specific values:
+ * - `fog` (#909099) was raised from #71717A to meet WCAG AA (4.5:1) as
+ *   body/label text on dark surfaces while staying dimmer than `silver`.
+ * - `gold` (#E8B44C) is the only brand accent. Use it for PRs, milestones and
+ *   important active states — never as a generic highlight.
+ *
+ * Prefer the semantic layer in `theme/tokens.ts` (`tokens.bg.*`,
+ * `tokens.text.*`, `tokens.border.*`, `tokens.accent.*`) in screens; reach for
+ * raw palette entries only when a semantic token genuinely does not fit.
+ */
+export const colors = palette.colors;
 
 export type ColorToken = keyof typeof colors;

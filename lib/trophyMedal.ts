@@ -1,4 +1,5 @@
 import type { TrophyMedal } from "@/lib/trophies";
+import { PREMIUM_RARITY_THRESHOLD } from "@/lib/trophyRaritySeeds";
 import { colors } from "@/theme/colors";
 
 /**
@@ -17,6 +18,25 @@ export const MEDAL_COLORS: Record<TrophyMedal, { solid: string; soft: string; bo
 /** Colors for a medal, defaulting to the gold accent for non-tiered trophies. */
 export function medalColors(medal?: TrophyMedal | null) {
   return MEDAL_COLORS[medal ?? "gold"];
+}
+
+/**
+ * Medal derived from the rarity percentage, for trophies with no explicit
+ * tier (all standalones). The diamond band IS the premium band (shared
+ * constant, so the premium dot/glint and the diamond medallion can't drift):
+ * sub-threshold (including "no one has this yet") reads diamond, then
+ * 1-3% gold, 3-8% silver, common bronze.
+ */
+export function medalForRarity(rarityPct: number): TrophyMedal {
+  if (rarityPct < PREMIUM_RARITY_THRESHOLD) return "diamond";
+  if (rarityPct < 3) return "gold";
+  if (rarityPct < 8) return "silver";
+  return "bronze";
+}
+
+/** The medal to display: the explicit DB tier when set, else rarity-derived. */
+export function resolveMedal(explicit: TrophyMedal | null | undefined, rarityPct: number): TrophyMedal {
+  return explicit ?? medalForRarity(rarityPct);
 }
 
 export function medalLabel(medal?: TrophyMedal | null): string | null {

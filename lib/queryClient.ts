@@ -3,6 +3,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import Constants from "expo-constants";
 
+import { isDemoMode } from "@/lib/supabase";
+
 /**
  * App-wide QueryClient + persistence.
  *
@@ -90,11 +92,17 @@ export const queryPersister = createAsyncStoragePersister({
 export const persistOptions = {
   persister: queryPersister,
   maxAge: 24 * 60 * 60 * 1000,
-  // New app version = drop the old cache shape.
-  buster: Constants.expoConfig?.version ?? "0",
+  // New app version = drop the old cache shape. The epoch suffix lets an OTA
+  // (same version) invalidate caches too: e1 discards anything written by the
+  // 2026-09-02 unconfigured bundle, whose fixture feed/profile data would
+  // otherwise rehydrate under the fixed bundle. Demo (dev) caches get their
+  // own buster so fixture data can never be restored by a configured build.
+  buster: `${Constants.expoConfig?.version ?? "0"}-e1${isDemoMode ? "-demo" : ""}`,
   dehydrateOptions: {
     shouldDehydrateQuery: (query: { queryKey: readonly unknown[]; state: { status: string } }) => {
       if (query.state.status !== "success") return false;
+      // Fixture data is never worth persisting.
+      if (isDemoMode) return false;
       const head = query.queryKey[0];
       return !(typeof head === "string" && EPHEMERAL_KEYS.has(head));
     }

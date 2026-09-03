@@ -2,18 +2,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Text, View } from "react-native";
+import { Modal, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { Text } from "@/components/ui/Text";
 import { useCommunityMembers, useJoinGymCommunity, useMyCommunities } from "@/hooks/queries/useCommunities";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { usePresenceStore } from "@/stores/presence";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
-import { radius } from "@/theme/tokens";
+import { radius, space, tokens } from "@/theme/tokens";
 
 /** Spec: at most once per week per gym per user if dismissed. */
 const PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -114,34 +115,46 @@ export function JoinGymCommunityPrompt({ userId }: { userId: string | null }) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={dismiss} statusBarTranslucent>
-      <View accessibilityViewIsModal style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.68)" }}>
+      <View accessibilityViewIsModal style={{ flex: 1, justifyContent: "flex-end", backgroundColor: tokens.bg.scrim }}>
         <View
           style={{
             backgroundColor: colors.ink,
             borderTopLeftRadius: radius.lg,
             borderTopRightRadius: radius.lg,
-            borderWidth: 1,
-            borderBottomWidth: 0,
-            borderColor: colors.iron,
-            paddingHorizontal: 24,
-            paddingTop: 22,
-            paddingBottom: insets.bottom + 20
+            paddingHorizontal: space[6],
+            paddingTop: space[6] - 2,
+            paddingBottom: insets.bottom + space[4] + 4
           }}
         >
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.slate, alignSelf: "center", marginBottom: 16 }} />
+          <View
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: colors.slate,
+              alignSelf: "center",
+              marginBottom: 16
+            }}
+          />
           {mutuals.length > 0 ? (
             <View style={{ flexDirection: "row", marginBottom: 12 }}>
               {mutuals.map((m, i) => (
                 <View key={m.user_id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
-                  <Avatar name={m.profile?.display_name ?? "Member"} uri={m.profile?.avatar_url ?? null} size={34} borderColor={colors.ink} borderWidth={2} />
+                  <Avatar
+                    name={m.profile?.display_name ?? "Member"}
+                    uri={m.profile?.avatar_url ?? null}
+                    size={34}
+                    borderColor={colors.ink}
+                    borderWidth={2}
+                  />
                 </View>
               ))}
             </View>
           ) : null}
-          <Text accessibilityRole="header" style={{ fontFamily: "Geist_700Bold", fontSize: 18, lineHeight: 24, letterSpacing: -0.2, color: colors.white }}>
+          <Text variant="subheading" accessibilityRole="header">
             {title}
           </Text>
-          <Text style={{ marginTop: 8, fontSize: 13.5, lineHeight: 20, color: colors.silver }}>
+          <Text variant="body-sm" className="mt-2 text-silver">
             Group chat, a board that only counts this gym, and a feed of everyone who trains here.
             {mutuals.length > 0 ? ` ${count} ${count === 1 ? "member" : "members"}.` : ""}
           </Text>
@@ -153,8 +166,9 @@ export function JoinGymCommunityPrompt({ userId }: { userId: string | null }) {
               Not now
             </Button>
           </View>
-          <Text style={{ marginTop: 12, fontSize: 11.5, lineHeight: 17, color: colors.fog }}>
-            Joining puts you on this gym&apos;s board and member list. Leave any time from Members — one tap. We won&apos;t ask again this week.
+          <Text variant="meta" className="mt-3">
+            Joining puts you on this gym&apos;s board and member list. Leave any time from Members — one tap. We
+            won&apos;t ask again this week.
           </Text>
         </View>
       </View>

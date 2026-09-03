@@ -163,7 +163,16 @@ export function LiftVideoReview({
           <Text style={{ fontFamily: "Geist_700Bold", fontSize: 17, color: colors.white, textAlign: "center" }}>
             Couldn't play that clip
           </Text>
-          <Text style={{ marginTop: 10, fontFamily: "Geist_400Regular", fontSize: 13.5, lineHeight: 20, color: colors.fog, textAlign: "center" }}>
+          <Text
+            style={{
+              marginTop: 10,
+              fontFamily: "Geist_400Regular",
+              fontSize: 13.5,
+              lineHeight: 20,
+              color: colors.fog,
+              textAlign: "center"
+            }}
+          >
             The recording didn't load. Retake it and try again.
           </Text>
         </View>
@@ -200,7 +209,14 @@ export function LiftVideoReview({
           <Pressable
             onPress={togglePlay}
             accessibilityLabel={playing ? "Pause" : "Play"}
-            style={{ width: 66, height: 66, borderRadius: 33, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}
+            style={{
+              width: 66,
+              height: 66,
+              borderRadius: 33,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
           >
             {playing ? (
               <Pause size={28} color={colors.white} strokeWidth={2} fill={colors.white} />
@@ -213,7 +229,14 @@ export function LiftVideoReview({
         {/* Trim bar */}
         <View style={{ width: "100%", paddingTop: 18 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", paddingBottom: 8 }}>
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.12, color: colors.fog }}>
+            <Text
+              style={{
+                fontFamily: "GeistMono_400Regular",
+                fontSize: 10.5,
+                letterSpacing: 10.5 * 0.12,
+                color: colors.fog
+              }}
+            >
               TRIM
             </Text>
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.silver }}>
@@ -224,13 +247,39 @@ export function LiftVideoReview({
             onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
             style={{ height: TRACK_H, borderRadius: 10, backgroundColor: colors.graphite, overflow: "hidden" }}
           >
-            <Animated.View style={[{ position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" }, leftDim]} />
-            <Animated.View style={[{ position: "absolute", right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" }, rightDim]} />
-            <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 0, bottom: 0, borderWidth: 2, borderColor: colors.white, borderRadius: 8 }, keptStyle]} />
+            <Animated.View
+              style={[
+                { position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" },
+                leftDim
+              ]}
+            />
+            <Animated.View
+              style={[
+                { position: "absolute", right: 0, top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" },
+                rightDim
+              ]}
+            />
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                { position: "absolute", top: 0, bottom: 0, borderWidth: 2, borderColor: colors.white, borderRadius: 8 },
+                keptStyle
+              ]}
+            />
             <GestureDetector gesture={startGesture}>
               <Animated.View
                 hitSlop={{ left: 16, right: 16, top: 12, bottom: 12 }}
-                style={[{ position: "absolute", top: 0, bottom: 0, width: HANDLE_W, alignItems: "center", justifyContent: "center" }, startHandleStyle]}
+                style={[
+                  {
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    width: HANDLE_W,
+                    alignItems: "center",
+                    justifyContent: "center"
+                  },
+                  startHandleStyle
+                ]}
               >
                 <View style={{ width: 5, height: 22, borderRadius: 2.5, backgroundColor: colors.white }} />
               </Animated.View>
@@ -238,7 +287,17 @@ export function LiftVideoReview({
             <GestureDetector gesture={endGesture}>
               <Animated.View
                 hitSlop={{ left: 16, right: 16, top: 12, bottom: 12 }}
-                style={[{ position: "absolute", top: 0, bottom: 0, width: HANDLE_W, alignItems: "center", justifyContent: "center" }, endHandleStyle]}
+                style={[
+                  {
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    width: HANDLE_W,
+                    alignItems: "center",
+                    justifyContent: "center"
+                  },
+                  endHandleStyle
+                ]}
               >
                 <View style={{ width: 5, height: 22, borderRadius: 2.5, backgroundColor: colors.white }} />
               </Animated.View>
@@ -251,10 +310,19 @@ export function LiftVideoReview({
       </View>
 
       <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 18, paddingBottom: insets.bottom + 18 }}>
-        <Button variant="ghost" style={{ flex: 1 }} onPress={onRetake} icon={<RotateCcw size={16} color={colors.bone} strokeWidth={2} />}>
+        <Button
+          variant="ghost"
+          style={{ flex: 1 }}
+          onPress={onRetake}
+          icon={<RotateCcw size={16} color={colors.bone} strokeWidth={2} />}
+        >
           Restart
         </Button>
-        <Button style={{ flex: 1 }} onPress={() => onContinue(trimRef.current)} icon={<Check size={16} color={colors.black} strokeWidth={2.4} />}>
+        <Button
+          style={{ flex: 1 }}
+          onPress={() => onContinue(trimRef.current)}
+          icon={<Check size={16} color={colors.black} strokeWidth={2.4} />}
+        >
           Continue
         </Button>
       </View>

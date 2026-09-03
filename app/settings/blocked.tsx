@@ -22,9 +22,14 @@ export default function BlockedAccountsScreen() {
       rowSub={(r) => `@${r.username} · blocked ${new Date(r.since).toLocaleDateString()}`}
       actionLabel="Unblock"
       confirmTitle="Unblock?"
-      confirmBody={(name) => `${name} will be able to find and message you again. This does not restore your friendship.`}
+      confirmBody={(name) =>
+        `${name} will be able to find and message you again. This does not restore your friendship.`
+      }
       onAction={(id) =>
-        unblock.mutate(id, { onSuccess: () => showToast("Unblocked"), onError: () => showToast("Couldn't unblock — try again") })
+        unblock.mutate(id, {
+          onSuccess: () => showToast("Unblocked"),
+          onError: () => showToast("Couldn't unblock — try again")
+        })
       }
     />
   );

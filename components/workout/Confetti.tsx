@@ -34,10 +34,7 @@ function PieceView({ piece, height }: { piece: Piece; height: number }) {
     );
   }, [piece, progress]);
   const style = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: progress.value * (height + 48) },
-      { rotate: `${progress.value * 720}deg` }
-    ],
+    transform: [{ translateY: progress.value * (height + 48) }, { rotate: `${progress.value * 720}deg` }],
     opacity: progress.value >= 1 ? 0 : 0.95
   }));
   return (
@@ -83,7 +80,10 @@ export function Confetti({ seed, count = 46 }: { seed: number; count?: number })
 
   if (reduced || seed === 0) return null;
   return (
-    <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden" }}>
+    <View
+      pointerEvents="none"
+      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, overflow: "hidden" }}
+    >
       {pieces.map((piece) => (
         <PieceView key={piece.key} piece={piece} height={height} />
       ))}

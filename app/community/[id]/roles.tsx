@@ -1,16 +1,20 @@
-import { appAlert } from "@/components/ui/AppDialog";
 import { useLocalSearchParams } from "expo-router";
 import { ChevronRight, Plus, Shield, Trash2 } from "lucide-react-native";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text as RNText, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { PillBadge } from "@/components/communities/Badges";
+import { appAlert } from "@/components/ui/AppDialog";
 import { Button } from "@/components/ui/Button";
 import { ColorWheel } from "@/components/ui/ColorWheel";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { SettingRow, SettingSectionLabel, SettingToggle } from "@/components/ui/SettingRow";
 import { SkeletonRows } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
+import { TextField } from "@/components/ui/TextField";
 import {
   roleErrorMessage,
   useCommunity,
@@ -23,8 +27,10 @@ import {
 } from "@/hooks/queries/useCommunities";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { icon, space, tokens } from "@/theme/tokens";
 
 type Draft = Required<Omit<RoleInput, "position">>;
+const GUTTER = space[4] + 2;
 
 const NEW_ROLE: Draft = {
   name: "",
@@ -156,9 +162,11 @@ export default function CommunityRolesScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
         <PanelHeader title="Roles" />
-        <Text style={{ paddingTop: 40, paddingHorizontal: 32, textAlign: "center", fontSize: 13, color: colors.fog }}>
-          Only members who can manage roles can open this.
-        </Text>
+        <EmptyState
+          icon={<Shield size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />}
+          title="Managers only"
+          body="Only members who can manage roles can open this."
+        />
       </View>
     );
   }
@@ -169,45 +177,35 @@ export default function CommunityRolesScreen() {
     const lockedAdminEdit = !isNew && editing.is_admin && !isAdmin;
     const pending = create.isPending || update.isPending;
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.black }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1, backgroundColor: colors.black }}
+      >
         <PanelHeader title={isNew ? "New role" : "Edit role"} onBack={() => setEditing(null)} />
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: insets.bottom + 28 }}
+          contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: insets.bottom + space[6] + 4 }}
         >
           <SettingSectionLabel>Name</SettingSectionLabel>
-          <TextInput
+          <TextField
             value={draft.name}
             onChangeText={(v) => set("name", v.slice(0, 32))}
             placeholder="e.g. Coach, VIP, Moderator"
-            placeholderTextColor={colors.fog}
+            accessibilityLabel="Role name"
             autoCapitalize="words"
             maxLength={32}
             editable={!lockedAdminEdit}
-            style={{
-              borderWidth: 1,
-              borderColor: colors.iron,
-              borderRadius: 12,
-              backgroundColor: colors.graphite,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              fontFamily: "Geist_500Medium",
-              fontSize: 15,
-              color: colors.white
-            }}
           />
 
           <SettingSectionLabel>Color</SettingSectionLabel>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 14 }}>
-            <View style={{ borderWidth: 1, borderColor: draft.color ?? colors.iron, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: draft.color ? `${draft.color}1F` : "transparent" }}>
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase", color: draft.color ?? colors.silver }}>
-                {draft.name.trim() || "Role name"}
-              </Text>
-            </View>
-            <Text style={{ flex: 1, fontFamily: "GeistMono_400Regular", fontSize: 11.5, color: colors.fog }}>{draft.color ?? "No color"}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space[3], paddingBottom: space[3] + 2 }}>
+            <PillBadge label={draft.name.trim() || "Role name"} color={draft.color ?? colors.silver} />
+            <Text variant="mono" className="flex-1">
+              {draft.color ?? "No color"}
+            </Text>
             {draft.color ? (
-              <Pressable onPress={() => set("color", null)} accessibilityLabel="Clear color" hitSlop={8}>
-                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.silver }}>Clear</Text>
+              <Pressable onPress={() => set("color", null)} accessibilityLabel="Clear color" hitSlop={8} haptic="none">
+                <Text variant="meta-strong">Clear</Text>
               </Pressable>
             ) : null}
           </View>
@@ -298,17 +296,24 @@ export default function CommunityRolesScreen() {
             }
           />
 
-          <View style={{ paddingTop: 26, gap: 10 }}>
+          <View style={{ paddingTop: space[6] + 2, gap: space[2] + 2 }}>
             <Button onPress={save} loading={pending} disabled={lockedAdminEdit}>
               {isNew ? "Create role" : "Save changes"}
             </Button>
             {!isNew && !editing.is_default && !lockedAdminEdit ? (
-              <Button variant="ghost" onPress={() => confirmDelete(editing)} loading={remove.isPending} icon={<Trash2 size={15} color="#EF4444" strokeWidth={2} />}>
+              <Button
+                variant="danger"
+                onPress={() => confirmDelete(editing)}
+                loading={remove.isPending}
+                icon={<Trash2 size={icon.size.xs - 1} color={tokens.status.danger} strokeWidth={icon.stroke.regular} />}
+              >
                 Delete role
               </Button>
             ) : null}
             {lockedAdminEdit ? (
-              <Text style={{ textAlign: "center", fontSize: 12, color: colors.fog }}>Only admins can edit admin roles.</Text>
+              <Text variant="meta" className="text-center">
+                Only admins can edit admin roles.
+              </Text>
             ) : null}
           </View>
         </ScrollView>
@@ -321,58 +326,77 @@ export default function CommunityRolesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title="Roles" sub={community.data?.name} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: insets.bottom + 28 }}>
-        <Text style={{ paddingTop: 8, paddingBottom: 6, fontSize: 12.5, lineHeight: 18, color: colors.fog }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: insets.bottom + space[6] + 4 }}>
+        <Text variant="meta" className="pb-[6px] pt-2">
           Roles decide who can chat, post, invite, and manage. The owner always has every permission.
         </Text>
         {list.map((role) => (
-          <Pressable key={role.id} onPress={() => openEdit(role)} accessibilityLabel={`Edit role ${role.name}`}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.graphite }}>
+          <Pressable
+            key={role.id}
+            onPress={() => openEdit(role)}
+            accessibilityLabel={`Edit role ${role.name}`}
+            haptic="none"
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: space[3],
+                paddingVertical: space[3] + 1,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.graphite
+              }}
+            >
               <View
                 style={{
                   width: 34,
                   height: 34,
                   borderRadius: 17,
                   borderWidth: 1,
-                  borderColor: role.color ?? colors.iron,
+                  borderColor: role.color ?? tokens.border.default,
                   backgroundColor: role.color ? `${role.color}26` : "transparent",
                   alignItems: "center",
                   justifyContent: "center"
                 }}
               >
-                <Shield size={16} color={role.color ?? colors.silver} strokeWidth={2} />
+                <Shield size={icon.size.xs} color={role.color ?? colors.silver} strokeWidth={icon.stroke.regular} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: "Geist_600SemiBold", fontSize: 14, color: role.color ?? colors.white }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: space[1] + 2 }}>
+                  {/* Role color is data-driven — the one raw Text on this screen. */}
+                  <RNText
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={2}
+                    style={{
+                      flexShrink: 1,
+                      fontFamily: "Geist_600SemiBold",
+                      fontSize: 15,
+                      lineHeight: 20,
+                      color: role.color ?? colors.white
+                    }}
+                  >
                     {role.name}
-                  </Text>
-                  {role.is_default ? <Tag>Default</Tag> : null}
+                  </RNText>
+                  {role.is_default ? <PillBadge label="Default" color={colors.silver} /> : null}
                 </View>
-                <Text numberOfLines={1} style={{ marginTop: 1, fontSize: 12, color: colors.fog }}>
+                <Text variant="meta" numberOfLines={1} className="mt-[1px]">
                   {permSummary(role)}
                 </Text>
               </View>
-              <ChevronRight size={16} color={colors.fog} strokeWidth={2} />
+              <ChevronRight size={icon.size.xs} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
             </View>
           </Pressable>
         ))}
-        <View style={{ paddingTop: 18 }}>
-          <Button variant="ghost" onPress={openNew} icon={<Plus size={15} color={colors.white} strokeWidth={2.2} />}>
+        <View style={{ paddingTop: space[4] + 2 }}>
+          <Button
+            variant="ghost"
+            onPress={openNew}
+            icon={<Plus size={icon.size.xs - 1} color={colors.white} strokeWidth={icon.stroke.bold} />}
+          >
             New role
           </Button>
         </View>
       </ScrollView>
-    </View>
-  );
-}
-
-function Tag({ children }: { children: string }) {
-  return (
-    <View style={{ borderWidth: 1, borderColor: colors.slate, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 }}>
-      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9, letterSpacing: 0.8, textTransform: "uppercase", color: colors.silver }}>
-        {children}
-      </Text>
     </View>
   );
 }

@@ -48,6 +48,13 @@ function escapeSql(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+/** Coordinates come from third-party JSON/HTML; only a finite number may be spliced into SQL unquoted. */
+function sqlNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error(`sqlNumber: not a finite number: ${String(value)}`);
+  return String(n);
+}
+
 function clean(text) {
   if (!text) return null;
   return text.replace(/\s+/g, " ").trim();
@@ -141,7 +148,7 @@ async function fetchAll(urls, parser, label) {
       (g) =>
         `insert into _seed_direct (name, address, latitude, longitude) values (${escapeSql(g.name)}, ${escapeSql(
           g.address
-        )}, ${g.latitude}, ${g.longitude});`
+        )}, ${sqlNumber(g.latitude)}, ${sqlNumber(g.longitude)});`
     ),
     // category is REQUIRED for the map (gyms_in_bounds filters on it).
     // Dedupe: gym_dupe_exists (accent/prefix-normalized name within ~165m)

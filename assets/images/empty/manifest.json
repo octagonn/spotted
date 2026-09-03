@@ -1,0 +1,18 @@
+{
+  "generated": "2026-08-30",
+  "generator": "Higgsfield MCP (nano_banana_pro, 2K source, cutouts via image_background_remover, trimmed + downscaled to 512px)",
+  "style": "gunmetal/graphite 3D icon with warm gold rim light on transparent - see lib/emptyStateArt.ts",
+  "assets": {
+    "dumbbell.png": { "render": "210202e8-357c-41cb-8115-098360f19ee4", "cutout": "14eca00a-991a-46ca-b19e-afdf988127d4" },
+    "trophy.png": { "render": "c3315d88-4425-4c13-931c-f843b6a4e481", "cutout": "00e36d40-d94f-41bd-81a2-ec411e7d5e2d" },
+    "bell.png": { "render": "8b83998b-74ba-46ad-9ac6-463d7cba2438", "cutout": "345c2624-dde4-445a-9660-77558522dd57" },
+    "chat.png": { "render": "0587def2-51fa-47ae-8818-e9bff74b8102", "cutout": "8d45e6ae-7815-4511-95d3-ac8727c18b3b" },
+    "camera.png": { "render": "7b6b9f28-4840-4a64-928b-b3eca474d530", "cutout": "e96c6335-42ab-4850-a694-698aa37ab12a" },
+    "photos.png": { "render": "b84cd52d-38bd-441b-941c-e429f4aeacb8", "cutout": "d00a926a-dad4-4fd3-a603-0f0a86baafac" }
+  },
+  "related": {
+    "../streak-flame.png": { "render": "c9d643d7-6550-48d8-a2da-7665fe91e649", "cutout": "5ebbcfc4-87bb-47cf-baa8-2727cf6051ba" },
+    "unused: gold welcome-mark rebuild": { "render": "abca3e14-bfb6-4904-b589-6575530e5190", "cutout": "5a8cddfc-9acb-4e88-b1d9-80d9a000ec1b", "note": "generated but rejected - user kept the original mark; regenerate from job id if ever wanted" },
+    "../auth-hero.jpg": { "render": "357d86b4-66c4-4480-9d7f-bdeee6af7126", "note": "opaque 1080x1920 fallback for AmbientVideoBackground" }
+  }
+}

@@ -4,9 +4,13 @@ import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
 import { Pressable } from "@/components/ui/Pressable";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
-/** "primary"/"danger" are legacy aliases kept so old call sites compile (primary→solid, danger→ghost). */
-type ButtonVariant = "solid" | "ghost" | "primary" | "danger";
+/**
+ * solid · ghost · danger (outlined in `status.danger`) · danger-solid (filled —
+ * the one irreversible action on a screen). "primary" is a legacy alias of solid.
+ */
+type ButtonVariant = "solid" | "ghost" | "primary" | "danger" | "danger-solid";
 
 type ButtonProps = {
   children: ReactNode;
@@ -40,11 +44,13 @@ export function Button({
   animateLabel = false,
   accessibilityLabel
 }: ButtonProps) {
-  const solid = variant === "solid" || variant === "primary";
+  const dangerSolid = variant === "danger-solid";
+  const danger = variant === "danger";
+  const solid = variant === "solid" || variant === "primary" || dangerSolid;
 
   const container: ViewStyle = solid
     ? {
-        backgroundColor: disabled ? colors.iron : colors.white,
+        backgroundColor: disabled ? colors.iron : dangerSolid ? tokens.status.danger : colors.white,
         borderRadius: 12,
         paddingVertical: 14,
         paddingHorizontal: 20
@@ -52,13 +58,28 @@ export function Button({
     : {
         backgroundColor: "transparent",
         borderWidth: 1,
-        borderColor: colors.slate,
+        borderColor: danger ? tokens.status.danger : colors.slate,
         borderRadius: 12,
         paddingVertical: 13,
         paddingHorizontal: 20
       };
 
-  const textColor = solid ? (disabled ? colors.ash : colors.black) : colors.bone;
+  const textColor = solid
+    ? disabled
+      ? colors.ash
+      : dangerSolid
+        ? colors.white
+        : colors.black
+    : danger
+      ? tokens.status.danger
+      : colors.bone;
+  const spinnerColor = solid
+    ? dangerSolid
+      ? colors.white
+      : colors.black
+    : danger
+      ? tokens.status.danger
+      : colors.bone;
 
   return (
     <Pressable
@@ -82,7 +103,7 @@ export function Button({
           style
         ]}
       >
-        {loading ? <ActivityIndicator color={solid ? colors.black : colors.bone} /> : null}
+        {loading ? <ActivityIndicator color={spinnerColor} /> : null}
         {!loading && icon ? <View>{icon}</View> : null}
         {animateLabel && typeof children === "string" ? (
           <Animated.Text
@@ -117,8 +138,9 @@ export function Button({
 
 type RelButtonProps = {
   label: string;
-  /** primary = white pill ("Add"/"Add Back"); quiet = fog text ("✓ Friends"/"Following"/"Added"). */
-  kind: "primary" | "quiet";
+  /** primary = white pill ("Add"); quiet = fog text, iron border ("Added"/"Taunted");
+   *  ghost = white text, slate border — an available secondary action ("Taunt", "Invite"). */
+  kind: "primary" | "quiet" | "ghost";
   onPress?: () => void;
   disabled?: boolean;
 };
@@ -126,6 +148,7 @@ type RelButtonProps = {
 /** Relationship pill (`.rel-btn`, §2.2): 12px 700, padding 7×16, radius 8, min-width 78. */
 export function RelButton({ label, kind, onPress, disabled }: RelButtonProps) {
   const primary = kind === "primary";
+  const ghost = kind === "ghost";
   return (
     <Pressable onPress={onPress} disabled={disabled} pressScale={0.98} accessibilityLabel={label}>
       <View
@@ -135,7 +158,7 @@ export function RelButton({ label, kind, onPress, disabled }: RelButtonProps) {
           paddingHorizontal: 16,
           borderRadius: 8,
           borderWidth: 1,
-          borderColor: primary ? colors.white : colors.iron,
+          borderColor: primary ? colors.white : ghost ? colors.slate : colors.iron,
           backgroundColor: primary ? colors.white : "transparent",
           alignItems: "center",
           justifyContent: "center"
@@ -146,7 +169,7 @@ export function RelButton({ label, kind, onPress, disabled }: RelButtonProps) {
             fontFamily: "Geist_700Bold",
             fontSize: 12,
             letterSpacing: 12 * 0.02,
-            color: primary ? colors.black : colors.fog
+            color: primary ? colors.black : ghost ? colors.white : colors.fog
           }}
         >
           {label}

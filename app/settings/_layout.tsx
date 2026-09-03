@@ -5,7 +5,10 @@ export default function SettingsLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: "fade_from_bottom"
+        animation: "fade_from_bottom",
+        // Same app-wide rule as the root stack: swipe back from anywhere.
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true
       }}
     />
   );

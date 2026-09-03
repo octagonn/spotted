@@ -1,23 +1,19 @@
 import { useAudioPlayer } from "expo-audio";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Eye, Flag, Heart, Image as ImageIcon, Lock, MoreHorizontal, Music, Plus, Send, Trash2, Users, X } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { Flag, Trash2 } from "lucide-react-native";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   useWindowDimensions,
   View
 } from "react-native";
-// RNGH ScrollView: negotiates with the root story gestures, so the viewers
-// list actually scrolls instead of losing its touches to the pan handlers.
-import { Gesture, GestureDetector, ScrollView as GHScrollView } from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -31,30 +27,38 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
-
-import { Avatar } from "@/components/ui/Avatar";
-import { Skeleton, SkeletonRows } from "@/components/ui/Skeleton";
-import { useMarkStoryViewed, useStories, type StoryGroup } from "@/hooks/queries/useStories";
+import { StoryOwnerBar, StoryReplyBar } from "@/components/story/StoryBars";
+import { MusicChipOverlay, STORY_CHIP_STACK, TagsChip, ViewPostChip } from "@/components/story/StoryChips";
+import { StoryHeader } from "@/components/story/StoryHeader";
+import { StoryOverlay } from "@/components/story/StoryOverlay";
+import { StoryViewersList } from "@/components/story/StoryViewersList";
+import { MenuRow } from "@/components/ui/MenuRow";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
 import { REPORT_REASONS, useDeleteStory, useReportContent } from "@/hooks/queries/useContentModeration";
-import { useStoryViewers } from "@/hooks/queries/useStoryViewers";
+import { useMarkStoryViewed, useStories, type StoryGroup } from "@/hooks/queries/useStories";
 import { useStoryLiked, useStoryLikers, useToggleStoryLike } from "@/hooks/queries/useStoryLikes";
+import { useStoryViewers } from "@/hooks/queries/useStoryViewers";
+import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
+import { timeAgo } from "@/lib/notificationCopy";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { showToast } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
+import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { icon, space, tokens } from "@/theme/tokens";
 
 /** How long each story auto-plays, ms. */
 const STORY_MS = 5000;
-
-function timeAgo(iso: string): string {
-  const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 60) return `${mins}m`;
-  return `${Math.round(mins / 60)}h`;
-}
+/** Left inset for the chip stack. */
+const CHIP_LEFT = space[3] + 2;
 
 /** Resolve (or lazily create) the DM conversation, then send a message. */
-async function replyToStory(userId: string, otherId: string, content: string, storyMedia?: string | null): Promise<boolean> {
+async function replyToStory(
+  userId: string,
+  otherId: string,
+  content: string,
+  storyMedia?: string | null
+): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   const [a, b] = [userId, otherId].sort();
   const findConversation = async () => {
@@ -73,7 +77,7 @@ async function replyToStory(userId: string, otherId: string, content: string, st
       .insert({ participant_a: a, participant_b: b })
       .select("id")
       .single();
-    conversationId = error ? await findConversation() : data?.id ?? null;
+    conversationId = error ? await findConversation() : (data?.id ?? null);
   }
   if (!conversationId) return false;
   const { error } = await supabase.from("messages").insert({
@@ -85,6 +89,11 @@ async function replyToStory(userId: string, otherId: string, content: string, st
   return !error;
 }
 
+/**
+ * Story viewer (fullScreenModal). Media first: the photo fills the screen and
+ * every piece of chrome fades on hold. Timer, pager and gestures live on the
+ * UI thread; overlays are local (the modal renders above the global sheet host).
+ */
 export default function StoryViewer() {
   const { user, ps } = useLocalSearchParams<{ user?: string; ps?: string }>();
   const router = useRouter();
@@ -102,9 +111,8 @@ export default function StoryViewer() {
   const [si, setSi] = useState(0);
   const [held, setHeld] = useState(false);
   // Hold-to-fullscreen: while the long-press pause is active FROM THE TAP
-  // ZONES, all chrome (scrim, progress, header, bars) fades out so the photo
-  // stands alone — IG behavior. Separate from `held` because the viewers
-  // sheet also sets held.
+  // ZONES, all chrome fades out so the photo stands alone. Separate from
+  // `held` because the viewers sheet also sets held.
   const [immersed, setImmersed] = useState(false);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
@@ -121,25 +129,21 @@ export default function StoryViewer() {
   const replyInputRef = useRef<TextInput>(null);
   pausedRef.current = held || typing;
 
-  // Finger-tracked horizontal paging between PEOPLE (Instagram-style): the whole
-  // card follows the finger while the neighbor's story peeks in, then snaps to
-  // the target and commits. `canPrev`/`canNext` gate the rubber-band at the ends.
+  // Finger-tracked horizontal paging between PEOPLE: the whole card follows
+  // the finger while the neighbor's story peeks in, then snaps and commits.
   const { width: screenW } = useWindowDimensions();
   const panX = useSharedValue(0);
   // UI-thread mirror of `gi`. The pager translates by (-giSV * width + panX),
   // and a swipe commit updates giSV and panX IN ONE WORKLET so the on-screen
-  // frame is arithmetically unchanged — the flash-free handoff can't depend on
-  // React and Reanimated flushing in the same frame (they never reliably do).
+  // frame is arithmetically unchanged.
   const giSV = useSharedValue(0);
   // 1 between the UI-thread commit and React catching up — pans are ignored.
   const settling = useSharedValue(0);
   const canPrev = useSharedValue(0);
   const canNext = useSharedValue(0);
   const paging = useSharedValue(0); // 1 while a horizontal pan is active (pauses timer)
-  // 1 while an overlay (options menu / viewers sheet / report sheet / reply
-  // keyboard) is up. The root gestures ignore touches then — otherwise a drag
-  // inside the viewers list dismissed the whole story, and a swipe behind an
-  // open sheet paged to another person underneath it.
+  // 1 while an overlay (menu / viewers / report / reply keyboard) is up. The
+  // root gestures ignore touches then.
   const overlayBlock = useSharedValue(0);
 
   // Pick the starting group + first UNVIEWED story once, when stories load.
@@ -164,19 +168,13 @@ export default function StoryViewer() {
   const story = group?.stories[si];
 
   // Latest nav state in a ref so the swipe gestures can be created ONCE and
-  // read current values — recreating gestures every render (the old approach)
-  // tore down + rebuilt the handlers mid-swipe, which is what made
-  // person-to-person swiping janky and could crash.
+  // read current values — recreating gestures every render tore down + rebuilt
+  // the handlers mid-swipe.
   const navRef = useRef({ queue, gi, group });
   navRef.current = { queue, gi, group };
 
   // Underlay pages for the pager, positioned at ABSOLUTE index * width and
-  // keyed by absolute index. The page the finger reveals keeps its React
-  // identity when it becomes the center after a commit, so the visible photo
-  // is never remounted or moved — the core of the flash-free handoff.
-  // Prev shows the previous person's FIRST story (matches goPrevPerson); next
-  // shows the next person's first UNSEEN story (matches goNextPerson); the
-  // center underlay mirrors the story on screen (sits behind the full UI).
+  // keyed by absolute index, so the visible photo is never remounted.
   const pagerPages = useMemo(() => {
     if (!queue) return [] as { idx: number; uri: string }[];
     const out: { idx: number; uri: string }[] = [];
@@ -195,34 +193,19 @@ export default function StoryViewer() {
     return out;
   }, [queue, gi, si]);
 
-  // (Bounds sync moved into the settle-release useLayoutEffect below — they
-  // MUST update in the same synchronous pass. When bounds lagged in a passive
-  // effect, a fast double-flick could commit past the ends: giSV went out of
-  // range, `settling` never released, and swiping died for the session.)
   useEffect(() => {
     overlayBlock.value = menuOpen || viewersOpen || reportOpen || typing ? 1 : 0;
   }, [menuOpen, viewersOpen, reportOpen, typing, overlayBlock]);
   const viewers = useStoryViewers(story?.id, Boolean(group?.isMe));
   const likers = useStoryLikers(story?.id, Boolean(group?.isMe) && viewersOpen);
-  const liked = useStoryLiked(!group?.isMe ? story?.id ?? null : null);
+  const liked = useStoryLiked(!group?.isMe ? (story?.id ?? null) : null);
   const toggleLike = useToggleStoryLike();
 
-  // No blank flash on open (4a): show a spinner until the media decodes, and
-  // prefetch the next segment + the next person's first story ahead of time.
+  // No blank flash on open: show a skeleton until the media decodes.
   const [mediaLoaded, setMediaLoaded] = useState(false);
   useEffect(() => {
     setMediaLoaded(false);
   }, [story?.id]);
-  useEffect(() => {
-    if (!queue) return;
-    const g = queue[gi];
-    const urls: string[] = [];
-    const nextInGroup = g?.stories[si + 1]?.mediaUrl;
-    if (nextInGroup) urls.push(nextInGroup);
-    const nextPersonFirst = queue[gi + 1]?.stories[0]?.mediaUrl;
-    if (nextPersonFirst) urls.push(nextPersonFirst);
-    for (const u of urls) void Image.prefetch(u);
-  }, [queue, gi, si]);
 
   // Any open overlay pauses the story; closing them all resumes it.
   const closeOverlays = () => {
@@ -250,8 +233,7 @@ export default function StoryViewer() {
       return;
     }
     // End of this person: advance to the next group that still has UNSEEN
-    // content. If none remains, EXIT rather than replaying already-viewed
-    // stories (4c — the auto-advance chain stops at the boundary of new content).
+    // content. If none remains, EXIT rather than replaying viewed stories.
     let ni = gi + 1;
     while (ni < queue.length && !queue[ni].stories.some((s) => !s.seen)) ni += 1;
     if (ni < queue.length) {
@@ -276,17 +258,15 @@ export default function StoryViewer() {
   }, [queue, gi, si]);
 
   // Smooth progress: ONE UI-thread linear timing drives the bar for the whole
-  // story (the old 50ms JS interval stepped the width ~1% per tick and
-  // stuttered whenever the JS thread was busy). Pausing cancels the animation
-  // (the value freezes in place); resuming re-times just the remainder.
+  // story. Pausing cancels the animation (the value freezes in place);
+  // resuming re-times just the remainder.
   const advancedRef = useRef(false);
 
   const autoAdvance = useCallback(() => {
     if (advancedRef.current) return;
     advancedRef.current = true;
-    // End of the LAST story: park with the bar full instead of closing the
-    // viewer by itself — closing is the user's move (tap past the end, swipe
-    // down, or the X).
+    // End of the LAST story: park with the bar full instead of closing —
+    // closing is the user's move (tap past the end, swipe down, or the X).
     const atEnd = Boolean(queue && gi === queue.length - 1 && group && si === group.stories.length - 1);
     if (atEnd) return;
     goNext();
@@ -297,9 +277,8 @@ export default function StoryViewer() {
     const remaining = Math.max(16, (1 - barFill.value) * STORY_MS);
     // ReduceMotion.Never is CRITICAL here: this timing IS the story timer, not
     // a decorative animation. With the system Reduce Motion setting on,
-    // Reanimated completes animations instantly (finished: true) — which
-    // auto-advanced through every story in one frame and closed the viewer
-    // the moment it opened on affected phones.
+    // Reanimated completes animations instantly — which auto-advanced through
+    // every story in one frame and closed the viewer the moment it opened.
     barFill.value = withTiming(
       1,
       { duration: remaining, easing: Easing.linear, reduceMotion: ReduceMotion.Never },
@@ -369,8 +348,7 @@ export default function StoryViewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [held, typing]);
 
-  // Preload the neighboring stories so advancing is an instant cache hit
-  // instead of showing the old frame, a cut, then a network load.
+  // Preload the neighboring stories so advancing is an instant cache hit.
   useEffect(() => {
     if (!queue) return;
     const urls: string[] = [];
@@ -390,16 +368,14 @@ export default function StoryViewer() {
     if (urls.length) void Image.prefetch(urls);
   }, [queue, gi, si]);
 
-  // Interactive swipe-down dismiss (Snapchat-style): the card follows the
-  // finger with a slight shrink, then flies off or springs back. The gesture
-  // itself is composed in the useMemo below.
+  // Interactive swipe-down dismiss: the card follows the finger with a slight
+  // shrink, then flies off or springs back.
   const dragY = useSharedValue(0);
-  // Pinch-to-zoom (Instagram-style transient zoom): scale about the pinch
-  // focal point while the fingers are down, spring back to 1 on release.
+  // Pinch-to-zoom (transient): scale about the focal point, spring back on release.
   const pinchScale = useSharedValue(1);
   const pinchFocalX = useSharedValue(0);
   const pinchFocalY = useSharedValue(0);
-  // Swipe = jump to the next/previous PERSON's ring (4d). Stable identity (reads
+  // Swipe = jump to the next/previous PERSON's ring. Stable identity (reads
   // nav state from the ref) so the gestures below never need to be rebuilt.
   const goNextPerson = useCallback(() => {
     const { queue: q, gi: g } = navRef.current;
@@ -419,8 +395,7 @@ export default function StoryViewer() {
       setGi(g - 1);
       setSi(0);
     } else {
-      // Shouldn't be reachable now that the bounds sync is synchronous — but
-      // if a commit ever lands at the first group, undo the worklet's
+      // If a commit ever lands at the first group, undo the worklet's
       // speculative shift so the pager can't wedge on a bailed-out render.
       giSV.value = g;
       panX.value = 0;
@@ -430,9 +405,6 @@ export default function StoryViewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Commit a page change AFTER the snap animation has moved the card fully to
-  // the neighbor — then reset panX so the (identical) new center shows with no
-  // flash. Both happen in the same JS turn.
   const commitNext = useCallback(() => {
     goNextPerson();
   }, [goNextPerson]);
@@ -441,10 +413,7 @@ export default function StoryViewer() {
   }, [goPrevPerson]);
   // React caught up with a commit (or gi changed via tap): sync the UI-thread
   // mirror, the swipe bounds AND release the settle guard in ONE synchronous
-  // pass. Bounds must never lag the release — layout effects all run before
-  // any passive effect, so releasing here while bounds updated in a passive
-  // useEffect left a window where a second flick could page past the ends
-  // (giSV out of range → black screen, settling stuck → swipes dead).
+  // pass. Bounds must never lag the release (layout effect, not passive).
   useLayoutEffect(() => {
     giSV.value = gi;
     canPrev.value = gi > 0 ? 1 : 0;
@@ -453,8 +422,7 @@ export default function StoryViewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gi, queue]);
 
-  // Swipe up: on someone else's story → reply keyboard; on YOUR OWN → viewer
-  // sheet (4e). Stable (reads group from the ref).
+  // Swipe up: on someone else's story → reply keyboard; on YOUR OWN → viewers.
   const swipeUpAction = useCallback(() => {
     const { group: gr } = navRef.current;
     if (!gr) return;
@@ -467,14 +435,9 @@ export default function StoryViewer() {
   }, []);
 
   // Build the composed gesture exactly ONCE (all callbacks + shared values are
-  // stable). GestureDetector then keeps the same handler across renders, so a
-  // re-render mid-swipe never interrupts the pan.
+  // stable), so a re-render mid-swipe never interrupts the pan.
   const storyGesture = useMemo(() => {
-    // Horizontal paging — the card tracks the finger 1:1, rubber-banding when
-    // there's no neighbor in that direction, and snaps to the target on release.
-    // Page snaps carry the finger's release VELOCITY into a clamped spring —
-    // a hard fling lands fast, a slow drag glides — instead of the old fixed
-    // 230ms timing curve that ignored velocity and felt mechanical.
+    // Page snaps carry the finger's release VELOCITY into a clamped spring.
     const SNAP_SPRING = {
       damping: 34,
       stiffness: 270,
@@ -485,10 +448,7 @@ export default function StoryViewer() {
     } as const;
     const pageG = Gesture.Pan()
       .activeOffsetX([-10, 10])
-      // Must bow out BEFORE either vertical gesture activates (up: 18, down:
-      // 16). At the old ±36 the pager could win the Race on a slightly-diagonal
-      // upward swipe — and on the last story that ran commitNext → close(),
-      // which is why "swipe up to reply" read as "swipe up closes the story".
+      // Must bow out BEFORE either vertical gesture activates (up: 18, down: 16).
       .failOffsetY([-14, 14])
       .onStart(() => {
         "worklet";
@@ -507,8 +467,6 @@ export default function StoryViewer() {
       .onEnd((e) => {
         "worklet";
         if (settling.value === 1 || overlayBlock.value === 1) return;
-        // Slideshow thresholds: a quarter-screen drag OR a modest flick turns
-        // the page (the old 80px + 650 velocity made lazy swipes bounce back).
         const turnDistance = screenW * 0.25;
         const goNextSwipe = (e.translationX < -turnDistance || e.velocityX < -500) && canNext.value === 1;
         const goPrevSwipe = (e.translationX > turnDistance || e.velocityX > 500) && canPrev.value === 1;
@@ -516,13 +474,10 @@ export default function StoryViewer() {
           settling.value = 1;
           panX.value = withSpring(-screenW, { ...SNAP_SPRING, velocity: e.velocityX }, (done) => {
             "worklet";
-            // A tap-advance mid-settle clears `settling` (via the sync
-            // effect) — bail instead of double-advancing.
+            // A tap-advance mid-settle clears `settling` — bail instead of double-advancing.
             if (done && settling.value === 1) {
               // ATOMIC handoff: giSV+1 and panX->0 change translation by
-              // (-W + W) = 0 in one UI-thread batch — the frame is pixel-
-              // identical. React then re-renders around the already-visible
-              // page (same key, same position) at its own pace.
+              // (-W + W) = 0 in one UI-thread batch — the frame is pixel-identical.
               giSV.value = giSV.value + 1;
               panX.value = 0;
               paging.value = 0;
@@ -598,7 +553,24 @@ export default function StoryViewer() {
       });
     // Race the one-finger directions; pinch runs alongside (two fingers).
     return Gesture.Simultaneous(Gesture.Race(pageG, swipeDownG, swipeUpG), pinchG);
-  }, [close, commitNext, commitPrev, swipeUpAction, dragY, panX, paging, canNext, canPrev, screenW, pinchScale, pinchFocalX, pinchFocalY, giSV, settling, overlayBlock]);
+  }, [
+    close,
+    commitNext,
+    commitPrev,
+    swipeUpAction,
+    dragY,
+    panX,
+    paging,
+    canNext,
+    canPrev,
+    screenW,
+    pinchScale,
+    pinchFocalX,
+    pinchFocalY,
+    giSV,
+    settling,
+    overlayBlock
+  ]);
 
   const pageStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -giSV.value * screenW + panX.value }]
@@ -635,6 +607,11 @@ export default function StoryViewer() {
     showToast(ok ? `Sent to ${group.name.split(" ")[0]}` : "Couldn't send reply");
   };
 
+  const openUser = (username: string) => {
+    close();
+    router.push(`/user/${username}`);
+  };
+
   if (!queue || !group || !story) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
@@ -643,531 +620,256 @@ export default function StoryViewer() {
     );
   }
 
+  // Chip stack above the bottom bar: each present chip pushes the ones above it up.
+  const chipBase = insets.bottom + (group.isMe ? 58 : 82);
+  const musicOffset = story.music ? STORY_CHIP_STACK : 0;
+  const tagsOffset = story.tags.length ? STORY_CHIP_STACK : 0;
+
   return (
     <GestureDetector gesture={storyGesture}>
       <Animated.View style={[{ flex: 1, backgroundColor: colors.black, overflow: "hidden" }, dragStyle]}>
-      {/* Paging layer — the current card + its two neighbor peeks translate
-          together with the finger; the neighbor images sit exactly one screen
-          width to each side so a drag reveals them seamlessly. */}
-      <Animated.View style={[{ flex: 1 }, pageStyle]}>
-        {/* Underlay pages at ABSOLUTE index positions, keyed by index — the
-            revealed page keeps its node across a commit, so the photo the
-            user is looking at never remounts. */}
-        {pagerPages.map((pg) => (
-          <Image
-            key={"page-" + pg.idx}
-            source={{ uri: pg.uri }}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            style={{ position: "absolute", top: 0, bottom: 0, left: pg.idx * screenW, width: screenW, backgroundColor: colors.black }}
-          />
-        ))}
-      {/* Full story UI rides at the center page's absolute slot. */}
-      <View style={{ position: "absolute", top: 0, bottom: 0, left: gi * screenW, width: screenW }}>
-      {/* iOS: the reply bar is absolutely positioned, which KAV padding cannot
-          move — the explicit bottom offset below handles it instead. */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? undefined : "height"}
-      >
-        {/* Skeleton behind the media so opening a story never flashes blank. */}
-        {story.mediaUrl && !mediaLoaded ? (
-          <View pointerEvents="none" style={{ position: "absolute", inset: 0 }}>
-            <Skeleton width="100%" radius={0} style={{ position: "absolute", inset: 0, height: undefined }} />
-          </View>
-        ) : null}
-        {story.mediaUrl ? (
-          <Animated.View pointerEvents="none" style={[{ position: "absolute", inset: 0 }, zoomStyle]}>
+        {/* Paging layer — the current card + its two neighbor peeks translate
+            together with the finger. */}
+        <Animated.View style={[{ flex: 1 }, pageStyle]}>
+          {/* Underlay pages at ABSOLUTE index positions, keyed by index — the
+              revealed page keeps its node across a commit. */}
+          {pagerPages.map((pg) => (
             <Image
-              source={{ uri: story.mediaUrl }}
+              key={"page-" + pg.idx}
+              source={{ uri: pg.uri }}
               contentFit="contain"
-              transition={150}
               cachePolicy="memory-disk"
-              priority="high"
-              onLoad={() => setMediaLoaded(true)}
-              // Reuse one decoded surface across stories (no reload flash) and let
-              // expo-image downscale big photos to the view — the main viewer cost.
-              recyclingKey={story.id}
-              allowDownscaling
-              style={{ flex: 1 }}
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: pg.idx * screenW,
+                width: screenW,
+                backgroundColor: colors.black
+              }}
             />
-          </Animated.View>
-        ) : null}
-
-        {/* Tap zones: left third = prev, right two-thirds = next; hold = pause. */}
-        <View style={{ position: "absolute", inset: 0, flexDirection: "row" }}>
-          <Pressable
-            style={{ width: "33%" }}
-            onPress={goPrev}
-            delayLongPress={180}
-            onLongPress={() => {
-              setHeld(true);
-              setImmersed(true);
-            }}
-            onPressOut={() => {
-              setHeld(false);
-              setImmersed(false);
-            }}
-          />
-          <Pressable
-            style={{ flex: 1 }}
-            onPress={goNext}
-            delayLongPress={180}
-            onLongPress={() => {
-              setHeld(true);
-              setImmersed(true);
-            }}
-            onPressOut={() => {
-              setHeld(false);
-              setImmersed(false);
-            }}
-          />
-        </View>
-
-        <LinearGradient
-          colors={["rgba(0,0,0,0.55)", "transparent"]}
-          pointerEvents="none"
-          style={{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top + 110, opacity: immersed ? 0 : 1 }}
-        />
-
-        {/* Progress bars — one segment per story. */}
-        <View
-          pointerEvents="none"
-          style={{ position: "absolute", top: insets.top + 8, left: 12, right: 12, flexDirection: "row", gap: 4, opacity: immersed ? 0 : 1 }}
-        >
-          {group.stories.map((s, index) => (
-            <View
-              key={s.id}
-              style={{ flex: 1, height: 2.5, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.3)", overflow: "hidden" }}
-            >
-              {index < si ? (
-                <View style={{ height: "100%", width: "100%", backgroundColor: colors.white }} />
-              ) : index === si ? (
-                <Animated.View style={[{ height: "100%", backgroundColor: colors.white }, activeBarStyle]} />
-              ) : null}
-            </View>
           ))}
-        </View>
-
-        {/* Header: poster + time + close */}
-        <View
-          pointerEvents={immersed ? "none" : "auto"}
-          style={{
-            position: "absolute",
-            top: insets.top + 20,
-            left: 14,
-            right: 14,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            opacity: immersed ? 0 : 1
-          }}
-        >
-          <Pressable
-            onPress={() => {
-              if (group.isMe) return;
-              router.push(`/user/${group.username}`);
-            }}
-            accessibilityLabel={`Open ${group.name}'s profile`}
-            hitSlop={6}
-            style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
-          >
-            <Avatar name={group.name} uri={group.avatarUrl} size={34} />
-            <View>
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white }}>{group.name}</Text>
-              {group.privateStoryName ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                  <Lock size={10} color="rgba(255,255,255,0.75)" strokeWidth={2.4} />
-                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 11, color: "rgba(255,255,255,0.75)" }}>
-                    {group.privateStoryName}
-                  </Text>
+          {/* Full story UI rides at the center page's absolute slot. */}
+          <View style={{ position: "absolute", top: 0, bottom: 0, left: gi * screenW, width: screenW }}>
+            {/* iOS: the reply bar is absolutely positioned, which KAV padding
+                cannot move — StoryReplyBar pins itself to the keyboard instead. */}
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? undefined : "height"}>
+              {story.mediaUrl && !mediaLoaded ? (
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  <Skeleton width="100%" radius={0} style={{ position: "absolute", inset: 0, height: undefined }} />
                 </View>
               ) : null}
-            </View>
-          </Pressable>
-          <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: "rgba(255,255,255,0.7)" }}>
-            {timeAgo(story.createdAt)}
-          </Text>
-          <View style={{ flex: 1 }} />
-          <Pressable
-            onPress={() => {
-              setHeld(true);
-              setMenuOpen(true);
-            }}
-            hitSlop={12}
-            accessibilityLabel="Story options"
-            style={{ paddingHorizontal: 4 }}
-          >
-            <MoreHorizontal color={colors.white} size={24} strokeWidth={2.2} />
-          </Pressable>
-          <Pressable onPress={close} hitSlop={12} accessibilityLabel="Close stories">
-            <X color={colors.white} size={24} strokeWidth={2.2} />
-          </Pressable>
-        </View>
+              {story.mediaUrl ? (
+                <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, zoomStyle]}>
+                  <Image
+                    source={{ uri: story.mediaUrl }}
+                    contentFit="contain"
+                    transition={150}
+                    cachePolicy="memory-disk"
+                    priority="high"
+                    onLoad={() => setMediaLoaded(true)}
+                    // Reuse one decoded surface across stories and let expo-image
+                    // downscale big photos to the view — the main viewer cost.
+                    recyclingKey={story.id}
+                    allowDownscaling
+                    style={{ flex: 1 }}
+                  />
+                </Animated.View>
+              ) : null}
 
-        {/* Reshared post — credit chip that opens the original (IG pattern).
-            Placed above the tag/music chips so the stack never overlaps. */}
-        {story.sharedPostId ? (
-          <Pressable
-            onPress={() => {
-              close();
-              router.push(`/post/${story.sharedPostId}`);
-            }}
-            accessibilityLabel="View the original post"
-            style={{
-              position: "absolute",
-              left: 14,
-              bottom:
-                insets.bottom +
-                (group.isMe ? 58 : 82) +
-                (story.music ? 40 : 0) +
-                (story.tags.length ? 40 : 0)
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingVertical: 6,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                backgroundColor: "rgba(0,0,0,0.55)",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.25)"
-              }}
-            >
-              <ImageIcon size={13} color={colors.white} strokeWidth={2} />
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.white }}>View post</Text>
-            </View>
-          </Pressable>
-        ) : null}
-
-        {/* Tagged friends — tappable chips that open each profile (consistent with posts). */}
-        {story.tags.length ? (
-          <View
-            style={{
-              position: "absolute",
-              left: 14,
-              bottom: insets.bottom + (group.isMe ? 58 : 82) + (story.music ? 40 : 0),
-              flexDirection: "row",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 6,
-              maxWidth: "80%",
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              borderRadius: 999,
-              backgroundColor: "rgba(0,0,0,0.55)"
-            }}
-          >
-            <Users size={13} color={colors.white} strokeWidth={2} />
-            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.75)" }}>with</Text>
-            {story.tags.map((tag) => (
-              <Pressable
-                key={tag.userId}
-                onPress={() => {
-                  close();
-                  router.push(`/user/${tag.username}`);
-                }}
-                accessibilityLabel={`Open @${tag.username}'s profile`}
-              >
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12, color: colors.white }}>
-                  @{tag.username}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Music chip — what's playing on this story. */}
-        {story.music ? (
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              opacity: immersed ? 0 : 1,
-              left: 14,
-              bottom: insets.bottom + (group.isMe ? 58 : 82),
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              paddingVertical: 6,
-              paddingLeft: 6,
-              paddingRight: 12,
-              borderRadius: 999,
-              backgroundColor: "rgba(0,0,0,0.55)"
-            }}
-          >
-            {story.music.artworkUrl ? (
-              <Image source={{ uri: story.music.artworkUrl }} style={{ width: 22, height: 22, borderRadius: 6 }} contentFit="cover" />
-            ) : (
-              <Music size={14} color={colors.white} strokeWidth={2} />
-            )}
-            <Text numberOfLines={1} style={{ maxWidth: 220, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.white }}>
-              {story.music.title} · {story.music.artist}
-            </Text>
-          </View>
-        ) : null}
-
-        {group.isMe ? (
-          // Slim own-story bar: viewer count left, compact Add right — the
-          // old centered stack sat on top of the photo and hid the count
-          // until the sheet was opened.
-          <View
-            pointerEvents={immersed ? "none" : "auto"}
-            style={{
-              position: "absolute",
-              bottom: insets.bottom + 16,
-              left: 14,
-              right: 14,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              opacity: immersed ? 0 : 1
-            }}
-          >
-            <Pressable
-              onPress={() => {
-                setHeld(true);
-                setViewersOpen(true);
-              }}
-              accessibilityLabel="See who viewed your story"
-              hitSlop={8}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.55)" }}>
-                <Eye size={15} color={colors.white} strokeWidth={2} />
-                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>
-                  {viewers.data?.length ? `Seen by ${viewers.data.length}` : "Seen by"}
-                </Text>
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                close();
-                router.push("/camera?mode=story");
-              }}
-              accessibilityLabel="Add another story"
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: 16, borderRadius: 19, backgroundColor: colors.white }}>
-                <Plus size={15} color={colors.black} strokeWidth={2.6} />
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: colors.black }}>Add</Text>
-              </View>
-            </Pressable>
-          </View>
-        ) : (
-          // Reply field — sends a DM to the poster referencing this story.
-          <View
-            pointerEvents={immersed ? "none" : "auto"}
-            style={{
-              position: "absolute",
-              opacity: immersed ? 0 : 1,
-              // KAV padding can't move an absolutely-positioned bar — pin it
-              // to the top of the keyboard ourselves.
-              bottom: Platform.OS === "ios" ? keyboardHeight : 0,
-              left: 0,
-              right: 0,
-              paddingHorizontal: 14,
-              paddingBottom: typing ? 10 : insets.bottom + 12,
-              paddingTop: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10
-            }}
-          >
-            <TextInput
-              ref={replyInputRef}
-              value={draft}
-              onChangeText={setDraft}
-              onFocus={() => setTyping(true)}
-              onBlur={() => setTyping(false)}
-              onSubmitEditing={() => void sendReply()}
-              placeholder={`Reply to ${group.name.split(" ")[0]}…`}
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              returnKeyType="send"
-              style={{
-                flex: 1,
-                minHeight: 44,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.4)",
-                borderRadius: 999,
-                paddingHorizontal: 18,
-                paddingVertical: 10,
-                fontSize: 14,
-                color: colors.white,
-                fontFamily: "Geist_400Regular"
-              }}
-            />
-            {draft.trim().length > 0 ? (
-              <Pressable
-                onPress={() => void sendReply()}
-                accessibilityLabel="Send reply"
-                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}
-              >
-                <Send size={18} color={colors.black} strokeWidth={2.2} />
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => {
-                  if (story?.id) toggleLike.mutate({ storyId: story.id, like: !liked.data });
-                }}
-                accessibilityLabel={liked.data ? "Unlike story" : "Like story"}
-                hitSlop={8}
-                style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" }}
-              >
-                <Heart
-                  size={26}
-                  color={liked.data ? "#FF2D55" : colors.white}
-                  fill={liked.data ? "#FF2D55" : "transparent"}
-                  strokeWidth={2}
+              {/* Tap zones: left third = prev, right two-thirds = next; hold = pause. */}
+              <View style={[StyleSheet.absoluteFill, { flexDirection: "row" }]}>
+                <Pressable
+                  style={{ width: "33%" }}
+                  onPress={goPrev}
+                  delayLongPress={180}
+                  onLongPress={() => {
+                    setHeld(true);
+                    setImmersed(true);
+                  }}
+                  onPressOut={() => {
+                    setHeld(false);
+                    setImmersed(false);
+                  }}
                 />
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {/* Options menu (⋯) — Delete on your own story, Report on others'. */}
-        {menuOpen ? (
-          <Pressable onPress={closeOverlays} style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }]}>
-            <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: colors.ink, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.iron, paddingBottom: insets.bottom + 12 }}>
-              <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 6 }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.slate }} />
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={goNext}
+                  delayLongPress={180}
+                  onLongPress={() => {
+                    setHeld(true);
+                    setImmersed(true);
+                  }}
+                  onPressOut={() => {
+                    setHeld(false);
+                    setImmersed(false);
+                  }}
+                />
               </View>
-              {group.isMe ? (
-                <OverlayRow
-                  icon={<Trash2 size={18} color="#EF4444" strokeWidth={2} />}
-                  label="Delete story"
-                  destructive
+
+              <StoryHeader
+                group={group}
+                storyIndex={si}
+                timeLabel={timeAgo(story.createdAt)}
+                activeBarStyle={activeBarStyle}
+                immersed={immersed}
+                onOpenProfile={() => router.push(`/user/${group.username}`)}
+                onOpenMenu={() => {
+                  setHeld(true);
+                  setMenuOpen(true);
+                }}
+                onClose={close}
+              />
+
+              {story.sharedPostId ? (
+                <ViewPostChip
                   onPress={() => {
-                    setMenuOpen(false);
-                    deleteStory.mutate(
-                      { storyId: story.id, mediaPath: null },
-                      {
-                        onSuccess: () => {
-                          showToast("Story deleted");
-                          close();
-                        },
-                        onError: () => showToast("Couldn't delete — try again")
-                      }
-                    );
+                    close();
+                    router.push(`/post/${story.sharedPostId}`);
+                  }}
+                  style={{
+                    position: "absolute",
+                    left: CHIP_LEFT,
+                    bottom: chipBase + musicOffset + tagsOffset,
+                    opacity: immersed ? 0 : 1
+                  }}
+                />
+              ) : null}
+              {story.tags.length ? (
+                <TagsChip
+                  tags={story.tags}
+                  onOpenUser={openUser}
+                  style={{
+                    position: "absolute",
+                    left: CHIP_LEFT,
+                    bottom: chipBase + musicOffset,
+                    opacity: immersed ? 0 : 1
+                  }}
+                />
+              ) : null}
+              {story.music ? (
+                <MusicChipOverlay
+                  music={story.music}
+                  style={{ position: "absolute", left: CHIP_LEFT, bottom: chipBase, opacity: immersed ? 0 : 1 }}
+                />
+              ) : null}
+
+              {group.isMe ? (
+                <StoryOwnerBar
+                  seenCount={viewers.data?.length}
+                  immersed={immersed}
+                  onOpenViewers={() => {
+                    setHeld(true);
+                    setViewersOpen(true);
+                  }}
+                  onAdd={() => {
+                    close();
+                    router.push("/camera?mode=story");
                   }}
                 />
               ) : (
-                <OverlayRow
-                  icon={<Flag size={18} color={colors.silver} strokeWidth={2} />}
-                  label="Report story"
-                  onPress={() => {
-                    setMenuOpen(false);
-                    setReportOpen(true);
+                <StoryReplyBar
+                  inputRef={replyInputRef}
+                  draft={draft}
+                  onChangeDraft={setDraft}
+                  onSend={() => void sendReply()}
+                  onFocus={() => setTyping(true)}
+                  onBlur={() => setTyping(false)}
+                  typing={typing}
+                  keyboardHeight={keyboardHeight}
+                  immersed={immersed}
+                  firstName={group.name.split(" ")[0]}
+                  liked={Boolean(liked.data)}
+                  onToggleLike={() => {
+                    if (story?.id) toggleLike.mutate({ storyId: story.id, like: !liked.data });
                   }}
                 />
               )}
-              <OverlayRow icon={null} label="Cancel" onPress={closeOverlays} />
-            </Pressable>
-          </Pressable>
-        ) : null}
 
-        {/* Report reasons */}
-        {reportOpen ? (
-          <Pressable onPress={closeOverlays} style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }]}>
-            <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: colors.ink, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.iron, paddingBottom: insets.bottom + 12 }}>
-              <Text style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 10, fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>
-                Report story
-              </Text>
-              {REPORT_REASONS.map((r) => (
-                <OverlayRow
-                  key={r}
-                  icon={null}
-                  label={r}
-                  onPress={() => {
-                    reportContent.mutate(
-                      { contentType: "story", contentId: story.id, reportedUserId: group.userId, reason: r },
-                      {
-                        onSuccess: () => {
-                          closeOverlays();
-                          showToast("Thanks — we'll review this.");
-                        },
-                        onError: () => showToast("Couldn't submit — try again")
+              {/* Options (⋯) — Delete on your own story, Report on others'. */}
+              {menuOpen ? (
+                <StoryOverlay onClose={closeOverlays}>
+                  {group.isMe ? (
+                    <MenuRow
+                      icon={
+                        <Trash2
+                          size={icon.size.xs + 2}
+                          color={tokens.status.danger}
+                          strokeWidth={icon.stroke.regular}
+                        />
                       }
-                    );
-                  }}
-                />
-              ))}
-              <OverlayRow icon={null} label="Cancel" onPress={closeOverlays} />
-            </Pressable>
-          </Pressable>
-        ) : null}
-
-        {/* Seen-by viewers list (own story) */}
-        {viewersOpen ? (
-          <Pressable onPress={closeOverlays} style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }]}>
-            <Pressable onPress={(e) => e.stopPropagation()} style={{ maxHeight: "70%", backgroundColor: colors.ink, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.iron, paddingBottom: insets.bottom + 12 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 }}>
-                <Eye size={17} color={colors.white} strokeWidth={2} />
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>
-                  {`Seen by ${viewers.data?.length ?? 0}`}
-                </Text>
-              </View>
-              <GHScrollView style={{ maxHeight: 360 }}>
-                {viewers.isLoading ? (
-                  <SkeletonRows count={4} avatar={34} />
-                ) : (viewers.data ?? []).length === 0 ? (
-                  <Text style={{ paddingHorizontal: 20, paddingVertical: 16, fontSize: 12.5, color: colors.fog }}>
-                    No views yet.
-                  </Text>
-                ) : (
-                  (viewers.data ?? []).map((v) => (
-                    <Pressable
-                      key={v.id}
+                      label="Delete story"
+                      destructive
                       onPress={() => {
-                        close();
-                        router.push(`/user/${v.username}`);
+                        setMenuOpen(false);
+                        deleteStory.mutate(
+                          { storyId: story.id, mediaPath: null },
+                          {
+                            onSuccess: () => {
+                              showToast("Story deleted");
+                              close();
+                            },
+                            onError: () => showToast("Couldn't delete — try again")
+                          }
+                        );
                       }}
-                      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 9 }}
-                    >
-                      <Avatar name={v.display_name} uri={v.avatar_url} size={42} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>{v.display_name}</Text>
-                        <Text style={{ marginTop: 1, fontSize: 12, color: colors.fog }}>@{v.username}</Text>
-                      </View>
-                      {likers.data?.has(v.id) ? (
-                        <Heart size={16} color="#FF2D55" fill="#FF2D55" strokeWidth={2} />
-                      ) : null}
-                      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.fog }}>{timeAgo(v.viewedAt)}</Text>
-                    </Pressable>
-                  ))
-                )}
-              </GHScrollView>
-            </Pressable>
-          </Pressable>
-        ) : null}
-      </KeyboardAvoidingView>
-      </View>
-      </Animated.View>
+                    />
+                  ) : (
+                    <MenuRow
+                      icon={<Flag size={icon.size.xs + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />}
+                      label="Report story"
+                      onPress={() => {
+                        setMenuOpen(false);
+                        setReportOpen(true);
+                      }}
+                    />
+                  )}
+                  <MenuRow icon={null} label="Cancel" onPress={closeOverlays} />
+                </StoryOverlay>
+              ) : null}
+
+              {reportOpen ? (
+                <StoryOverlay onClose={closeOverlays}>
+                  <Text variant="subheading" className="px-5 pt-2 pb-2">
+                    Report story
+                  </Text>
+                  {REPORT_REASONS.map((r) => (
+                    <MenuRow
+                      key={r}
+                      icon={null}
+                      label={r}
+                      onPress={() => {
+                        reportContent.mutate(
+                          { contentType: "story", contentId: story.id, reportedUserId: group.userId, reason: r },
+                          {
+                            onSuccess: () => {
+                              closeOverlays();
+                              showToast("Thanks — we'll review this.");
+                            },
+                            onError: () => showToast("Couldn't submit — try again")
+                          }
+                        );
+                      }}
+                    />
+                  ))}
+                  <MenuRow icon={null} label="Cancel" onPress={closeOverlays} />
+                </StoryOverlay>
+              ) : null}
+
+              {viewersOpen ? (
+                <StoryOverlay onClose={closeOverlays} maxHeight="70%">
+                  <StoryViewersList
+                    viewers={viewers.data ?? []}
+                    loading={viewers.isLoading}
+                    likedBy={likers.data}
+                    onOpenUser={openUser}
+                  />
+                </StoryOverlay>
+              ) : null}
+            </KeyboardAvoidingView>
+          </View>
+        </Animated.View>
       </Animated.View>
     </GestureDetector>
-  );
-}
-
-function OverlayRow({
-  icon,
-  label,
-  destructive,
-  onPress
-}: {
-  icon: React.ReactNode;
-  label: string;
-  destructive?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} accessibilityLabel={label}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 15 }}>
-        {icon ? <View style={{ width: 20, alignItems: "center" }}>{icon}</View> : <View style={{ width: 20 }} />}
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 15, color: destructive ? "#EF4444" : label === "Cancel" ? colors.fog : colors.white }}>
-          {label}
-        </Text>
-      </View>
-    </Pressable>
   );
 }

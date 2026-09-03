@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
 import { CachedImage } from "@/components/ui/CachedImage";
@@ -80,6 +80,8 @@ export function Avatar({
   const [from, to] = gradientFor(name);
   const initial = name.trim().charAt(0).toUpperCase() || "?";
   const meaningful = Boolean(accessibilityLabel);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [uri]);
 
   return (
     <View
@@ -101,11 +103,19 @@ export function Avatar({
         opacity: muted ? 0.4 : 1
       }}
     >
-      {uri ? (
-        // expo-image (memory+disk cache): avatar URLs are public and stable, so
-        // every avatar in the app renders from cache after first sight.
-        <CachedImage source={{ uri }} contentFit="cover" style={{ width: px, height: px }} />
-      ) : (
+      {/* Gradient + initial ALWAYS render underneath: while an "r2:" avatar is
+          still being signed (or if signing/loading fails on a device) the
+          circle used to be a black hole. The image paints over it once it
+          actually loads. */}
+      {uri && !failed ? (
+        <CachedImage
+          source={{ uri }}
+          contentFit="cover"
+          style={{ position: "absolute", top: 0, left: 0, width: px, height: px, zIndex: 1 }}
+          onError={() => setFailed(true)}
+        />
+      ) : null}
+      {
         <>
           <LinearGradient
             colors={[from, to]}
@@ -123,7 +133,7 @@ export function Avatar({
             {initial}
           </Text>
         </>
-      )}
+      }
       {/* Sheen: linear-gradient(160deg, rgba(255,255,255,0.10), transparent 55%) */}
       <LinearGradient
         colors={["rgba(255,255,255,0.10)", "transparent"]}
@@ -131,7 +141,7 @@ export function Avatar({
         start={{ x: 0.35, y: 0 }}
         end={{ x: 0.65, y: 1 }}
         pointerEvents="none"
-        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        style={{ zIndex: 2,  position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
       />
     </View>
   );

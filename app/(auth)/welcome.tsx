@@ -14,9 +14,11 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GrainOverlay } from "@/components/GrainOverlay";
+import { StepPill } from "@/components/auth/OnboardingHeader";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
 import { usePageFade } from "@/hooks/usePageFade";
+import { colors } from "@/theme/colors";
 
 // Glowing S-dumbbell mark (transparent PNG, 3:2) — rendered bare, no
 // container/border, so the glow bleeds straight into the video background.
@@ -61,10 +63,7 @@ function SpottedReveal() {
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    progress.value = withDelay(
-      400,
-      withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) })
-    );
+    progress.value = withDelay(400, withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }));
   }, [progress]);
 
   const style = useAnimatedStyle(() => ({
@@ -83,7 +82,7 @@ function SpottedReveal() {
           fontSize: 60,
           lineHeight: 96,
           letterSpacing: -1.2,
-          color: "#FAFAFA",
+          color: colors.white,
           textTransform: "uppercase",
           paddingTop: 22,
           paddingBottom: 4
@@ -118,11 +117,7 @@ export default function WelcomeScreen() {
 
         <View className="gap-4">
           <Animated.View entering={FadeInDown.duration(600).delay(150)}>
-            <View className="self-start overflow-hidden rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-              <Text variant="micro" className="text-mist">
-                DAILY · GYM · STORIES
-              </Text>
-            </View>
+            <StepPill>DAILY · GYM · STORIES</StepPill>
           </Animated.View>
 
           <SpottedReveal />

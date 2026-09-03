@@ -1,5 +1,13 @@
-/** Post photo frame ratio (w/h) — the feed's main photo frame. */
-export const POST_PHOTO_RATIO = 3 / 3.6;
+/**
+ * Post photo frame ratio (w/h) — the feed's main photo frame AND the daily
+ * camera's viewfinder.
+ *
+ * 3:4 is the phone camera sensor's native portrait ratio (the reason
+ * Instagram moved its feed to 3:4 in 2025): the viewfinder shows the whole
+ * sensor frame, the capture is exactly what was on screen, and the feed shows
+ * the whole capture. Nothing is cropped at any step.
+ */
+export const POST_PHOTO_RATIO = 3 / 4;
 /** Dual-selfie inset frame ratio (matches the feed inset). */
 export const INSET_RATIO = 3 / 4;
 
@@ -38,4 +46,3 @@ export function captureCropRect(
     height: h
   };
 }
-

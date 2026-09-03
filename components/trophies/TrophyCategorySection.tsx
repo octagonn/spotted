@@ -1,14 +1,15 @@
 import { ChevronDown } from "lucide-react-native";
 import { useEffect } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { TrophyCard } from "@/components/trophies/TrophyCard";
 import { TrophyGrid } from "@/components/trophies/TrophyGrid";
 import { Pressable } from "@/components/ui/Pressable";
+import { Text } from "@/components/ui/Text";
 import { type CategorySection } from "@/lib/trophySelectors";
-import { colors } from "@/theme/colors";
-import { tokens } from "@/theme/tokens";
+import { durations } from "@/theme/motion";
+import { icon, space, tokens } from "@/theme/tokens";
 
 /**
  * A collapsible category section (5b): the header is a tap target with a
@@ -34,7 +35,7 @@ export function TrophyCategorySection({
 
   const rotation = useSharedValue(collapsed ? -90 : 0);
   useEffect(() => {
-    rotation.value = withTiming(collapsed ? -90 : 0, { duration: 200 });
+    rotation.value = withTiming(collapsed ? -90 : 0, { duration: durations.color });
   }, [collapsed, rotation]);
   const chevronStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
 
@@ -42,20 +43,30 @@ export function TrophyCategorySection({
     <>
       <Pressable
         onPress={() => onToggle(section.category)}
+        haptic="selection"
         accessibilityRole="button"
         accessibilityState={{ expanded: !collapsed }}
         accessibilityLabel={`${section.label}, ${earnedCount} of ${section.cards.length} earned`}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 20, paddingBottom: 10 }}>
-          <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.14, textTransform: "uppercase", color: colors.fog }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: space[2],
+            paddingHorizontal: space[4] + 2,
+            paddingTop: space[4] + 4,
+            paddingBottom: space[2] + 2
+          }}
+        >
+          <Text variant="micro" accessibilityRole="header">
             {section.label}
           </Text>
-          <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 10.5, color: earnedCount > 0 ? tokens.accent.gold : colors.slate }}>
-            {earnedCount}/{section.cards.length}
+          <Text variant="mono" className={earnedCount > 0 ? "text-gold" : "text-slate"}>
+            {`${earnedCount}/${section.cards.length}`}
           </Text>
           <View style={{ flex: 1 }} />
           <Animated.View style={chevronStyle}>
-            <ChevronDown size={15} color={colors.fog} strokeWidth={2} />
+            <ChevronDown size={icon.size.xs - 1} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
           </Animated.View>
         </View>
       </Pressable>

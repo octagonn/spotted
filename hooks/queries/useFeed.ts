@@ -3,7 +3,7 @@ import { useCallback, useRef } from "react";
 
 import { logger } from "@/lib/logger";
 import { mockFeed } from "@/lib/mockData";
-import { isSupabaseConfigured, signedPostUrls, supabase } from "@/lib/supabase";
+import { isDemoMode, isSupabaseConfigured, signedPostUrls, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import type { FeedPost, Gym, Post, Profile } from "@/types/domain";
 
@@ -102,7 +102,7 @@ export function useFeed() {
     refetchInterval: 60_000,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }): Promise<FeedPost[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return pageParam ? [] : mockFeed;
       }
       // The main feed shows only TODAY's posts — anything from a previous day

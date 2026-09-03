@@ -5,16 +5,13 @@ import { Pressable, StyleSheet } from "react-native";
 import ReanimatedSwipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 
+import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
+
 const ACTION_WIDTH = 84;
 
 /** The red delete pane revealed behind the row (tracks the drag 1:1). */
-function DeleteAction({
-  drag,
-  onPress
-}: {
-  drag: SharedValue<number>;
-  onPress: () => void;
-}) {
+function DeleteAction({ drag, onPress }: { drag: SharedValue<number>; onPress: () => void }) {
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: drag.value + ACTION_WIDTH }]
   }));
@@ -26,7 +23,7 @@ function DeleteAction({
         accessibilityLabel="Delete conversation"
         style={styles.actionPress}
       >
-        <Trash2 size={22} color="#FFFFFF" strokeWidth={2} />
+        <Trash2 size={22} color={colors.pure} strokeWidth={2} />
       </Pressable>
     </Animated.View>
   );
@@ -84,11 +81,11 @@ export function SwipeableThreadRow({
 
 const styles = StyleSheet.create({
   row: {
-    backgroundColor: "#000000"
+    backgroundColor: colors.black
   },
   action: {
     width: ACTION_WIDTH,
-    backgroundColor: "#E5484D"
+    backgroundColor: tokens.status.danger
   },
   actionPress: {
     flex: 1,

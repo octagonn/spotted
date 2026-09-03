@@ -64,6 +64,21 @@ const isWebServer = Platform.OS === "web" && typeof window === "undefined";
 
 export const isSupabaseConfigured = configuredUrl.length > 0 && configuredAnonKey.length > 0;
 
+/**
+ * The offline demo mode (mock "Octavio" profile, fixture feed/chats/friends)
+ * exists ONLY for local development without a backend. It is hard-off in every
+ * release bundle: an OTA update shipped without backend config on 2026-09-02
+ * and every install that took it opened "signed in" as the mock profile with
+ * fake people in the feed. Every mock branch in the app keys off THIS flag, not
+ * off `!isSupabaseConfigured`, so a release bundle can never render fixture
+ * data no matter how it was built. In release an unconfigured bundle shows
+ * <ConfigBlocker> (app/_layout.tsx) and nothing else.
+ */
+export const isDemoMode = __DEV__ && !isSupabaseConfigured;
+
+/** Release bundle with no backend config — a packaging failure, never a mode. */
+export const isBrokenRelease = !__DEV__ && !isSupabaseConfigured;
+
 export const supabase = createClient<Database>(
   isSupabaseConfigured ? configuredUrl : "https://example.supabase.co",
   isSupabaseConfigured ? configuredAnonKey : "anon-key-not-configured",

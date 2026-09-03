@@ -169,9 +169,7 @@ export function ShutterButton({
             accessibilityRole="button"
             accessibilityState={{ disabled }}
             accessibilityLabel={recording ? "Recording video" : "Take photo"}
-            accessibilityHint={
-              allowRecording ? "Activate to take a photo, or use the Record video action" : undefined
-            }
+            accessibilityHint={allowRecording ? "Activate to take a photo, or use the Record video action" : undefined}
             accessibilityActions={
               allowRecording
                 ? [
@@ -201,9 +199,9 @@ export function ShutterButton({
 /** The visual ring: white puck idle, red puck recording, red square when locked. */
 function ShutterRing({ recording, locked }: { recording: boolean; locked: boolean }) {
   const inner = locked
-    ? { width: 30, height: 30, borderRadius: 8, backgroundColor: "#EF4444" }
+    ? { width: 30, height: 30, borderRadius: 8, backgroundColor: tokens.status.danger }
     : recording
-      ? { width: 40, height: 40, borderRadius: 20, backgroundColor: "#EF4444" }
+      ? { width: 40, height: 40, borderRadius: 20, backgroundColor: tokens.status.danger }
       : { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.white };
   return (
     <View
@@ -212,7 +210,7 @@ function ShutterRing({ recording, locked }: { recording: boolean; locked: boolea
         height: 76,
         borderRadius: 38,
         borderWidth: 4,
-        borderColor: recording ? "#EF4444" : colors.white,
+        borderColor: recording ? tokens.status.danger : colors.white,
         alignItems: "center",
         justifyContent: "center"
       }}

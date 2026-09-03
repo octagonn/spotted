@@ -7,13 +7,10 @@ import { logger } from "@/lib/logger";
 /** AsyncStorage key holding the local-date string of the last daily post. */
 const POSTED_TODAY_KEY = "spotted:postedTodayDate";
 
-/** Local-date key, e.g. "2026-07-14" — local timezone, so the flag resets at local midnight. */
-export function localDateKey(date: Date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+import { localDateKey } from "@/lib/dateKey";
+
+/** Re-exported for existing importers; the implementation lives in lib (node-testable). */
+export { localDateKey };
 
 export type ToastItem = { id: number; message: string };
 
@@ -85,8 +82,7 @@ export const useUiStore = create<UiState>((set) => ({
   wavedIds: new Set<string>(),
   markWaved: (id) => set((state) => ({ wavedIds: new Set(state.wavedIds).add(id) })),
   reactedSelfies: {},
-  markReacted: (id, selfieUri) =>
-    set((state) => ({ reactedSelfies: { ...state.reactedSelfies, [id]: selfieUri } })),
+  markReacted: (id, selfieUri) => set((state) => ({ reactedSelfies: { ...state.reactedSelfies, [id]: selfieUri } })),
 
   resetForAccount: () => {
     // The posted-today flag persists in AsyncStorage under one global key — it

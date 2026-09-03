@@ -1,17 +1,23 @@
 import { Check, Lock, Pin, Share2, X } from "lucide-react-native";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable as RNPressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { TrophyIcon } from "@/components/trophies/TrophyIcon";
+import { TrophyIconDisc } from "@/components/trophies/TrophyCard";
 import { TrophyProgressBar } from "@/components/trophies/TrophyProgressBar";
 import { TrophyTierLadder } from "@/components/trophies/TrophyTierLadder";
 import { formatEarnedDate } from "@/components/trophies/trophyFormat";
+import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
+import { Text } from "@/components/ui/Text";
+import { resolveMedal } from "@/lib/trophyMedal";
 import { formatRarity, PREMIUM_RARITY_THRESHOLD } from "@/lib/trophyRaritySeeds";
 import { type LadderRow, type TrophyCardModel } from "@/lib/trophySelectors";
 import { colors } from "@/theme/colors";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 /**
- * Trophy detail bottom sheet (plain RN Modal so it renders on native + web).
+ * Trophy detail bottom sheet (plain RN Modal so it renders on native + web,
+ * and above the trophy case's own sheet host).
  *  - stacked:    the full tier ladder, each row with its rarity + earned date.
  *  - standalone: requirement, earned state + exact date, rarity.
  * Rarity is always the numeric "X% of users". Sub-1% trophies get a subtle gold
@@ -43,66 +49,80 @@ export function TrophyDetailSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: tokens.bg.scrim }}>
+        <RNPressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
         <View
           style={{
             backgroundColor: colors.ink,
-            borderTopLeftRadius: 22,
-            borderTopRightRadius: 22,
-            borderWidth: 1,
+            borderTopLeftRadius: radius.lg,
+            borderTopRightRadius: radius.lg,
+            borderWidth: premium ? 1 : 0,
             borderBottomWidth: 0,
-            borderColor: premium ? colors.gold : colors.iron,
+            borderColor: tokens.accent.gold,
             maxHeight: "82%",
-            paddingBottom: insets.bottom + 14
+            paddingBottom: insets.bottom + space[3] + 2
           }}
         >
-          <View style={{ alignItems: "center", paddingTop: 10 }}>
+          <View style={{ alignItems: "center", paddingTop: space[2] + 2 }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.slate }} />
           </View>
-          <Pressable onPress={onClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", top: 16, right: 16, zIndex: 2 }}>
-            <X size={18} color={colors.fog} strokeWidth={2.4} />
-          </Pressable>
+          <View style={{ position: "absolute", top: space[2], right: space[2], zIndex: 2 }}>
+            <IconButton
+              variant="plain"
+              icon={<X size={icon.size.sm} color={tokens.text.tertiary} strokeWidth={icon.stroke.bold} />}
+              accessibilityLabel="Close"
+              onPress={onClose}
+            />
+          </View>
 
           {/* Header */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingTop: 14 }}>
-            <View
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 27,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: card.earned ? colors.goldSoft : colors.charcoal,
-                borderWidth: card.earned ? 0 : 1,
-                borderColor: colors.iron
-              }}
-            >
-              <TrophyIcon iconKey={def.icon} earned={card.earned} size={26} />
-            </View>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space[3] + 2,
+              paddingHorizontal: space[4] + 4,
+              paddingTop: space[3] + 2,
+              paddingRight: space[12]
+            }}
+          >
+            <TrophyIconDisc
+              iconKey={def.icon}
+              earned={card.earned}
+              size={54}
+              medal={resolveMedal(isStacked ? card.displayTier?.medal : def.medal, card.rarityPct)}
+            />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 19, color: colors.white }}>{def.name}</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 }}>
-                <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: premium ? colors.gold : colors.silver }}>
+              <Text variant="heading">{def.name}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space[2], marginTop: 3 }}>
+                <Text variant="mono" className={premium ? "text-gold" : "text-silver"}>
                   {formatRarity(card.rarityPct)}
                 </Text>
-                {isStacked ? (
-                  <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.fog }}>{card.tierPosition} tiers</Text>
-                ) : null}
+                {isStacked ? <Text variant="mono">{`${card.tierPosition} tiers`}</Text> : null}
                 {premium ? (
-                  <View style={{ paddingVertical: 2, paddingHorizontal: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.gold }}>
-                    <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9, letterSpacing: 0.5, color: colors.gold }}>PREMIUM</Text>
+                  <View
+                    style={{
+                      paddingVertical: 2,
+                      paddingHorizontal: 7,
+                      borderRadius: radius.pill,
+                      borderWidth: 1,
+                      borderColor: tokens.accent.gold
+                    }}
+                  >
+                    <Text variant="micro" className="text-gold">
+                      Premium
+                    </Text>
                   </View>
                 ) : null}
               </View>
             </View>
           </View>
 
-          <Text style={{ paddingHorizontal: 20, paddingTop: 10, fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.silver }}>
+          <Text variant="caption" className="px-5 pt-[10px]">
             {def.description}
           </Text>
 
-          <ScrollView contentContainerStyle={{ paddingTop: 10 }}>
+          <ScrollView contentContainerStyle={{ paddingTop: space[2] + 2 }}>
             {isStacked ? (
               <TrophyTierLadder def={def} rows={ladder} progress={card.progress} />
             ) : (
@@ -111,26 +131,30 @@ export function TrophyDetailSheet({
           </ScrollView>
 
           {card.earned && onShare ? (
-            <View style={{ marginTop: 12, marginHorizontal: 20, gap: 8 }}>
-              <Pressable
+            <View style={{ marginTop: space[3], marginHorizontal: space[4] + 4, gap: space[2] }}>
+              <Button
                 onPress={onShare}
+                icon={<Share2 size={icon.size.xs} color={colors.black} strokeWidth={icon.stroke.bold} />}
                 accessibilityLabel="Share trophy"
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: 14, backgroundColor: colors.white }}
               >
-                <Share2 size={16} color={colors.black} strokeWidth={2.4} />
-                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.black }}>Share</Text>
-              </Pressable>
+                Share
+              </Button>
               {onFeature ? (
-                <Pressable
+                <Button
+                  variant="ghost"
                   onPress={onFeature}
+                  icon={
+                    <Pin
+                      size={icon.size.xs - 1}
+                      color={featured ? tokens.accent.gold : colors.mist}
+                      strokeWidth={icon.stroke.regular}
+                    />
+                  }
                   accessibilityLabel={featured ? "Unpin from profile" : "Pin to profile"}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: featured ? colors.gold : colors.iron }}
+                  style={featured ? { borderColor: tokens.accent.gold } : undefined}
                 >
-                  <Pin size={15} color={featured ? colors.gold : colors.mist} strokeWidth={2.2} />
-                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: featured ? colors.gold : colors.mist }}>
-                    {featured ? "Featured on profile" : "Feature on profile"}
-                  </Text>
-                </Pressable>
+                  {featured ? "Featured on profile" : "Feature on profile"}
+                </Button>
               ) : null}
             </View>
           ) : null}
@@ -142,32 +166,45 @@ export function TrophyDetailSheet({
 
 function StandaloneBody({ card, earnedDate }: { card: TrophyCardModel; earnedDate: string | null }) {
   return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 6, gap: 14 }}>
+    <View style={{ paddingHorizontal: space[4] + 4, paddingTop: space[1] + 2, gap: space[3] + 2 }}>
       <View>
-        <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: colors.fog }}>
-          How to earn it
-        </Text>
-        <Text style={{ marginTop: 6, fontFamily: "Geist_400Regular", fontSize: 14, lineHeight: 20, color: colors.silver }}>
+        <Text variant="micro">How to earn it</Text>
+        <Text variant="body-sm" className="mt-[6px] text-silver">
           {card.def.requirement}
         </Text>
       </View>
 
       {card.progress ? (
-        <TrophyProgressBar current={card.progress.current} target={card.progress.target} unit={card.progress.unit} earned={card.earned} />
+        <TrophyProgressBar
+          current={card.progress.current}
+          target={card.progress.target}
+          unit={card.progress.unit}
+          earned={card.earned}
+        />
       ) : null}
 
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.graphite, borderWidth: 1, borderColor: colors.iron }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: space[2],
+          paddingVertical: space[3],
+          paddingHorizontal: space[3] + 2,
+          borderRadius: radius.sm,
+          backgroundColor: tokens.bg.raised
+        }}
+      >
         {card.earned ? (
           <>
-            <Check size={15} color={colors.gold} strokeWidth={2.6} />
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.white }}>
-              Earned{earnedDate ? ` · ${earnedDate}` : ""}
+            <Check size={icon.size.xs - 1} color={tokens.accent.gold} strokeWidth={icon.stroke.bold} />
+            <Text variant="meta-strong" className="text-white">
+              {`Earned${earnedDate ? ` · ${earnedDate}` : ""}`}
             </Text>
           </>
         ) : (
           <>
-            <Lock size={13} color={colors.ash} strokeWidth={2} />
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, color: colors.silver }}>Not earned yet</Text>
+            <Lock size={13} color={colors.ash} strokeWidth={icon.stroke.regular} />
+            <Text variant="meta-strong">Not earned yet</Text>
           </>
         )}
       </View>

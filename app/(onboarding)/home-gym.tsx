@@ -10,22 +10,20 @@ import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/Button";
+import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { SkeletonRow } from "@/components/ui/Skeleton";
 import { Text } from "@/components/ui/Text";
-import {
-  formatDistance,
-  useGymSearch,
-  type GymSearchCoords,
-  type GymSearchResult
-} from "@/hooks/queries/useGymSearch";
+import { formatDistance, useGymSearch, type GymSearchCoords, type GymSearchResult } from "@/hooks/queries/useGymSearch";
 import { usePageFade } from "@/hooks/usePageFade";
+import { seedGymsNear } from "@/lib/gymSeeding";
 import { logger } from "@/lib/logger";
 import { advanceOnboarding } from "@/lib/onboarding";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { icon } from "@/theme/tokens";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -89,6 +87,25 @@ export default function HomeGymScreen() {
   const gyms = useGymSearch(query, coords, locationSettled);
   const rows = useMemo(() => (gyms.data?.pages ?? []).flat(), [gyms.data]);
 
+  // The gyms table only covers pre-seeded areas. This step is a hard gate, so
+  // an empty nearby list would lock the user out of the app entirely — seed
+  // their area live (Foursquare/OSM) once and re-run the search.
+  const [seedState, setSeedState] = useState<"idle" | "seeding" | "done">("idle");
+  const refetchGyms = gyms.refetch;
+  useEffect(() => {
+    if (seedState !== "idle" || !locationSettled || !coords) return;
+    if (gyms.isLoading || gyms.isError) return;
+    if (rows.length > 0) {
+      setSeedState("done");
+      return;
+    }
+    setSeedState("seeding");
+    void seedGymsNear(coords.latitude, coords.longitude).then((seeded) => {
+      setSeedState("done");
+      if (seeded) void refetchGyms();
+    });
+  }, [seedState, locationSettled, coords, gyms.isLoading, gyms.isError, rows.length, refetchGyms]);
+
   const loadMore = useCallback(() => {
     if (gyms.hasNextPage && !gyms.isFetchingNextPage) {
       void gyms.fetchNextPage();
@@ -100,22 +117,22 @@ export default function HomeGymScreen() {
       return;
     }
     if (!isSupabaseConfigured || !userId) {
-      await advanceOnboarding(userId, "complete");
-      fadeNavigate(() => router.replace("/feed"));
+      await advanceOnboarding(userId, "friends");
+      fadeNavigate(() => router.replace("/add-friends"));
       return;
     }
     setSubmitting(true);
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ home_gym_id: selectedId, onboarding_stage: "complete" })
+        .update({ home_gym_id: selectedId, onboarding_stage: "friends" })
         .eq("id", userId);
       if (error) {
         throw error;
       }
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
-      useAuthStore.getState().setOnboardingStage("complete");
-      fadeNavigate(() => router.replace("/feed"));
+      useAuthStore.getState().setOnboardingStage("friends");
+      fadeNavigate(() => router.replace("/add-friends"));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save gym.";
       appAlert("Couldn't save", message);
@@ -133,17 +150,11 @@ export default function HomeGymScreen() {
 
   return (
     <Animated.View className="flex-1 px-4" style={[{ paddingTop: insets.top + 16 }, fadeStyle]}>
-      <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-        <Text variant="micro" className="text-mist">
-          STEP 7 OF 7
-        </Text>
-      </View>
-      <Text variant="display-md" className="mt-6">
-        PICK YOUR GYM.
-      </Text>
-      <Text variant="body"  className="mt-3">
-        {coords ? "Closest first. Yours should be near the top." : "A gym is a place, not a group."}
-      </Text>
+      <OnboardingHeader
+        step={7}
+        title="PICK YOUR GYM."
+        body={`${coords ? "Closest first. " : ""}Check-ins need a home gym — pick yours to continue.`}
+      />
 
       <SearchBar
         value={searchInput}
@@ -166,12 +177,17 @@ export default function HomeGymScreen() {
           contentContainerStyle={{ paddingBottom: 12 }}
           ItemSeparatorComponent={() => <View className="h-3" />}
           ListEmptyComponent={
-            gyms.isLoading || !locationSettled ? (
+            gyms.isLoading || !locationSettled || seedState === "seeding" ? (
               <View className="pt-2">
                 <SkeletonRow avatar={0} />
                 <SkeletonRow avatar={0} />
                 <SkeletonRow avatar={0} />
                 <SkeletonRow avatar={0} />
+                {seedState === "seeding" ? (
+                  <Text variant="caption" className="pt-4 text-center text-mist">
+                    Finding gyms near you…
+                  </Text>
+                ) : null}
               </View>
             ) : gyms.isError ? (
               <View className="items-center pt-16">
@@ -186,8 +202,8 @@ export default function HomeGymScreen() {
               </View>
             ) : (
               <View className="items-center pt-16">
-                <Text variant="caption" className="text-mist">
-                  {query ? `No gyms match "${query}".` : "No gyms yet."}
+                <Text variant="caption" className="text-center text-mist">
+                  {query ? `No gyms match "${query}". Try the name on the sign out front.` : "No gyms found nearby yet — try searching your gym's name."}
                 </Text>
               </View>
             )
@@ -196,35 +212,18 @@ export default function HomeGymScreen() {
         />
       </View>
 
+      {/* No skip: check-ins can't happen without a home gym, so this step is a
+          hard gate — 45% skipped it and none of them ever checked in. */}
       <View style={{ paddingBottom: insets.bottom + 12 }}>
         <Button className="mt-2" onPress={handleNext} loading={submitting} disabled={!selectedId}>
           Set home gym
         </Button>
-        <Pressable
-          className="mt-4 self-center"
-          onPress={() => {
-            void advanceOnboarding(userId, "complete");
-            fadeNavigate(() => router.replace("/feed"));
-          }}
-        >
-          <Text variant="micro" className="text-mist">
-            SKIP FOR NOW
-          </Text>
-        </Pressable>
       </View>
     </Animated.View>
   );
 }
 
-function GymCard({
-  gym,
-  selected,
-  onPress
-}: {
-  gym: GymSearchResult;
-  selected: boolean;
-  onPress: () => void;
-}) {
+function GymCard({ gym, selected, onPress }: { gym: GymSearchResult; selected: boolean; onPress: () => void }) {
   const distance = formatDistance(gym.distance_meters);
   return (
     <Pressable
@@ -240,7 +239,7 @@ function GymCard({
           selected ? "border-black/15 bg-black/5" : "border-hairline bg-glass-soft"
         }`}
       >
-        <MapPin color={selected ? colors.black : colors.white} size={17} strokeWidth={1.8} />
+        <MapPin color={selected ? colors.black : colors.white} size={icon.size.xs + 1} strokeWidth={icon.stroke.thin} />
       </View>
       <View className="flex-1">
         <Text variant="body-strong" numberOfLines={1} className={selected ? "text-black" : "text-white"}>

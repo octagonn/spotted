@@ -18,6 +18,8 @@ import { ScenePhoto } from "@/components/post/ScenePhoto";
 import { WorkoutSlideCard } from "@/components/post/WorkoutSlideCard";
 import { LiftTag, PlayBadge, VChip, VidDur } from "@/components/ui/Chips";
 import { useAudioStore } from "@/stores/audio";
+import { usePostFrameRatio } from "@/lib/mediaAspect";
+import { DEFAULT_POST_RATIO } from "@/lib/postFrame";
 import type { FeedMockPost } from "@/lib/redesignData";
 import { colors } from "@/theme/colors";
 import { easing } from "@/theme/motion";
@@ -47,9 +49,13 @@ type MediaProps = {
   onToggleSwap?: () => void;
 };
 
-/** Front-and-back photo (`.fb`, §4.3.1) — full-bleed 3/3.6 with optional 31% inset selfie. */
+/** Front-and-back photo (`.fb`, §4.3.1) — frame follows the photo's own
+ *  aspect ratio (no crop); optional 31% inset selfie. */
 export function FbMedia({ post, blurRadius, swapped: swappedProp, onToggleSwap, onRegisterTap }: MediaProps) {
   const router = useRouter();
+  // Frame ratio comes from the PRIMARY photo (not the swapped-in selfie) so
+  // the card never changes height when the inset is tapped.
+  const { ratio: frameRatio, onSize } = usePostFrameRatio(post.mediaUri);
   const hasInset = Boolean(post.inset || post.insetUri);
   const isLift = post.kind === "lift";
   // BeReal-style: tapping the corner selfie swaps it with the main photo (and
@@ -73,11 +79,14 @@ export function FbMedia({ post, blurRadius, swapped: swappedProp, onToggleSwap, 
   const cornerUri = swapped ? post.mediaUri : post.insetUri;
   const cornerScene = swapped ? post.main : post.inset;
   return (
-    <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
+    <View style={{ width: "100%", aspectRatio: frameRatio }}>
       <ScenePhoto
         uri={mainUri}
         scene={mainScene}
         blurRadius={blurRadius}
+        // Size only from the primary photo — the swapped-in selfie must not
+        // resize the card.
+        onSize={!swapped ? onSize : undefined}
         accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"}
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
       />
@@ -300,7 +309,7 @@ export function VideoMedia({ post, blurRadius }: MediaProps) {
 
   return (
     <NativePressable onPress={play} disabled={blurRadius !== undefined}>
-      <View style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
+      <View style={{ width: "100%", aspectRatio: DEFAULT_POST_RATIO }}>
         <ScenePhoto
           uri={post.mediaUri}
           scene={post.main}
@@ -536,11 +545,11 @@ function RealVideoMedia({ post, blurRadius, active, onRegisterTap }: MediaProps)
 
   if (blurRadius !== undefined) {
     // Locked feed: no playback, just the frosted placeholder tile.
-    return <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }} />;
+    return <View style={{ width: "100%", aspectRatio: DEFAULT_POST_RATIO, backgroundColor: colors.graphite }} />;
   }
 
   return (
-    <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.graphite }}>
+    <View style={{ width: "100%", aspectRatio: DEFAULT_POST_RATIO, backgroundColor: colors.graphite }}>
       {/* Poster frame paints instantly under the player while the stream
           buffers — without it the tile sits flat graphite and reads as slow. */}
       {video.posterUrl ? (
@@ -583,6 +592,9 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
   const uris = post.mediaUris as string[];
   const [index, setIndex] = useState(0);
   const [width, setWidth] = useState(0);
+  // One shared frame for every page (paging needs equal heights) — sized by
+  // the first photo, which every later shot in the session matches anyway.
+  const { ratio: frameRatio, onSize } = usePostFrameRatio(uris?.[0]);
   // Warm every frame up front so paging between photos is instant instead of
   // decoding on-demand as you swipe.
   useEffect(() => {
@@ -591,7 +603,7 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
   return (
     <View
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      style={{ width: "100%", aspectRatio: 3 / 3.6 }}
+      style={{ width: "100%", aspectRatio: frameRatio }}
     >
       {width > 0 ? (
         <ScrollView
@@ -602,9 +614,9 @@ function CarouselMedia({ post, blurRadius }: MediaProps) {
           onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
           style={{ flex: 1 }}
         >
-          {uris.map((uri) => (
+          {uris.map((uri, i) => (
             <View key={uri} style={{ width, height: "100%" }}>
-              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"} />
+              <ScenePhoto uri={uri} blurRadius={blurRadius} legibility={false} onSize={i === 0 ? onSize : undefined} accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"} />
             </View>
           ))}
         </ScrollView>
@@ -650,8 +662,10 @@ function PostStack({ post, blurRadius }: MediaProps) {
   const [swapped, setSwapped] = useState(false);
   const hasInset = Boolean(post.insetUri);
   const total = photos.length + workouts.length;
+  // Frame follows the daily photo; workout slides stretch to the same height.
+  const { ratio: frameRatio, onSize } = usePostFrameRatio(photos[0]);
   return (
-    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ width: "100%", aspectRatio: 3 / 3.6 }}>
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ width: "100%", aspectRatio: frameRatio }}>
       {width > 0 ? (
         <ScrollView
           horizontal
@@ -668,7 +682,15 @@ function PostStack({ post, blurRadius }: MediaProps) {
             const cornerUri = swapped ? uri : post.insetUri;
             return (
               <View key={uri} style={{ width, height: "100%" }}>
-                <ScenePhoto uri={mainUri} blurRadius={blurRadius} legibility={false} accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"} />
+                <ScenePhoto
+                  uri={mainUri}
+                  blurRadius={blurRadius}
+                  legibility={false}
+                  // Size only from the first photo, unswapped — selfie swaps
+                  // and later pages must not resize the stack.
+                  onSize={photoIndex === 0 && !(showInset && swapped) ? onSize : undefined}
+                  accessibilityLabel={post.caption ? `Post: ${post.caption}` : "Post photo"}
+                />
                 {showInset ? (
                   <NativePressable
                     onPress={() => blurRadius === undefined && setSwapped((s) => !s)}

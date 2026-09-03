@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { View } from "react-native";
 import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
 
+import { Pressable } from "@/components/ui/Pressable";
+import { Text } from "@/components/ui/Text";
 import { GlassSurface } from "@/components/workout/GlassSurface";
-import { MED, NUM, W } from "@/components/workout/wtheme";
+import { colors } from "@/theme/colors";
 import { fmtClock } from "@/lib/workoutLibrary";
+import { durations } from "@/theme/motion";
+import { radius, space, tokens } from "@/theme/tokens";
 
 export const REST_SECONDS = 90;
 
 /**
- * Rest countdown pill that appears after checking off a set — Liquid Glass
- * (tab-bar material), floating above the bottom bar. Tap anywhere to skip.
- * `signal` restarts the countdown each time it changes; 0 = hidden.
+ * Rest countdown pill that appears after checking off a set — glass, floating
+ * above the bottom bar. Tap anywhere to skip. `signal` restarts the countdown
+ * each time it changes; 0 = hidden.
  */
 export function RestTimerPill({ signal, onDone }: { signal: number; onDone: () => void }) {
   const [left, setLeft] = useState(REST_SECONDS);
@@ -36,31 +40,38 @@ export function RestTimerPill({ signal, onDone }: { signal: number; onDone: () =
   if (signal === 0) return null;
 
   return (
-    <Animated.View entering={FadeInDown.duration(220)} exiting={FadeOut.duration(150)}>
-      <GlassSurface radius={999}>
+    <Animated.View entering={FadeInDown.duration(durations.toast)} exiting={FadeOut.duration(durations.press)}>
+      <GlassSurface radius={radius.pill}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Rest, ${left} seconds left. Tap to skip`}
           onPress={onDone}
-          style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 11 }}
+          haptic="none"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: space[3],
+            paddingHorizontal: space[4] + 2,
+            paddingVertical: space[3] - 1
+          }}
         >
-          <Text style={{ fontFamily: MED, fontSize: 11, letterSpacing: 0.6, textTransform: "uppercase", color: W.text }}>
+          <Text variant="micro" className="text-white">
             Rest
           </Text>
-          <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" }}>
+          <View
+            style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.hairlineStrong, overflow: "hidden" }}
+          >
             <View
               style={{
                 height: "100%",
                 borderRadius: 2,
                 width: `${(left / REST_SECONDS) * 100}%`,
-                backgroundColor: W.text
+                backgroundColor: tokens.text.primary
               }}
             />
           </View>
-          <Text style={{ fontFamily: NUM, fontSize: 15, color: W.text }}>{fmtClock(left)}</Text>
-          <Text style={{ fontFamily: MED, fontSize: 11, letterSpacing: 0.6, textTransform: "uppercase", color: "rgba(255,255,255,0.6)" }}>
-            Skip
-          </Text>
+          <Text variant="numeral-sm">{fmtClock(left)}</Text>
+          <Text variant="micro">Skip</Text>
         </Pressable>
       </GlassSurface>
     </Animated.View>

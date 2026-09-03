@@ -14,8 +14,8 @@ export type LiftEntryOption = {
   name: string;
   /** Whether the trophy keys off weight (lb) or reps. */
   unit: "lb" | "reps";
-  /** The trophy definition this exercise maps to. */
-  def: TrophyDefinition;
+  /** The trophy definition this exercise maps to (undefined until the catalog loads). */
+  def?: TrophyDefinition;
   /** Best-ever stat key the engine reads (benchMax, pullupMax, …). */
   statKey: string;
 };
@@ -34,20 +34,40 @@ function statKeyFor(id: LiftExercise): string {
   return `${id}Max`;
 }
 
-/** All strength trophy lines, in catalog order — the entry options. */
-export const LIFT_OPTIONS: LiftEntryOption[] = (["bench", "squat", "deadlift", "pullups", "pushups"] as LiftExercise[])
-  .filter((id) => TROPHIES_BY_ID[id])
-  .map((id) => ({
-    id,
-    name: TROPHIES_BY_ID[id].name,
-    unit: UNIT[id],
-    def: TROPHIES_BY_ID[id],
-    statKey: statKeyFor(id)
-  }));
+const LIFT_IDS: LiftExercise[] = ["bench", "squat", "deadlift", "pullups", "pushups"];
 
-export const LIFT_OPTION_BY_ID: Record<string, LiftEntryOption> = Object.fromEntries(
-  LIFT_OPTIONS.map((o) => [o.id, o])
-);
+/** Display names used until the server trophy catalog has loaded. */
+const FALLBACK_NAMES: Record<LiftExercise, string> = {
+  bench: "Bench Press",
+  squat: "Squat",
+  deadlift: "Deadlift",
+  pullups: "Pull-ups",
+  pushups: "Push-ups"
+};
+
+/**
+ * All strength trophy lines, in catalog order — the entry options.
+ *
+ * Resolved LAZILY: `TROPHIES_BY_ID` is filled by `useTrophyCatalog` at runtime,
+ * so a module-level snapshot would be empty on a cold start (the camera's lift
+ * picker crashed with "Cannot read property 'unit' of undefined"). Before the
+ * catalog arrives the options still exist with fallback names and no `def`.
+ */
+export function getLiftOptions(): LiftEntryOption[] {
+  return LIFT_IDS.map((id) => {
+    const def = TROPHIES_BY_ID[id];
+    return { id, name: def?.name ?? FALLBACK_NAMES[id], unit: UNIT[id], def, statKey: statKeyFor(id) };
+  });
+}
+
+/** One option by id; `undefined` for ids that aren't a lift exercise (e.g. a stale draft). */
+export function getLiftOption(id: string): LiftEntryOption | undefined {
+  return (LIFT_IDS as string[]).includes(id) ? getLiftOptions().find((o) => o.id === id) : undefined;
+}
+
+export function isLiftExercise(id: string): id is LiftExercise {
+  return (LIFT_IDS as string[]).includes(id);
+}
 
 /**
  * Tiers newly crossed by going from `oldBest` to `newValue` for an exercise —
@@ -55,9 +75,7 @@ export const LIFT_OPTION_BY_ID: Record<string, LiftEntryOption> = Object.fromEnt
  * Highest first.
  */
 export function newlyUnlockedTiers(exercise: LiftExercise, oldBest: number, newValue: number) {
-  const def = LIFT_OPTION_BY_ID[exercise]?.def;
+  const def = getLiftOption(exercise)?.def;
   if (!def?.tiers) return [];
-  return def.tiers
-    .filter((t) => t.value > oldBest && t.value <= newValue)
-    .sort((a, b) => b.value - a.value);
+  return def.tiers.filter((t) => t.value > oldBest && t.value <= newValue).sort((a, b) => b.value - a.value);
 }

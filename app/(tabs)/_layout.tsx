@@ -1,19 +1,35 @@
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import {
+  createMaterialTopTabNavigator,
+  type MaterialTopTabBarProps,
+  type MaterialTopTabNavigationEventMap,
+  type MaterialTopTabNavigationOptions
+} from "@react-navigation/material-top-tabs";
+import type { ParamListBase, TabNavigationState } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
-import { Tabs, useRouter } from "expo-router";
+import { useRouter, withLayoutContext } from "expo-router";
 import { Camera, House, Send, User, Users } from "lucide-react-native";
-import { useState } from "react";
-import { Platform, Pressable as RNPressable, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Platform, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useInboxThreads } from "@/components/friends/useInboxThreads";
+import { Pressable } from "@/components/ui/Pressable";
 import { useMessageRequests } from "@/hooks/queries/useMessagesExtras";
-import { selectionHaptic } from "@/lib/haptics";
+import { haptic } from "@/lib/haptics";
 import { useTabActions } from "@/stores/tabActions";
 import { colors } from "@/theme/colors";
+import { TAB_BAR_FLOAT_GAP, TAB_BAR_ROW_HEIGHT } from "@/theme/layout";
+import { durations, easing, springs } from "@/theme/motion";
+import { icon, radius, tokens } from "@/theme/tokens";
 
 // Apple's real Liquid Glass (iOS 26 UIGlassEffect) via expo-glass-effect —
 // lazy-required AND capability-probed inside try/catch: in Expo Go or builds
@@ -30,13 +46,30 @@ try {
   liquidGlassAvailable = false;
 }
 
-type TabName = "feed" | "friends" | "map" | "profile";
+/**
+ * Native pager tabs: the scenes live in a react-native-pager-view, so a swipe
+ * sticks to the finger (Instagram/Snapchat) instead of animating after a
+ * fling. Expo Router wraps the navigator so the (tabs) routes are unchanged.
+ */
+const { Navigator } = createMaterialTopTabNavigator();
+const MaterialTabs = withLayoutContext<
+  MaterialTopTabNavigationOptions,
+  typeof Navigator,
+  TabNavigationState<ParamListBase>,
+  MaterialTopTabNavigationEventMap
+>(Navigator);
 
-/** Tab order per spec §3: Home · Friends · Camera (center) · Map · Profile. */
-const TABS: (TabName | "camera")[] = ["feed", "friends", "camera", "map", "profile"];
+/** Land on the feed when (tabs) is entered without a child route. */
+export const unstable_settings = { initialRouteName: "feed" };
+
+type TabName = "feed" | "friends" | "map" | "profile";
+type SlotName = TabName | "camera";
+
+/** Tab order: Home · Friends · Camera (center action) · Map · Profile. */
+const TABS: SlotName[] = ["feed", "friends", "camera", "map", "profile"];
 
 /** Human-readable names for screen readers (route names are internal). */
-const TAB_LABELS: Record<TabName | "camera", string> = {
+const TAB_LABELS: Record<SlotName, string> = {
   feed: "Home",
   friends: "Friends",
   camera: "Camera",
@@ -44,89 +77,119 @@ const TAB_LABELS: Record<TabName | "camera", string> = {
   profile: "Profile"
 };
 
-function TabIcon({ name, focused }: { name: TabName | "camera"; focused: boolean }) {
-  const color = focused ? "#FFFFFF" : "rgba(255,255,255,0.62)";
-  const size = 25;
-  if (name === "feed") return <House color={color} size={size} strokeWidth={2.1} />;
-  if (name === "friends") return <Send color={color} size={size} strokeWidth={2.1} />;
-  if (name === "camera") return <Camera color={color} size={size} strokeWidth={2.1} />;
-  if (name === "map") return <Users color={color} size={size} strokeWidth={2.1} />;
-  return <User color={color} size={size} strokeWidth={2.1} />;
+/* ------------------------------ geometry ------------------------------ */
+
+/** Pill row height (shared with theme/layout so screens can clear it). */
+const ROW_H = TAB_BAR_ROW_HEIGHT;
+/** Fixed slot width; the row distributes leftover space evenly. */
+const SLOT_W = 60;
+/** Row inset. */
+const ROW_PAD = 4;
+/** Selected / scrub capsule behind an icon. */
+const CAPSULE_W = 52;
+const CAPSULE_H = 38;
+
+/* -------------------------------- colors ------------------------------- */
+
+const ICON_ACTIVE = colors.white;
+const ICON_INACTIVE = colors.silver;
+/** Capsule tints over glass — palette overlays, no ad-hoc rgba. */
+const CAPSULE_SELECTED = colors.glassStrong;
+const CAPSULE_SCRUB = colors.hairlineStrong;
+
+function TabIcon({ name, focused }: { name: SlotName; focused: boolean }) {
+  // The camera is an action, so it's always drawn in the active white weight.
+  const active = focused || name === "camera";
+  const color = active ? ICON_ACTIVE : ICON_INACTIVE;
+  const size = icon.size.lg;
+  const strokeWidth = active ? icon.stroke.bold : icon.stroke.regular;
+  if (name === "feed") return <House color={color} size={size} strokeWidth={strokeWidth} />;
+  if (name === "friends") return <Send color={color} size={size} strokeWidth={strokeWidth} />;
+  if (name === "camera") return <Camera color={color} size={size} strokeWidth={strokeWidth} />;
+  if (name === "map") return <Users color={color} size={size} strokeWidth={strokeWidth} />;
+  return <User color={color} size={size} strokeWidth={strokeWidth} />;
 }
 
+/**
+ * A destination slot. The selected capsule fades in/out with the standard
+ * color duration (instant under reduced motion) instead of snapping.
+ */
 function TabSlot({
   name,
   focused,
   dot = false,
   onPress
 }: {
-  name: TabName | "camera";
+  name: SlotName;
   focused: boolean;
-  /** Small red activity dot (unread DMs), IG-style at the icon's corner. */
+  /** Activity dot (unread DMs / pending requests) at the icon's corner. */
   dot?: boolean;
   onPress: () => void;
 }) {
+  const reducedMotion = useReducedMotion();
+  const selected = useSharedValue(focused ? 1 : 0);
+
+  useEffect(() => {
+    selected.value = reducedMotion
+      ? focused
+        ? 1
+        : 0
+      : withTiming(focused ? 1 : 0, { duration: durations.color, easing: easing.standard });
+  }, [focused, reducedMotion, selected]);
+
+  const capsuleStyle = useAnimatedStyle(() => ({ opacity: selected.value }));
+
   return (
-    <RNPressable
-      onPress={() => {
-        void selectionHaptic();
-        onPress();
-      }}
+    <Pressable
+      onPress={onPress}
+      haptic={name === "camera" ? "impact" : "selection"}
+      pressScale={0.9}
+      pressOpacity={1}
+      hitSlop={6}
       testID={`tab-${name}`}
-      accessibilityRole="button"
+      accessibilityRole={name === "camera" ? "button" : "tab"}
       accessibilityLabel={dot ? `${TAB_LABELS[name]}, new activity` : TAB_LABELS[name]}
       accessibilityState={{ selected: focused }}
-      hitSlop={6}
-      // Fixed-size slot, centered content — the ROW distributes the slots
-      // (space-evenly), so leftover width can never pool on one side.
-      style={({ pressed }) => ({
-        width: 60,
-        height: 62,
-        alignItems: "center",
-        justifyContent: "center",
-        transform: [{ scale: pressed ? 0.9 : 1 }]
-      })}
+      style={{ width: SLOT_W, height: ROW_H, alignItems: "center", justifyContent: "center" }}
     >
-      {/* Active pill highlight — the IG-style lighter capsule behind the icon. */}
-      <View
-        style={{
-          width: 56,
-          height: 40,
-          borderRadius: 20,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: focused ? "rgba(255,255,255,0.17)" : "transparent"
-        }}
-      >
-        <View style={{ width: 25, height: 25, alignItems: "center", justifyContent: "center" }}>
-          <TabIcon name={name} focused={focused} />
-          {dot ? (
-            <View
-              style={{
-                position: "absolute",
-                bottom: -3,
-                right: -6,
-                width: 9,
-                height: 9,
-                borderRadius: 5,
-                backgroundColor: "#FF3B30"
-              }}
-            />
-          ) : null}
-        </View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: "absolute",
+            width: CAPSULE_W,
+            height: CAPSULE_H,
+            borderRadius: radius.pill,
+            backgroundColor: CAPSULE_SELECTED
+          },
+          capsuleStyle
+        ]}
+      />
+      <View style={{ width: icon.size.lg, height: icon.size.lg, alignItems: "center", justifyContent: "center" }}>
+        <TabIcon name={name} focused={focused} />
+        {dot ? (
+          <View
+            style={{
+              position: "absolute",
+              top: -2,
+              right: -4,
+              width: 8,
+              height: 8,
+              borderRadius: radius.pill,
+              backgroundColor: tokens.status.danger
+            }}
+          />
+        ) : null}
       </View>
-    </RNPressable>
+    </Pressable>
   );
 }
 
-/** Row inset (slots are fixed-width; space-evenly distributes the leftover). */
-const ROW_PAD = 4;
-
 /**
  * The five slots, symmetrically distributed — shared by both glass branches.
- * IG-style scrub: HOLD anywhere on the bar and a glass highlight appears and
- * follows the finger across the tabs; release commits the tab under it.
- * Quick taps are untouched (the pan only activates after a long press).
+ * Scrub: HOLD anywhere on the bar and a capsule follows the finger across the
+ * tabs; release commits the tab under it. Quick taps are untouched (the pan
+ * only activates after a long press).
  */
 function TabRow({
   isFocused,
@@ -135,11 +198,11 @@ function TabRow({
 }: {
   isFocused: (name: TabName) => boolean;
   hasUnreadDm: boolean;
-  goTo: (name: TabName | "camera") => void;
+  goTo: (name: SlotName) => void;
 }) {
   const [rowW, setRowW] = useState(0);
   // React mirror of the drag state — while scrubbing, the STATIC focused-tab
-  // highlight hides so only the finger's capsule is lit.
+  // capsule hides so only the finger's capsule is lit.
   const [scrubbing, setScrubbing] = useState(false);
   const dragging = useSharedValue(0);
   const dragX = useSharedValue(0);
@@ -149,20 +212,21 @@ function TabRow({
     setScrubbing(false);
     goTo(TABS[Math.max(0, Math.min(TABS.length - 1, i))]);
   };
-  const tick = () => void selectionHaptic();
+  const tick = () => haptic("selection");
   const beginScrub = () => {
     setScrubbing(true);
-    void selectionHaptic();
+    haptic("selection");
   };
   const endScrub = () => setScrubbing(false);
 
+  const half = CAPSULE_W / 2;
   const pan = Gesture.Pan()
     .activateAfterLongPress(200)
     .onStart((e) => {
       "worklet";
       const span = rowW > 0 ? rowW / TABS.length : 1;
       dragIndex.value = Math.max(0, Math.min(TABS.length - 1, Math.floor(e.x / span)));
-      dragX.value = Math.max(ROW_PAD + 28, Math.min(rowW - ROW_PAD - 28, e.x));
+      dragX.value = Math.max(ROW_PAD + half, Math.min(rowW - ROW_PAD - half, e.x));
       dragging.value = 1;
       runOnJS(beginScrub)();
     })
@@ -171,7 +235,7 @@ function TabRow({
       const span = rowW > 0 ? rowW / TABS.length : 1;
       // The capsule follows the FINGER exactly; the index (haptic tick +
       // release target) tracks which slot it's over.
-      dragX.value = Math.max(ROW_PAD + 28, Math.min(rowW - ROW_PAD - 28, e.x));
+      dragX.value = Math.max(ROW_PAD + half, Math.min(rowW - ROW_PAD - half, e.x));
       const next = Math.max(0, Math.min(TABS.length - 1, Math.floor(e.x / span)));
       if (next !== dragIndex.value) {
         dragIndex.value = next;
@@ -191,10 +255,7 @@ function TabRow({
 
   const scrubPillStyle = useAnimatedStyle(() => ({
     opacity: dragging.value,
-    transform: [
-      { translateX: dragX.value - 28 },
-      { scale: withSpring(dragging.value ? 1.06 : 0.9, { damping: 18, stiffness: 280 }) }
-    ]
+    transform: [{ translateX: dragX.value - half }, { scale: withSpring(dragging.value ? 1.04 : 0.92, springs.snappy) }]
   }));
 
   return (
@@ -205,22 +266,22 @@ function TabRow({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-evenly",
-          height: 62,
+          height: ROW_H,
           paddingHorizontal: ROW_PAD
         }}
       >
-        {/* Scrub highlight — brighter glass capsule gliding under the finger. */}
+        {/* Scrub capsule gliding under the finger. */}
         <Animated.View
           pointerEvents="none"
           style={[
             {
               position: "absolute",
-              top: 11,
+              top: (ROW_H - CAPSULE_H) / 2,
               left: 0,
-              width: 56,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: "rgba(255,255,255,0.26)"
+              width: CAPSULE_W,
+              height: CAPSULE_H,
+              borderRadius: radius.pill,
+              backgroundColor: CAPSULE_SCRUB
             },
             scrubPillStyle
           ]}
@@ -230,7 +291,7 @@ function TabRow({
             key={name}
             name={name}
             // While scrubbing, ONLY the finger capsule is highlighted.
-            focused={!scrubbing && name !== "camera" && isFocused(name as TabName)}
+            focused={!scrubbing && name !== "camera" && isFocused(name)}
             dot={name === "friends" && hasUnreadDm}
             onPress={() => goTo(name)}
           />
@@ -241,23 +302,22 @@ function TabRow({
 }
 
 /**
- * Instagram-style floating glass pill: dark translucent blur, fully rounded,
- * hovering above the home indicator; the focused tab sits in a lighter
- * capsule. Same five actions as before (camera pushes /camera).
+ * Floating glass pill above the home indicator. Lightened for V2: shallower
+ * shadow, no sheen gradient, 56pt row, one hairline border on the fallback.
+ * Same five actions as before (camera pushes /camera).
  */
-function GlassTabBar({ state, navigation }: BottomTabBarProps) {
+function GlassTabBar({ state, navigation }: MaterialTopTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  // Red dot on the DMs tab whenever any thread is unread or a request waits.
+  // Activity dot on the DMs tab whenever any thread is unread or a request waits.
   const inbox = useInboxThreads();
   const messageRequests = useMessageRequests();
-  const hasUnreadDm =
-    (inbox.data ?? []).some((thread) => thread.unread) || (messageRequests.data ?? []).length > 0;
+  const hasUnreadDm = (inbox.data ?? []).some((thread) => thread.unread) || (messageRequests.data ?? []).length > 0;
 
   const isFocused = (name: TabName) => state.routes[state.index]?.name === name;
   const bumpFeedReset = useTabActions((s) => s.bumpFeedReset);
-  const goTo = (name: TabName | "camera") => {
+  const goTo = (name: SlotName) => {
     if (name === "camera") {
       router.push("/camera");
       return;
@@ -270,77 +330,53 @@ function GlassTabBar({ state, navigation }: BottomTabBarProps) {
     navigation.navigate(name);
   };
 
+  const row = <TabRow isFocused={isFocused} hasUnreadDm={hasUnreadDm} goTo={goTo} />;
+
   return (
     <View
       pointerEvents="box-none"
-      style={{
-        position: "absolute",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 100,
-        elevation: 100
-      }}
+      style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 100, elevation: 100 }}
     >
-      {/* Shadow lives on an unclipped wrapper; the blur clips to the pill. */}
+      {/* Shadow lives on an unclipped wrapper; the material clips to the pill. */}
       <View
         style={{
-          marginHorizontal: 18,
-          marginBottom: insets.bottom > 0 ? insets.bottom + 4 : 16,
-          borderRadius: 999,
-          shadowColor: "#000000",
-          shadowOpacity: 0.55,
-          shadowRadius: 22,
-          shadowOffset: { width: 0, height: 10 },
-          elevation: 18
+          marginHorizontal: 24,
+          marginBottom: insets.bottom > 0 ? insets.bottom : TAB_BAR_FLOAT_GAP,
+          borderRadius: radius.pill,
+          shadowColor: colors.black,
+          shadowOpacity: 0.3,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 10
         }}
       >
         {Glass && liquidGlassAvailable ? (
           /* iOS 26+: Apple's own Liquid Glass material. The native effect view
              must NOT own the row layout (its content view doesn't reliably
-             forward flex styles — icons piled left with dead space right);
-             a plain inner View does the laying out. */
+             forward flex styles); a plain inner View does the laying out. */
           <Glass.GlassView
             glassEffectStyle="regular"
             isInteractive
-            style={{ borderRadius: 999, overflow: "hidden" }}
+            style={{ borderRadius: radius.pill, overflow: "hidden" }}
           >
-            <TabRow
-              isFocused={isFocused}
-              hasUnreadDm={hasUnreadDm}
-              goTo={goTo}
-            />
+            {row}
           </Glass.GlassView>
         ) : (
-          /* Pre-iOS-26 / Android fallback: the most transparent system
-             material with barely any smoke. */
+          /* Pre-iOS-26 / Android fallback: system blur + one hairline. */
           <View
             style={{
-              borderRadius: 999,
+              borderRadius: radius.pill,
               overflow: "hidden",
               borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.12)"
+              borderColor: tokens.border.subtle
             }}
           >
             <BlurView
-              intensity={100}
-              tint={Platform.OS === "ios" ? "systemUltraThinMaterialDark" : "dark"}
-              style={{
-                backgroundColor: Platform.OS === "ios" ? "rgba(14,14,18,0.08)" : "rgba(16,16,20,0.6)"
-              }}
+              intensity={90}
+              tint={Platform.OS === "ios" ? "systemThinMaterialDark" : "dark"}
+              style={{ backgroundColor: Platform.OS === "ios" ? colors.glassSoft : "rgba(10,10,10,0.7)" }}
             >
-              {/* Top-edge sheen — the light catching the glass. */}
-              <LinearGradient
-                colors={["rgba(255,255,255,0.12)", "rgba(255,255,255,0.02)", "transparent"]}
-                locations={[0, 0.35, 1]}
-                pointerEvents="none"
-                style={{ position: "absolute", top: 0, left: 0, right: 0, height: 30 }}
-              />
-              <TabRow
-                isFocused={isFocused}
-                hasUnreadDm={hasUnreadDm}
-                goTo={goTo}
-              />
+              {row}
             </BlurView>
           </View>
         )}
@@ -351,16 +387,20 @@ function GlassTabBar({ state, navigation }: BottomTabBarProps) {
 
 export default function TabLayout() {
   return (
-    <Tabs
+    <MaterialTabs
+      tabBarPosition="bottom"
+      initialRouteName="feed"
       tabBar={(props) => <GlassTabBar {...props} />}
-      screenOptions={{ headerShown: false, lazy: false, sceneStyle: { backgroundColor: colors.black } }}
+      screenOptions={{
+        swipeEnabled: true,
+        lazy: false,
+        sceneStyle: { backgroundColor: colors.black }
+      }}
     >
-      <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="feed" options={{ title: "Home" }} />
-      <Tabs.Screen name="friends" options={{ title: "Friends" }} />
-      <Tabs.Screen name="map" options={{ title: "Map" }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
-    </Tabs>
+      <MaterialTabs.Screen name="feed" options={{ title: "Home" }} />
+      <MaterialTabs.Screen name="friends" options={{ title: "Friends" }} />
+      <MaterialTabs.Screen name="map" options={{ title: "Map" }} />
+      <MaterialTabs.Screen name="profile" options={{ title: "Profile" }} />
+    </MaterialTabs>
   );
 }

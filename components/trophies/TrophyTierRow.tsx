@@ -1,13 +1,15 @@
 import { Check, Lock } from "lucide-react-native";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 
 import { TrophyProgressBar } from "@/components/trophies/TrophyProgressBar";
 import { formatEarnedDate } from "@/components/trophies/trophyFormat";
-import { formatRarity } from "@/lib/trophyRaritySeeds";
-import { type LadderRow } from "@/lib/trophySelectors";
+import { Text } from "@/components/ui/Text";
 import { type TrophyDefinition } from "@/lib/trophies";
 import { medalColors, medalLabel } from "@/lib/trophyMedal";
+import { formatRarity } from "@/lib/trophyRaritySeeds";
+import { type LadderRow } from "@/lib/trophySelectors";
 import { colors } from "@/theme/colors";
+import { icon, space, tokens } from "@/theme/tokens";
 
 /**
  * One rung of a stacked tier ladder. Earned rows are gold with a check + exact
@@ -28,8 +30,18 @@ export function TrophyTierRow({
   const { tier, earned, isNext } = row;
   const date = formatEarnedDate(row.earnedAt);
   const showBar = isNext && def.trackingType === "progress" && Boolean(progress);
+  const medal = medalColors(tier.medal);
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.graphite }}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space[3],
+        paddingVertical: space[2] + 3,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.graphite
+      }}
+    >
       <View
         style={{
           width: 26,
@@ -37,38 +49,42 @@ export function TrophyTierRow({
           borderRadius: 13,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: earned ? medalColors(tier.medal).solid : "transparent",
+          backgroundColor: earned ? medal.solid : "transparent",
           borderWidth: earned ? 0 : 1.5,
-          borderColor: isNext ? medalColors(tier.medal).solid : colors.iron
+          borderColor: isNext ? medal.solid : tokens.border.default
         }}
       >
         {earned ? (
           <Check size={14} color={colors.black} strokeWidth={3} />
         ) : isNext ? (
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: medalColors(tier.medal).solid }} />
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: medal.solid }} />
         ) : (
-          <Lock size={11} color={colors.ash} strokeWidth={2} />
+          <Lock size={11} color={colors.ash} strokeWidth={icon.stroke.regular} />
         )}
       </View>
 
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: earned ? colors.white : isNext ? colors.bone : colors.silver }}>
+        <Text variant="username" className={earned ? "" : isNext ? "text-bone" : "text-silver"}>
           {tier.name}
         </Text>
-        <Text style={{ marginTop: 1, fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>
-          {medalLabel(tier.medal) ? `${medalLabel(tier.medal)} · ` : ""}{tier.requirement} · {formatRarity(tier.rarityPct)}
+        <Text variant="mono" className="mt-[1px]">
+          {`${medalLabel(tier.medal) ? `${medalLabel(tier.medal)} · ` : ""}${tier.requirement} · ${formatRarity(tier.rarityPct)}`}
         </Text>
       </View>
 
       <View style={{ alignItems: "flex-end", minWidth: 68 }}>
         {earned ? (
-          <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.gold, textAlign: "right" }}>{date ?? "Earned"}</Text>
+          <Text variant="mono" className="text-right text-gold">
+            {date ?? "Earned"}
+          </Text>
         ) : showBar && progress ? (
           <View style={{ width: 68 }}>
             <TrophyProgressBar current={progress.current} target={tier.value} unit={def.unit} showLabel />
           </View>
         ) : (
-          <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10, color: colors.ash }}>Locked</Text>
+          <Text variant="mono" className="text-ash">
+            Locked
+          </Text>
         )}
       </View>
     </View>

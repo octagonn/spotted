@@ -20,8 +20,13 @@ export function distanceMeters(a: Coordinate, b: Coordinate) {
   return 2 * earthRadiusMeters * Math.asin(Math.sqrt(h));
 }
 
-export function isInsideGeofence(point: Coordinate, center: Coordinate, radiusMeters: number) {
-  return distanceMeters(point, center) <= radiusMeters;
+/**
+ * Fence test with GPS-error forgiveness: the phone's reported accuracy widens
+ * the fence, capped at 50m (mirrors the server-side cap in checkin()) so a
+ * coarse fix can't verify from a block away.
+ */
+export function isInsideGeofence(point: Coordinate, center: Coordinate, radiusMeters: number, accuracyMeters = 0) {
+  return distanceMeters(point, center) <= radiusMeters + Math.min(Math.max(accuracyMeters, 0), 50);
 }
 
 export function jitterGymCoordinate(center: Coordinate, seed: string) {

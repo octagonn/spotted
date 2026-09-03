@@ -2,16 +2,19 @@ import { router } from "expo-router";
 import { appAlert } from "@/components/ui/AppDialog";
 import { AtSign } from "lucide-react-native";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/Button";
+import { AuthField } from "@/components/auth/AuthField";
+import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Text } from "@/components/ui/Text";
 import { usePageFade } from "@/hooks/usePageFade";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { icon } from "@/theme/tokens";
 
 const usernameRegex = /^[a-z0-9_]+$/;
 
@@ -62,70 +65,53 @@ export default function OnboardingCreateProfileScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <Animated.View style={[{ flex: 1 }, fadeStyle]}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 16,
-          paddingTop: insets.top + 16,
-          paddingBottom: insets.bottom + 24
-        }}
-      >
-        <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-          <Text variant="micro" className="text-mist">
-            STEP 3 OF 7
-          </Text>
-        </View>
-        <Text variant="display-md" className="mt-6">
-          CLAIM YOUR NAME.
-        </Text>
-        <Text variant="body"  className="mt-3">
-          What your crew sees. Photo comes next.
-        </Text>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: 16,
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 24
+          }}
+        >
+          <OnboardingHeader step={3} title="CLAIM YOUR NAME." body="What your crew sees. Photo comes next." />
 
-        <View className="mt-8 rounded-card border border-hairline-strong bg-glass-strong p-4">
-          <View className="gap-3">
-            <View className="rounded-pill border border-hairline bg-glass-soft px-4 py-2">
-              <TextInput
+          <View className="mt-8 rounded-card border border-hairline-strong bg-glass-strong p-4">
+            <View className="gap-3">
+              <AuthField
                 value={displayName}
                 onChangeText={setDisplayName}
                 accessibilityLabel="Display name"
                 placeholder="Display name"
-                placeholderTextColor={colors.fog}
                 autoCapitalize="words"
                 maxLength={40}
                 returnKeyType="next"
-                className="font-sansMedium text-[16px] text-white"
+                inputClassName="font-sansMedium"
               />
-            </View>
-            <View className="flex-row items-center gap-2 rounded-pill border border-hairline bg-glass-soft px-4 py-2">
-              <AtSign color={colors.mist} size={15} strokeWidth={2} />
-              <TextInput
+              <AuthField
+                icon={<AtSign color={colors.mist} size={icon.size.xs - 1} strokeWidth={icon.stroke.regular} />}
                 value={username}
                 onChangeText={(value) => setUsername(value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                 accessibilityLabel="Username"
                 placeholder="username"
-                placeholderTextColor={colors.fog}
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={20}
                 returnKeyType="done"
-                className="flex-1 p-0 font-sans text-[14px] text-white"
               />
             </View>
           </View>
-        </View>
-        {!usernameValid && username.length > 0 ? (
-          <Text variant="micro" accessibilityLiveRegion="polite" className="mt-3 text-mist">
-            3–20 chars, lowercase letters, numbers, underscore.
-          </Text>
-        ) : null}
+          {!usernameValid && username.length > 0 ? (
+            <Text variant="micro" accessibilityLiveRegion="polite" className="mt-3 text-mist">
+              3–20 chars, lowercase letters, numbers, underscore.
+            </Text>
+          ) : null}
 
-        <View className="flex-1" />
-        <Button className="mt-8" onPress={handleNext} loading={submitting} disabled={!ready}>
-          Next
-        </Button>
-      </ScrollView>
+          <View className="flex-1" />
+          <Button className="mt-8" onPress={handleNext} loading={submitting} disabled={!ready}>
+            Next
+          </Button>
+        </ScrollView>
       </Animated.View>
     </KeyboardAvoidingView>
   );

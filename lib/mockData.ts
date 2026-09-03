@@ -30,6 +30,7 @@ export const mockGyms: Gym[] = [
     external_id: null,
     chain: null,
     institution: null,
+    pin_locked: false,
   },
   {
     id: "gym-ironworks",
@@ -44,6 +45,7 @@ export const mockGyms: Gym[] = [
     external_id: null,
     chain: null,
     institution: null,
+    pin_locked: false,
   }
 ];
 

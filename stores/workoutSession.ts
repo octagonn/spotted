@@ -67,6 +67,30 @@ export const useWorkoutSession = create<WorkoutSessionState>((set) => ({
 const STORAGE_KEY = "workout-session-v1";
 let hydrating = true;
 
+/**
+ * Repair duplicate set ids in a restored session. Older builds seeded the id
+ * counter from a wrapping clock, so a session saved across an app restart
+ * could hold two sets with the same id — which React renders as duplicate
+ * keys (rows duplicated/omitted). Reassign any repeat to a fresh unique id.
+ */
+function dedupeSetIds(exercises: WorkoutExercise[]): WorkoutExercise[] {
+  const seen = new Set<number>();
+  // Well above the range app/workout.tsx's uid() counter (seeded from
+  // Date.now() at module eval) can reach within a session — reassigning from
+  // plain Date.now() would put repaired ids exactly where the next uid() calls
+  // land, recreating the very collisions this repairs.
+  let next = Date.now() + 1_000_000_000_000;
+  return exercises.map((exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((s) => {
+      let id = s.id;
+      while (seen.has(id)) id = ++next;
+      seen.add(id);
+      return id === s.id ? s : { ...s, id };
+    })
+  })) as WorkoutExercise[];
+}
+
 void AsyncStorage.getItem(STORAGE_KEY)
   .then((raw) => {
     if (!raw) return;
@@ -81,7 +105,7 @@ void AsyncStorage.getItem(STORAGE_KEY)
         active: true,
         startedAt: typeof saved.startedAt === "number" ? saved.startedAt : Date.now(),
         name: typeof saved.name === "string" ? saved.name : "",
-        exercises: Array.isArray(saved.exercises) ? saved.exercises : [],
+        exercises: Array.isArray(saved.exercises) ? dedupeSetIds(saved.exercises) : [],
         sessionPRs: Array.isArray(saved.sessionPRs) ? saved.sessionPRs : [],
         bests: saved.bests && typeof saved.bests === "object" ? saved.bests : {}
       });

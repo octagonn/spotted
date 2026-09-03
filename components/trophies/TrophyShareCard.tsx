@@ -1,9 +1,14 @@
-import { Text, View } from "react-native";
+import { Image } from "expo-image";
+import { View } from "react-native";
 
 import { TrophyIcon } from "@/components/trophies/TrophyIcon";
 import { formatEarnedDate } from "@/components/trophies/trophyFormat";
+import { Text } from "@/components/ui/Text";
+import { resolveMedal } from "@/lib/trophyMedal";
+import { medalArt, medalGlyphColor } from "@/lib/trophyMedalArt";
 import { formatRarity } from "@/lib/trophyRaritySeeds";
 import { colors } from "@/theme/colors";
+import { radius, space, tokens } from "@/theme/tokens";
 
 export type TrophyShareData = {
   icon: string;
@@ -24,32 +29,30 @@ export type TrophyShareData = {
  */
 export function TrophyShareCard({ data }: { data: TrophyShareData }) {
   const date = formatEarnedDate(data.earnedAt);
+  const displayMedal = resolveMedal(data.medal, data.rarityPct);
   return (
     <View
       style={{
         width: 340,
-        paddingVertical: 34,
-        paddingHorizontal: 28,
-        borderRadius: 26,
+        paddingVertical: space[8] + 2,
+        paddingHorizontal: space[6] + 4,
+        borderRadius: radius.lg,
         backgroundColor: colors.ink,
         borderWidth: 1,
-        borderColor: colors.iron,
+        borderColor: tokens.border.default,
         alignItems: "center"
       }}
     >
-      <Text
-        maxFontSizeMultiplier={1.4}
-        style={{ fontFamily: "Boldonse_400Regular", fontSize: 15, letterSpacing: 1, color: colors.white, includeFontPadding: false }}
-      >
+      <Text variant="display-sm" className="text-[15px] leading-[20px] tracking-[1px]" maxFontSizeMultiplier={1.4}>
         SPOTTED
       </Text>
-      <Text style={{ marginTop: 4, fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 2, textTransform: "uppercase", color: colors.gold }}>
+      <Text variant="micro" className="mt-1 text-gold">
         Trophy Unlocked
       </Text>
 
       <View
         style={{
-          marginTop: 22,
+          marginTop: space[6] - 2,
           width: 96,
           height: 96,
           borderRadius: 48,
@@ -58,28 +61,43 @@ export function TrophyShareCard({ data }: { data: TrophyShareData }) {
           justifyContent: "center"
         }}
       >
-        <TrophyIcon iconKey={data.icon} earned size={46} />
+        <Image
+          source={medalArt(displayMedal)}
+          style={{ position: "absolute", width: 90, height: 90 }}
+          contentFit="contain"
+          accessible={false}
+        />
+        <TrophyIcon iconKey={data.icon} earned size={33} color={medalGlyphColor(displayMedal)} />
       </View>
 
       {data.familyName ? (
-        <Text style={{ marginTop: 18, fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.fog }}>
+        <Text variant="micro" className="mt-[18px]">
           {data.familyName}
         </Text>
       ) : null}
-      <Text style={{ marginTop: data.familyName ? 4 : 18, fontFamily: "Geist_700Bold", fontSize: 22, textAlign: "center", color: colors.white }}>
+      <Text
+        variant="heading"
+        className={`text-center text-[22px] leading-[28px] ${data.familyName ? "mt-1" : "mt-[18px]"}`}
+      >
         {data.name}
       </Text>
 
-      <View style={{ marginTop: 16, alignSelf: "stretch", height: 1, backgroundColor: colors.graphite }} />
+      <View style={{ marginTop: space[4], alignSelf: "stretch", height: 1, backgroundColor: colors.graphite }} />
 
-      <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignSelf: "stretch" }}>
+      <View
+        style={{ marginTop: space[3] + 2, flexDirection: "row", justifyContent: "space-between", alignSelf: "stretch" }}
+      >
         <View>
-          <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 8.5, letterSpacing: 1, textTransform: "uppercase", color: colors.fog }}>Earned</Text>
-          <Text style={{ marginTop: 3, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}>{date ?? "Today"}</Text>
+          <Text variant="micro">Earned</Text>
+          <Text variant="meta-strong" className="mt-[3px] text-white">
+            {date ?? "Today"}
+          </Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 8.5, letterSpacing: 1, textTransform: "uppercase", color: colors.fog }}>Rarity</Text>
-          <Text style={{ marginTop: 3, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.gold }}>{formatRarity(data.rarityPct)}</Text>
+          <Text variant="micro">Rarity</Text>
+          <Text variant="meta-strong" className="mt-[3px] text-gold">
+            {formatRarity(data.rarityPct)}
+          </Text>
         </View>
       </View>
     </View>

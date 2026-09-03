@@ -5,7 +5,7 @@ import type { CardioSet, LiftSet, WorkoutExercise } from "@/hooks/queries/useWor
 import { fmtClock } from "@/lib/workoutLibrary";
 import { colors } from "@/theme/colors";
 
-const CARDIO = "#FF8A4C";
+const CARDIO = colors.silver;
 
 export type FeedWorkout = {
   id: string;
@@ -34,10 +34,21 @@ export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
   }
 
   return (
-    <View style={{ width: "100%", aspectRatio: 3 / 3.6, backgroundColor: colors.ink, padding: 16 }}>
+    // Fills the stack slide it lives in — the stack's height now follows the
+    // daily photo's aspect ratio, so this stretches instead of fixing 3:3.6.
+    <View style={{ width: "100%", height: "100%", backgroundColor: colors.ink, padding: 16 }}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: "rgba(232,180,76,0.14)", alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            backgroundColor: "rgba(232,180,76,0.14)",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
           <Dumbbell size={17} color={colors.gold} strokeWidth={1.9} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -55,8 +66,18 @@ export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
           </Text>
         </View>
         {workout.isSecond ? (
-          <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.gold }}>
-            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 9, letterSpacing: 0.5, color: colors.gold }}>2ND TODAY</Text>
+          <View
+            style={{
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: colors.gold
+            }}
+          >
+            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 9, letterSpacing: 0.5, color: colors.gold }}>
+              2ND TODAY
+            </Text>
           </View>
         ) : null}
       </View>
@@ -79,13 +100,20 @@ export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
                 ) : (
                   <Dumbbell size={12} color={colors.gold} strokeWidth={2} />
                 )}
-                <Text style={{ flex: 1, fontFamily: "Geist_700Bold", fontSize: 13, color: colors.white }} numberOfLines={1}>
+                <Text
+                  style={{ flex: 1, fontFamily: "Geist_700Bold", fontSize: 13, color: colors.white }}
+                  numberOfLines={1}
+                >
                   {ex.name}
                 </Text>
                 {anyPR ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <Trophy size={11} color={colors.gold} strokeWidth={2} />
-                    <Text style={{ fontFamily: "Geist_700Bold", fontSize: 9.5, letterSpacing: 0.5, color: colors.gold }}>PR</Text>
+                    <Text
+                      style={{ fontFamily: "Geist_700Bold", fontSize: 9.5, letterSpacing: 0.5, color: colors.gold }}
+                    >
+                      PR
+                    </Text>
                   </View>
                 ) : null}
               </View>
@@ -108,8 +136,12 @@ export function WorkoutSlideCard({ workout }: { workout: FeedWorkout }) {
                         backgroundColor: s.pr ? "rgba(232,180,76,0.12)" : "rgba(255,255,255,0.03)"
                       }}
                     >
-                      <Text style={{ width: 18, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.fog }}>{i + 1}</Text>
-                      <Text style={{ flex: 1, fontFamily: "Geist_400Regular", fontSize: 13, color: colors.bone }}>{text}</Text>
+                      <Text style={{ width: 18, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.fog }}>
+                        {i + 1}
+                      </Text>
+                      <Text style={{ flex: 1, fontFamily: "Geist_400Regular", fontSize: 13, color: colors.bone }}>
+                        {text}
+                      </Text>
                     </View>
                   );
                 })}

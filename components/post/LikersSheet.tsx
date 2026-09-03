@@ -8,6 +8,7 @@ import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { usePostLikers } from "@/hooks/queries/usePostReactions";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 /** Bottom-sheet list of everyone who liked a post — tap a row to open a profile. */
 export function LikersSheet({ postId }: { postId: string }) {
@@ -37,7 +38,7 @@ export function LikersSheet({ postId }: { postId: string }) {
                 left={<Avatar name={liker.displayName} uri={liker.avatarUrl} size={46} />}
                 name={mine ? `${liker.displayName} (you)` : liker.displayName}
                 sub={liker.username ? `@${liker.username}` : undefined}
-                right={<Heart size={16} color="#FF2D55" fill="#FF2D55" strokeWidth={2} />}
+                right={<Heart size={16} color={tokens.status.like} fill={tokens.status.like} strokeWidth={2} />}
                 onPress={
                   mine || !liker.username
                     ? undefined

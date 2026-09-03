@@ -52,3 +52,6 @@ app-example
 # Generated gym-seed SQL (rebuild with scripts/seed-us-gyms-all.mjs)
 scripts/out/
 scripts/out-seed.log
+
+# Trophy art 2K source renders (re-creatable; see assets/images/trophies/manifest.json)
+assets/images/trophies/originals/

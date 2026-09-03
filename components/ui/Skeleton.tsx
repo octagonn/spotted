@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { View, type DimensionValue } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 
+import { DEFAULT_POST_RATIO } from "@/lib/postFrame";
 import { colors } from "@/theme/colors";
 
 /** A single shimmering placeholder block. */
@@ -22,7 +23,9 @@ export function Skeleton({
   }, [shimmer]);
   const animated = useAnimatedStyle(() => ({ opacity: shimmer.value }));
   return (
-    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: colors.graphite }, animated, style]} />
+    <Animated.View
+      style={[{ width, height, borderRadius: radius, backgroundColor: colors.graphite }, animated, style]}
+    />
   );
 }
 
@@ -31,17 +34,14 @@ export function Skeleton({
  * people/inbox/members/requests lists. `avatar={0}` drops the circle (e.g.
  * gym-search rows that have no avatar).
  */
-export function SkeletonRow({
-  avatar = 40,
-  lines = 2,
-  style
-}: {
-  avatar?: number;
-  lines?: 1 | 2;
-  style?: object;
-}) {
+export function SkeletonRow({ avatar = 40, lines = 2, style }: { avatar?: number; lines?: 1 | 2; style?: object }) {
   return (
-    <View style={[{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 10 }, style]}>
+    <View
+      style={[
+        { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 10 },
+        style
+      ]}
+    >
       {avatar > 0 ? <Skeleton width={avatar} height={avatar} radius={avatar / 2} /> : null}
       <View style={{ flex: 1, gap: 7 }}>
         <Skeleton width="55%" height={12} />
@@ -108,7 +108,10 @@ export function SkeletonToggleRows({ count = 8 }: { count?: number }) {
   return (
     <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
       {Array.from({ length: count }, (_, i) => (
-        <View key={i} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14 }}>
+        <View
+          key={i}
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14 }}
+        >
           <Skeleton width={`${45 + (i % 3) * 12}%` as `${number}%`} height={13} />
           <Skeleton width={44} height={26} radius={13} />
         </View>
@@ -136,7 +139,7 @@ export function SkeletonHeaderDetail() {
 export function SkeletonMediaCard() {
   return (
     <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: 10 }}>
-      <Skeleton width="100%" radius={12} style={{ aspectRatio: 3 / 3.6 }} />
+      <Skeleton width="100%" radius={12} style={{ aspectRatio: DEFAULT_POST_RATIO }} />
       <Skeleton width="50%" height={12} />
       <Skeleton width="30%" height={10} />
     </View>
@@ -172,16 +175,16 @@ export function SkeletonTrackRow() {
 /** A feed post placeholder (header + media + caption lines). */
 export function PostCardSkeleton() {
   return (
-    <View style={{ paddingTop: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.graphite }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingBottom: 10 }}>
+    <View style={{ paddingTop: 16, paddingBottom: 16 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 12 }}>
         <Skeleton width={40} height={40} radius={20} />
         <View style={{ gap: 6 }}>
           <Skeleton width={120} height={12} />
           <Skeleton width={80} height={10} />
         </View>
       </View>
-      <Skeleton width="100%" radius={0} style={{ aspectRatio: 3 / 3.6 }} />
-      <View style={{ paddingHorizontal: 18, paddingTop: 12, gap: 8 }}>
+      <Skeleton width="100%" radius={0} style={{ aspectRatio: DEFAULT_POST_RATIO }} />
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 8 }}>
         <Skeleton width="70%" height={12} />
         <Skeleton width="45%" height={12} />
       </View>

@@ -1,20 +1,21 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useState } from "react";
-import { LayoutAnimation, Text, View, useWindowDimensions } from "react-native";
+import { LayoutAnimation, View, useWindowDimensions } from "react-native";
 
-import { EarnedTrophyCard } from "@/components/trophies/EarnedTrophyCard";
+import { EarnedTrophyCard } from "@/components/trophies/TrophyCard";
 import { TrophyCategorySection } from "@/components/trophies/TrophyCategorySection";
 import { TrophyDetailSheet } from "@/components/trophies/TrophyDetailSheet";
 import { TrophyGrid, trophyCardWidth } from "@/components/trophies/TrophyGrid";
 import { TrophySegmentedControl, type TrophyTab } from "@/components/trophies/TrophySegmentedControl";
 import { TrophyUnlockModal } from "@/components/trophies/TrophyUnlockModal";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { EMPTY_ART } from "@/lib/emptyStateArt";
 import { useTrophies } from "@/hooks/useTrophies";
 import { useMyProfile } from "@/hooks/queries/useProfile";
 import { useSetFeaturedTrophies } from "@/hooks/queries/useProfileExtras";
 import { showToast } from "@/stores/ui";
 import { type TrophyCardModel } from "@/lib/trophySelectors";
-import { colors } from "@/theme/colors";
 
 /**
  * The trophy case. Two tabs only — Categories (default) and Earned. Categories
@@ -38,9 +39,10 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
     const names = new Set(featured.map((f) => f.name));
     const storedIds = new Set(featured.map((f) => f.id).filter(Boolean) as string[]);
     const ids = new Set<string>();
-    for (const section of sections) for (const card of section.cards) {
-      if (storedIds.has(card.def.id) || names.has(card.displayTier?.name ?? card.def.name)) ids.add(card.def.id);
-    }
+    for (const section of sections)
+      for (const card of section.cards) {
+        if (storedIds.has(card.def.id) || names.has(card.displayTier?.name ?? card.def.name)) ids.add(card.def.id);
+      }
     return ids;
   }, [featured, sections]);
   const [tab, setTab] = useState<TrophyTab>("Categories");
@@ -80,7 +82,7 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
     return map;
   }, [sections]);
 
-  const openCard = openId ? cardById.get(openId) ?? null : null;
+  const openCard = openId ? (cardById.get(openId) ?? null) : null;
   const ladder = useMemo(() => (openCard ? ladderFor(openCard.def) : []), [openCard, ladderFor]);
 
   const shareFromCard = (card: TrophyCardModel): TrophyShareData => ({
@@ -88,7 +90,12 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
     name: card.displayTier ? card.displayTier.name : card.def.name,
     familyName: card.def.type === "stacked" ? card.def.name : null,
     earnedAt: card.earnedAt,
-    rarityPct: card.rarityPct
+    rarityPct: card.rarityPct,
+    // Mirror the grid's medal resolution: stacked trophies take the tier's
+    // medal, standalones their def's explicit medal — dropping def.medal here
+    // made the share/celebration card fall back to the rarity-derived metal,
+    // which can differ from the medallion the user was just looking at.
+    medal: card.def.type === "stacked" ? (card.displayTier?.medal ?? null) : (card.def.medal ?? null)
   });
 
   return (
@@ -109,16 +116,22 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
           ))}
         </>
       ) : earned.length === 0 ? (
-        <View style={{ alignItems: "center", paddingTop: 48, paddingHorizontal: 40 }}>
-          <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.fog, textAlign: "center" }}>
-            No trophies earned yet. Post, check in, and hit the gym to start your case.
-          </Text>
-        </View>
+        <EmptyState
+          art={EMPTY_ART.trophy}
+          title="No trophies yet"
+          body="Post, check in, and hit the gym to start your case."
+          paddingTop={40}
+        />
       ) : (
         <View style={{ paddingTop: 6 }}>
           <TrophyGrid>
             {earned.map((entry) => (
-              <EarnedTrophyCard key={entry.key} entry={entry} width={cardWidth} onPress={() => setOpenId(entry.def.id)} />
+              <EarnedTrophyCard
+                key={entry.key}
+                entry={entry}
+                width={cardWidth}
+                onPress={() => setOpenId(entry.def.id)}
+              />
             ))}
           </TrophyGrid>
         </View>
@@ -151,7 +164,15 @@ export function TrophyCase({ userId }: { userId?: string | null }) {
                 }
                 const next = already
                   ? featured.filter((f) => f.id !== id)
-                  : [...featured, { id, icon: openCard.def.icon, name: openCard.displayTier?.name ?? openCard.def.name, familyName: openCard.def.type === "stacked" ? openCard.def.name : null }];
+                  : [
+                      ...featured,
+                      {
+                        id,
+                        icon: openCard.def.icon,
+                        name: openCard.displayTier?.name ?? openCard.def.name,
+                        familyName: openCard.def.type === "stacked" ? openCard.def.name : null
+                      }
+                    ];
                 setFeatured.mutate(
                   next.map((f) => ({ id: f.id ?? "", icon: f.icon, name: f.name, familyName: f.familyName }))
                 );

@@ -3,10 +3,11 @@ import { appAlert } from "@/components/ui/AppDialog";
 // Gesture-handler ScrollView: scrolls correctly inside the bottom sheet, where
 // BottomSheetScrollView only works as the sheet's direct child and RN's own
 // ScrollView loses the pan gesture to the sheet.
-import { Gesture, GestureDetector, ScrollView as SheetScrollView } from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { CameraView, useCameraPermissions, useMicrophonePermissions, type CameraType } from "expo-camera";
 
 import { INSET_RATIO, POST_PHOTO_RATIO, captureCropRect } from "@/lib/captureCrop";
+import { usePhotoAspect } from "@/lib/mediaAspect";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -14,8 +15,6 @@ import { useIsFocused } from "@react-navigation/native";
 import {
   ChevronLeft,
   Download,
-  Dumbbell,
-  Home,
   Image as ImageIcon,
   Lock,
   MapPin,
@@ -30,10 +29,9 @@ import {
   Zap,
   ZapOff
 } from "lucide-react-native";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as ImageManipulator from "expo-image-manipulator";
-import { useVideoPlayer, VideoView } from "expo-video";
 import {
   ActivityIndicator,
   InputAccessoryView,
@@ -43,14 +41,19 @@ import {
   ScrollView,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   useWindowDimensions,
   View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CommunitySheet } from "@/components/camera/CommunitySheet";
+import { DualCameraIcon, StepPill } from "@/components/camera/ComposeChrome";
+import { FriendsSheet } from "@/components/camera/FriendsSheet";
+import { GymSheet } from "@/components/camera/GymSheet";
 import { LiftVideoReview, type VideoTrim } from "@/components/camera/LiftVideoReview";
-import { MusicClipScrubber } from "@/components/camera/MusicClipScrubber";
+import { LiftVideoThumb, MediaPreview } from "@/components/camera/MediaPreview";
+import { MusicSheet, type SelectedTrack } from "@/components/camera/MusicSheet";
+import { GYM_GEOFENCE_METERS, gymName, type Mode, type SelectedGym } from "@/components/camera/types";
 import { ShutterButton } from "@/components/camera/ShutterButton";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
 import {
@@ -62,45 +65,34 @@ import {
   type CameraDraftInput
 } from "@/lib/cameraDraft";
 import { impactHaptic } from "@/lib/haptics";
-import { LIFT_OPTIONS, LIFT_OPTION_BY_ID, newlyUnlockedTiers, type LiftExercise } from "@/lib/liftCatalog";
+import {
+  getLiftOption,
+  getLiftOptions,
+  isLiftExercise,
+  newlyUnlockedTiers,
+  type LiftExercise
+} from "@/lib/liftCatalog";
 import { useLogLift, useUserLifts } from "@/hooks/queries/useUserLifts";
 import { PhotoEditor } from "@/components/camera/PhotoEditor";
 import { PhotoTagOverlay, type PhotoTag } from "@/components/camera/PhotoTagOverlay";
 import { EditorBoundary } from "@/components/EditorBoundary";
 import { ScenePhoto } from "@/components/post/ScenePhoto";
-import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { LiftTag, PlayBadge } from "@/components/ui/Chips";
 import { ChoiceRow } from "@/components/ui/ChoiceRow";
 import { OptRow } from "@/components/ui/OptRow";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
-import { SearchBar } from "@/components/ui/SearchBar";
-import { Hairline, SectionLabel } from "@/components/ui/SectionLabel";
-import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
-import { SkeletonRow, SkeletonRows, SkeletonTrackRow } from "@/components/ui/Skeleton";
-import {
-  formatDistance,
-  useGymSearch,
-  type GymSearchCoords,
-  type GymSearchResult
-} from "@/hooks/queries/useGymSearch";
+import { SectionLabel } from "@/components/ui/SectionLabel";
+import { useSheet } from "@/components/ui/Sheet";
+import { useGymSearch, type GymSearchCoords, type GymSearchResult } from "@/hooks/queries/useGymSearch";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { captureRef } from "react-native-view-shot";
 
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
-import {
-  dedupeTracks,
-  recordMusicPick,
-  songKey,
-  useRecommendedTracks,
-  useTopSongs,
-  useTrackSearch,
-  type MusicTrack
-} from "@/lib/music";
-import { useMyCommunities, type CommunitySummary } from "@/hooks/queries/useCommunities";
+import { type MusicTrack } from "@/lib/music";
+import { useMyCommunities } from "@/hooks/queries/useCommunities";
 import { usePostedState } from "@/hooks/queries/usePostedState";
 import { usePostStory } from "@/hooks/queries/useStories";
 import { StoryDestinationSheet, type StoryDestination } from "@/components/story/StoryDestinationSheet";
@@ -118,22 +110,13 @@ import { markPostedToday, showToast, triggerFlash, triggerPostCelebration } from
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
 
-type Mode = "daily" | "lift" | "story";
 type DailyStep = "capture" | "review" | "compose";
 type LiftStep = "record" | "review" | "liftmeta" | "compose";
 type DualPhase = "off" | "selfie" | "main";
 
-/** Where the post happened: a real mapped gym row, or an unmapped location. */
-type SelectedGym =
-  | { type: "gym"; id: string; name: string }
-  | { type: "home" }
-  | { type: "other" };
-
-
 // Module-scoped so it survives camera remounts: we only auto-prompt for
 // location once per app session, never on every open.
 let locationAskedThisSession = false;
-
 
 /** Mirror (front camera) and center-crop a capture to `ratio` (w/h) in one
  *  re-encode. Returns the untouched uri when no transform is needed. */
@@ -158,732 +141,6 @@ async function finalizeCapture(
     format: ImageManipulator.SaveFormat.JPEG
   });
   return out.uri;
-}
-
-
-function gymName(gym: SelectedGym | null): string | null {
-  if (!gym) return null;
-  if (gym.type === "home") return "Custom location";
-  if (gym.type === "other") return "Other location";
-  return gym.name;
-}
-
-
-/** Dual-camera glyph, Snapchat-style: two overlapping rounded frames offset
- *  diagonally (front card occludes the back one). */
-function DualCameraIcon({ active }: { active: boolean }) {
-  const color = active ? tokens.accent.gold : colors.white;
-  return (
-    <View style={{ width: 20, height: 20 }}>
-      {/* back frame — top-right */}
-      <View
-        style={{ position: "absolute", top: 0, right: 0, width: 13, height: 13, borderRadius: 4, borderWidth: 1.8, borderColor: color, opacity: 0.6 }}
-      />
-      {/* front frame — bottom-left, filled with the button bg so it occludes */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          width: 13,
-          height: 13,
-          borderRadius: 4,
-          borderWidth: 1.8,
-          borderColor: color,
-          backgroundColor: "rgba(0,0,0,0.55)"
-        }}
-      />
-    </View>
-  );
-}
-
-function StepPill({ children }: { children: ReactNode }) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 7,
-        backgroundColor: "rgba(0,0,0,0.62)",
-        borderWidth: 1,
-        borderColor: colors.white,
-        borderRadius: 999,
-        paddingVertical: 8,
-        paddingHorizontal: 16
-      }}
-    >
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white }} />
-      <Text
-        style={{
-          fontFamily: "Geist_700Bold",
-          fontSize: 12,
-          letterSpacing: 12 * 0.1,
-          textTransform: "uppercase",
-          color: colors.white
-        }}
-      >
-        {children}
-      </Text>
-    </View>
-  );
-}
-
-
-function IconTile({ children, round = false }: { children: ReactNode; round?: boolean }) {
-  return (
-    <View
-      style={{
-        width: 38,
-        height: 38,
-        borderRadius: round ? 19 : 10,
-        borderWidth: 1,
-        borderColor: colors.slate,
-        alignItems: "center",
-        justifyContent: "center"
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-/** Paused, muted first-frame preview of the recorded lift clip. */
-function LiftVideoThumb({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.muted = true;
-    p.pause();
-  });
-  return (
-    <VideoView
-      player={player}
-      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-      contentFit="cover"
-      nativeControls={false}
-    />
-  );
-}
-
-function MediaPreview({
-  mode,
-  photoUri,
-  videoUri,
-  photos,
-  photoCount = 1,
-  lift,
-  weight,
-  width = "62%"
-}: {
-  mode: Mode;
-  photoUri?: string;
-  videoUri?: string;
-  /** All photos for a multi-photo daily post — swipeable preview. */
-  photos?: string[];
-  photoCount?: number;
-  lift: string;
-  weight: string;
-  width?: `${number}%`;
-}) {
-  const isLift = mode === "lift";
-  const [pageW, setPageW] = useState(0);
-  const [page, setPage] = useState(0);
-  const gallery = !isLift && photos && photos.length > 1 ? photos : null;
-  return (
-    <View
-      style={{
-        width,
-        maxWidth: 360,
-        // Photos preview at the feed frame ratio (matches the capture crop);
-        // lift videos keep the 3:4 clip frame.
-        aspectRatio: isLift ? 3 / 4 : POST_PHOTO_RATIO,
-        alignSelf: "center",
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: colors.iron,
-        backgroundColor: colors.graphite,
-        overflow: "hidden"
-      }}
-    >
-      {isLift && videoUri ? (
-        <LiftVideoThumb uri={videoUri} />
-      ) : gallery ? (
-        <View style={{ flex: 1 }} onLayout={(e) => setPageW(e.nativeEvent.layout.width)}>
-          {pageW > 0 ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
-            >
-              {gallery.map((uri) => (
-                <View key={uri} style={{ width: pageW, height: "100%" }}>
-                  <ScenePhoto uri={uri} scene="s2" />
-                </View>
-              ))}
-            </ScrollView>
-          ) : null}
-          <View pointerEvents="none" style={{ position: "absolute", bottom: 10, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 }}>
-            {gallery.map((_, i) => (
-              <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i === page ? colors.white : "rgba(255,255,255,0.4)" }} />
-            ))}
-          </View>
-        </View>
-      ) : (
-        <ScenePhoto uri={isLift ? undefined : photoUri} scene={isLift ? "s6" : "s2"} />
-      )}
-      {isLift ? (
-        <>
-          <LiftTag lift={lift} weight={weight} style={{ position: "absolute", left: 12, top: 12 }} />
-          <PlayBadge style={{ position: "absolute", left: "50%", top: "50%", marginLeft: -28, marginTop: -28 }} />
-        </>
-      ) : null}
-      {!isLift && photoCount > 1 ? (
-        <View style={{ position: "absolute", top: 10, right: 10, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.6)" }}>
-          <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 10.5, color: colors.white }}>
-            {photoCount} PHOTOS
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-/** Hard geofence for posting a gym photo: 0.2 miles. */
-const GYM_GEOFENCE_METERS = 0.2 * 1609.344;
-
-function GymSheet({
-  selected,
-  coords,
-  locationSettled,
-  onSelect
-}: {
-  selected: SelectedGym | null;
-  coords: GymSearchCoords | null;
-  locationSettled: boolean;
-  onSelect: (gym: SelectedGym) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const { height: windowHeight } = useWindowDimensions();
-  const listHeight = Math.min(300, Math.round(windowHeight * 0.32));
-  const gyms = useGymSearch(query, coords, locationSettled);
-  const rows: GymSearchResult[] = (gyms.data?.pages?.[0] ?? []).slice(0, 20);
-
-  return (
-    <View>
-      <SheetTitle>Where was this?</SheetTitle>
-      <SheetSub>
-        Mapped gyms show on the post. Custom locations and unlisted spots won&apos;t claim a mapped gym.
-      </SheetSub>
-      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search gyms" />
-      </View>
-      {/* Fixed-height results area: the sheet is dynamically sized, so without
-          this it shrinks as search narrows the list and slides under the
-          keyboard. Results scroll inside instead. Height is capped to the
-          screen so the rows below never clip past the sheet's 78% max. */}
-      <View style={{ height: listHeight }}>
-        {gyms.isLoading || !locationSettled ? (
-          <View style={{ paddingTop: 6 }}>
-            <SkeletonRow avatar={0} />
-            <SkeletonRow avatar={0} />
-            <SkeletonRow avatar={0} />
-            <SkeletonRow avatar={0} />
-          </View>
-        ) : rows.length === 0 ? (
-          <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
-            No gyms found. Try a different name.
-          </Text>
-        ) : (
-          <SheetScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-            {rows.map((gym) => {
-              const distance = formatDistance(gym.distance_meters);
-              return (
-                <ChoiceRow
-                  key={gym.id}
-                  title={gym.name}
-                  sub={[gym.address, distance].filter(Boolean).join(" \u00b7 ") || "Mapped gym"}
-                  selected={selected?.type === "gym" && selected.id === gym.id}
-                  left={<IconTile round><Dumbbell size={15} color={colors.mist} /></IconTile>}
-                  onPress={() => onSelect({ type: "gym", id: gym.id, name: gym.name })}
-                />
-              );
-            })}
-          </SheetScrollView>
-        )}
-      </View>
-      <Hairline style={{ marginVertical: 6, marginHorizontal: 20 }} />
-      <ChoiceRow
-        title="Custom location"
-        sub="Home gym or another spot that isn't mapped"
-        selected={selected?.type === "home"}
-        left={<IconTile round><Home size={15} color={colors.mist} /></IconTile>}
-        onPress={() => onSelect({ type: "home" })}
-      />
-      <ChoiceRow
-        title="Other / unlisted"
-        sub="Not a mapped gym"
-        selected={selected?.type === "other"}
-        left={<IconTile round><MapPin size={15} color={colors.mist} /></IconTile>}
-        onPress={() => onSelect({ type: "other" })}
-      />
-    </View>
-  );
-}
-
-function FriendsSheet({ initial, onDone }: { initial: string[]; onDone: (ids: string[]) => void }) {
-  const sheet = useSheet();
-  const friends = useFriends();
-  const { height: windowHeight } = useWindowDimensions();
-  const listHeight = Math.min(300, Math.round(windowHeight * 0.32));
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(initial);
-  const toggle = (id: string) => setSelected((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
-
-  const q = query.trim().toLowerCase();
-  const rows = (friends.data ?? []).filter(
-    (friend) => !q || `${friend.display_name} ${friend.username}`.toLowerCase().includes(q)
-  );
-
-  return (
-    <View>
-      <SheetTitle>Tag friends</SheetTitle>
-      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search friends" />
-      </View>
-      {/* Fixed height so the sheet doesn't shrink under the keyboard while
-          searching, capped to the screen so the Done button never clips. */}
-      <View style={{ height: listHeight }}>
-        {friends.isLoading ? (
-          <SkeletonRows count={4} style={{ paddingTop: 6 }} />
-        ) : rows.length === 0 ? (
-          <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
-            {q ? "No friends match that name." : "No friends yet — add your crew from the Friends tab."}
-          </Text>
-        ) : (
-          <SheetScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-            {rows.map((friend) => (
-              <ChoiceRow
-                key={friend.id}
-                title={friend.display_name}
-                sub={`@${friend.username}`}
-                selected={selected.includes(friend.id)}
-                left={<Avatar name={friend.display_name} uri={friend.avatar_url} size={40} />}
-                onPress={() => toggle(friend.id)}
-              />
-            ))}
-          </SheetScrollView>
-        )}
-      </View>
-      <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
-        <Button onPress={() => { onDone(selected); sheet.close(); }}>Done</Button>
-      </View>
-    </View>
-  );
-}
-
-type SelectedTrack = MusicTrack & { clipStart?: number };
-
-const PREVIEW_SECONDS = 30;
-
-/** Spotify-style explicit marker: gray rounded square with a dark bold E. */
-function ExplicitBadge() {
-  return (
-    <View
-      accessibilityLabel="Explicit"
-      style={{ width: 15, height: 15, borderRadius: 3, backgroundColor: colors.silver, alignItems: "center", justifyContent: "center" }}
-    >
-      <Text style={{ fontFamily: "Geist_700Bold", fontSize: 9.5, lineHeight: 12, color: colors.black }}>E</Text>
-    </View>
-  );
-}
-
-/** Uppercase divider between picker sections. */
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <Text
-      style={{
-        paddingHorizontal: 20,
-        paddingTop: 12,
-        paddingBottom: 4,
-        fontFamily: "GeistMono_400Regular",
-        fontSize: 10.5,
-        letterSpacing: 10.5 * 0.14,
-        color: colors.fog
-      }}
-    >
-      {label}
-    </Text>
-  );
-}
-
-function MusicSheet({
-  selected,
-  onSelect,
-  onChange
-}: {
-  selected: SelectedTrack | null;
-  /** Final answer — the caller closes the sheet on this. */
-  onSelect: (track: SelectedTrack | null) => void;
-  /** Live: the pick as it stands, without closing. */
-  onChange: (track: SelectedTrack) => void;
-}) {
-  const { height: windowHeight } = useWindowDimensions();
-  const [query, setQuery] = useState("");
-  const results = useTrackSearch(query);
-  // Two feeds: songs matched to this user's taste, then today's chart paged
-  // for infinite scroll.
-  const recommended = useRecommendedTracks();
-  const top = useTopSongs();
-  // Chart pages arrive independently, so the same song can land on more than
-  // one page — and anything already shown under RECOMMENDED would otherwise
-  // appear a second time a few rows further down.
-  const recommendedTracks = useMemo(() => dedupeTracks(recommended.data ?? []), [recommended.data]);
-  const topTracks = useMemo(() => {
-    const shown = new Set(recommendedTracks.map(songKey));
-    return dedupeTracks((top.data?.pages ?? []).flat()).filter((track) => !shown.has(songKey(track)));
-  }, [top.data, recommendedTracks]);
-  const rows = results.data ?? [];
-  const searching = query.trim().length >= 2;
-
-  /** Pull the next page in when the list nears its end. */
-  const onListScroll = (e: { nativeEvent: { layoutMeasurement: { height: number }; contentOffset: { y: number }; contentSize: { height: number } } }) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const nearEnd = contentOffset.y + layoutMeasurement.height >= contentSize.height - 320;
-    if (nearEnd && top.hasNextPage && !top.isFetchingNextPage) void top.fetchNextPage();
-  };
-  // Chosen (auditioning) track — plays out loud, with a draggable clip-start.
-  const [chosen, setChosen] = useState<SelectedTrack | null>(selected);
-  const sheetApi = useSheet();
-
-  /**
-   * Commit the picker's result exactly once.
-   *
-   * Tapping a song marks the row selected AND starts playing it, which reads as
-   * "chosen" — so dismissing the sheet there (swipe down, or tap the backdrop,
-   * which closes on press) felt like confirming. It silently discarded the
-   * pick instead, the post came back with no music, and the whole selection had
-   * to be done a second time. Now a dismissal commits whatever is chosen.
-   */
-  const committed = useRef(false);
-  const commit = (next: SelectedTrack | null) => {
-    if (next) trackAnalyticsEvent("music_selected", { has_preview: Boolean(next.previewUrl) });
-    if (committed.current) return;
-    committed.current = true;
-    // Feeds the taste profile — the only input the recommender learns from.
-    if (next) void recordMusicPick(next);
-    onSelect(next);
-  };
-  // Tall picker: the old 28% list showed ~4 songs at a time. The sheet host
-  // grows to 78% of the screen, so give the list most of that — but shrink it
-  // once a song is chosen, otherwise the audition card and the Add to post
-  // button get pushed past the sheet's max height and clipped off-screen.
-  const listHeight = Math.round(windowHeight * (chosen ? 0.3 : 0.46));
-  const [clipStart, setClipStart] = useState(selected?.clipStart ?? 0);
-  const clipStartRef = useRef(clipStart);
-  clipStartRef.current = clipStart;
-
-  const player = useAudioPlayer(chosen?.previewUrl ? { uri: chosen.previewUrl } : null);
-  const status = useAudioPlayerStatus(player);
-  const playerRef = useRef(player);
-  playerRef.current = player;
-  const statusRef = useRef(status);
-  statusRef.current = status;
-
-  // All native player calls are wrapped: an unready/torn-down player throws
-  // synchronously from .play()/.seekTo(), which crashed the picker (the
-  // reported "selecting the segment crashes" bug).
-  const safeSeekPlay = (seconds: number) => {
-    const p = playerRef.current;
-    if (!p) return;
-    // Seeking a player that has not finished loading is the other way this
-    // crashed: the native side asserts rather than throwing something JS can
-    // catch. The load effect re-issues the seek once isLoaded flips true, so
-    // bailing here loses nothing.
-    const current = statusRef.current;
-    if (!current?.isLoaded) return;
-    // Never seek past the end of the actual preview — the 30s length is an
-    // assumption, and a short preview would otherwise get an out-of-range seek.
-    const duration = typeof current.duration === "number" && current.duration > 0 ? current.duration : null;
-    const target = duration ? Math.min(Math.max(0, seconds), Math.max(0, duration - 0.25)) : Math.max(0, seconds);
-    try {
-      void Promise.resolve(p.seekTo(target)).catch(() => {});
-      p.play();
-    } catch {
-      // Player not ready yet — the load effect will start it.
-    }
-  };
-
-  const auditTrack = (track: MusicTrack) => {
-    setChosen(track);
-    setClipStart(0);
-    // Hand it to the post immediately. The row already renders as selected and
-    // starts playing, so the choice has visibly been made — it must not depend
-    // on landing a second tap on "Add to post". With the search keyboard up,
-    // that second tap is genuinely easy to miss: the sheet floats above the
-    // keyboard (keyboardBehavior="interactive"), so the tap that dismisses the
-    // keyboard also re-lays-out the sheet and slides the button out from under
-    // your finger. That was "it makes me select a song again".
-    onChange({ ...track, clipStart: 0 });
-    // Settle the layout now rather than on the way to the button.
-    Keyboard.dismiss();
-  };
-
-  // Auto-play the audition from the clip start whenever the track loads.
-  useEffect(() => {
-    if (!chosen?.previewUrl || !status.isLoaded) return;
-    safeSeekPlay(clipStartRef.current);
-    // Replay only on track change / initial load, not every status tick.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chosen?.id, status.isLoaded]);
-
-  // Commit on dismissal. Reads through refs so it never re-subscribes on every
-  // scrub, and `seenOpen` avoids firing before the sheet has actually opened.
-  const latestPick = useRef({ chosen, clipStart });
-  latestPick.current = { chosen, clipStart };
-  const seenOpen = useRef(false);
-  useEffect(() => {
-    if (sheetApi.isOpen) {
-      seenOpen.current = true;
-      return;
-    }
-    if (!seenOpen.current || committed.current) return;
-    const { chosen: pick, clipStart: start } = latestPick.current;
-    if (pick) commit({ ...pick, clipStart: start });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetApi.isOpen]);
-
-  const dismissKeyboard = () => Keyboard.dismiss();
-
-  return (
-    // Tapping anywhere outside the search field closes the keyboard.
-    <TouchableWithoutFeedback onPress={dismissKeyboard} accessible={false}>
-    <View>
-      <SheetTitle>Add music</SheetTitle>
-      <SheetSub>Search any song, hear it, and pick where the clip starts.</SheetSub>
-      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search songs or artists" />
-      </View>
-      <View style={{ height: listHeight }}>
-        {!searching ? (
-          recommended.isLoading && top.isLoading ? (
-            <View style={{ paddingTop: 6 }}>
-              <SkeletonTrackRow />
-              <SkeletonTrackRow />
-              <SkeletonTrackRow />
-              <SkeletonTrackRow />
-              <SkeletonTrackRow />
-              <SkeletonTrackRow />
-            </View>
-          ) : (
-            <SheetScrollView
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-              onScroll={onListScroll}
-              scrollEventThrottle={64}
-            >
-              {/* Matched to what this user actually picks — sharpens over time. */}
-              {recommendedTracks.length > 0 ? (
-                <>
-                  <SectionHeader label="RECOMMENDED FOR YOU" />
-                  {recommendedTracks.map((track) => (
-                    <ChoiceRow
-                      key={`rec-${track.id}`}
-                      title={track.title}
-                      sub={track.artist}
-                      subBadge={track.explicit ? <ExplicitBadge /> : undefined}
-                      selected={chosen?.id === track.id}
-                      left={<TrackArt uri={track.artworkUrl} />}
-                      onPress={() => auditTrack(track)}
-                    />
-                  ))}
-                </>
-              ) : null}
-
-              <SectionHeader label="TOP SONGS TODAY" />
-              {topTracks.map((track: MusicTrack, i: number) => (
-                <ChoiceRow
-                  key={`top-${track.id}-${i}`}
-                  title={track.title}
-                  sub={track.artist}
-                  subBadge={track.explicit ? <ExplicitBadge /> : undefined}
-                  selected={chosen?.id === track.id}
-                  left={<TrackArt uri={track.artworkUrl} />}
-                  onPress={() => auditTrack(track)}
-                />
-              ))}
-              {top.isFetchingNextPage ? (
-                <View style={{ paddingVertical: 14, alignItems: "center" }}>
-                  <ActivityIndicator color={colors.fog} />
-                </View>
-              ) : null}
-            </SheetScrollView>
-          )
-        ) : results.isLoading ? (
-          <View style={{ paddingTop: 6 }}>
-            <SkeletonTrackRow />
-            <SkeletonTrackRow />
-            <SkeletonTrackRow />
-            <SkeletonTrackRow />
-          </View>
-        ) : results.isError ? (
-          <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
-            Search didn't load. Check your connection and try again.
-          </Text>
-        ) : rows.length === 0 ? (
-          <Text style={{ paddingTop: 28, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
-            No songs found for &ldquo;{query.trim()}&rdquo;.
-          </Text>
-        ) : (
-          <SheetScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" nestedScrollEnabled>
-            {rows.map((track) => (
-              <ChoiceRow
-                key={track.id}
-                title={track.title}
-                sub={track.artist}
-                subBadge={track.explicit ? <ExplicitBadge /> : undefined}
-                selected={chosen?.id === track.id}
-                left={<TrackArt uri={track.artworkUrl} />}
-                onPress={() => auditTrack(track)}
-              />
-            ))}
-          </SheetScrollView>
-        )}
-      </View>
-
-      {/* Audition + clip picker for the chosen song */}
-      {chosen ? (
-        <View style={{ marginHorizontal: 20, marginTop: 4, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.iron, backgroundColor: colors.charcoal }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <TrackArt uri={chosen.artworkUrl} />
-            <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white }}>
-                {chosen.title}
-              </Text>
-              <View style={{ marginTop: 2, flexDirection: "row", alignItems: "center", gap: 5 }}>
-                {chosen.explicit ? <ExplicitBadge /> : null}
-                <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 12.5, color: colors.silver }}>
-                  {chosen.artist}
-                </Text>
-              </View>
-            </View>
-            <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 12, color: colors.silver }}>
-              {`0:${String(clipStart).padStart(2, "0")}`}
-            </Text>
-          </View>
-          {chosen.previewUrl ? (
-            <MusicClipScrubber
-              previewSeconds={PREVIEW_SECONDS}
-              maxStart={PREVIEW_SECONDS - 5}
-              initialStart={clipStart}
-              onChange={setClipStart}
-              onCommit={(sec) => {
-                setClipStart(sec);
-                safeSeekPlay(sec);
-                // Keep the post in step with the scrubber on release, so the
-                // clip start survives a dismissal too.
-                if (chosen) onChange({ ...chosen, clipStart: sec });
-              }}
-            />
-          ) : (
-            <Text style={{ marginTop: 10, fontSize: 11.5, color: colors.fog }}>
-              No preview available for this song — it will still show on your post.
-            </Text>
-          )}
-          <Text style={{ marginTop: 8, fontSize: 10.5, color: colors.fog }}>
-            Drag to choose where your clip starts. It plays out loud so you can hear it.
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingTop: 14 }}>
-        <Button
-          variant="ghost"
-          style={{ flex: 1 }}
-          icon={<X size={14} color={colors.bone} />}
-          onPress={() => commit(null)}
-        >
-          No music
-        </Button>
-        <Button
-          style={{ flex: 1 }}
-          disabled={!chosen}
-          onPress={() => {
-            if (!chosen) return;
-            commit({ ...chosen, clipStart });
-          }}
-        >
-          Add to post
-        </Button>
-      </View>
-    </View>
-    </TouchableWithoutFeedback>
-  );
-}
-
-function TrackArt({ uri }: { uri: string | null }) {
-  if (!uri) {
-    return <IconTile><Music size={15} color={colors.mist} /></IconTile>;
-  }
-  return (
-    <ExpoImage
-      source={{ uri }}
-      style={{ width: 38, height: 38, borderRadius: 8, backgroundColor: colors.charcoal }}
-      contentFit="cover"
-    />
-  );
-}
-
-function CommunitySheet({
-  chosenGymId,
-  initial,
-  onDone
-}: {
-  chosenGymId: string | null;
-  initial: string[];
-  onDone: (ids: string[]) => void;
-}) {
-  const sheet = useSheet();
-  const communities = useMyCommunities();
-  const [selected, setSelected] = useState(initial);
-
-  const eligible = (community: CommunitySummary) =>
-    community.type !== "gym" || community.gym_id === chosenGymId;
-
-  const toggle = (community: CommunitySummary) => {
-    if (!eligible(community)) return;
-    setSelected((ids) => ids.includes(community.id) ? ids.filter((id) => id !== community.id) : [...ids, community.id]);
-  };
-
-  return (
-    <View>
-      <SheetTitle>Post to a community</SheetTitle>
-      <SheetSub>Gym communities need this post tagged at that gym. Your other communities are always open.</SheetSub>
-      {(communities.data ?? []).length === 0 && !communities.isLoading ? (
-        <Text style={{ paddingHorizontal: 20, paddingVertical: 14, fontSize: 12.5, color: colors.fog }}>
-          You're not in any communities yet. Join one from the Map tab first.
-        </Text>
-      ) : null}
-      {(communities.data ?? []).map((community) => {
-        const disabled = !eligible(community);
-        const sub = disabled
-          ? "Tag this gym on the post to share here"
-          : `${community.type[0].toUpperCase()}${community.type.slice(1)} \u00b7 ${community.memberCount} member${community.memberCount === 1 ? "" : "s"}`;
-        return (
-          <ChoiceRow
-            key={community.id}
-            title={community.name}
-            sub={sub}
-            selected={selected.includes(community.id)}
-            disabled={disabled}
-            left={<IconTile><Users size={16} color={colors.mist} /></IconTile>}
-            onPress={() => toggle(community)}
-          />
-        );
-      })}
-      <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
-        <Button onPress={() => { onDone(selected); sheet.close(); }}>Done</Button>
-      </View>
-    </View>
-  );
 }
 
 export default function CameraScreen() {
@@ -966,7 +223,7 @@ export default function CameraScreen() {
   // Ultra-wide (0.5×): pinching out past 1× hands off to the ultra-wide lens
   // when the device has one. Virtual zoom < 0 = ultra-wide territory.
   const [availableLenses, setAvailableLenses] = useState<string[]>([]);
-  const ultraLens = facing === "back" ? availableLenses.find((l) => /ultra.?wide/i.test(l)) ?? null : null;
+  const ultraLens = facing === "back" ? (availableLenses.find((l) => /ultra.?wide/i.test(l)) ?? null) : null;
   const [virtualZoom, setVirtualZoom] = useState(0);
   const ultraActive = Boolean(ultraLens) && (recording ? recordUltraRef.current : virtualZoom < 0);
   /** Full ultra-wide travel: virtualZoom −0.35 = full 0.5×. */
@@ -980,9 +237,7 @@ export default function CameraScreen() {
   // view (ultra-wide zoomed in to match 1×), then widens continuously toward
   // 0.5× as the pinch continues.
   const ultraProgress = ultraActive ? Math.min(1, -virtualZoom / ULTRA_RANGE) : 0;
-  const cameraZoom = ultraActive
-    ? ULTRA_ENTRY_ZOOM * (1 - ultraProgress)
-    : Math.max(0, Math.min(1, virtualZoom));
+  const cameraZoom = ultraActive ? ULTRA_ENTRY_ZOOM * (1 - ultraProgress) : Math.max(0, Math.min(1, virtualZoom));
   /** The user-facing zoom multiplier (1× ↔ 0.5× across the ultra travel). */
   const zoomLabel = ultraActive ? 1 - 0.5 * ultraProgress : 1 + cameraZoom * 4;
   /** Keep virtual zoom in range; while recording, never cross the lens boundary. */
@@ -1022,6 +277,21 @@ export default function CameraScreen() {
   const [recordIntent, setRecordIntent] = useState(false);
   const camMode: "picture" | "video" = mode === "daily" && !recordIntent ? "picture" : "video";
   const [photoUri, setPhotoUri] = useState<string>();
+  // The captured photo's own aspect ratio, clamped to the feed band — the
+  // review frame is exactly the frame the feed will show.
+  const reviewAspect = usePhotoAspect(photoUri, POST_PHOTO_RATIO);
+  // Daily photos are shot through a 3:4 viewfinder (Instagram's feed ratio =
+  // the sensor's native ratio) instead of a full-screen preview, so what's on
+  // screen is exactly what posts and the feed shows all of it. Video (hold to
+  // record) and stories stay full-screen. The viewfinder sits between the top
+  // controls and the shutter stack; on short screens it just overlaps them.
+  const viewfinder = mode === "daily" && camMode === "picture";
+  const viewfinderHeight = winW / POST_PHOTO_RATIO;
+  const viewfinderTop = (() => {
+    const bandTop = insets.top + 64;
+    const bandBottom = winH - insets.bottom - 150;
+    return Math.max(bandTop, bandTop + (bandBottom - bandTop - viewfinderHeight) / 2);
+  })();
   /** Earlier shots in a multi-photo daily post (carousel). Max 4 total. */
   const [extraPhotos, setExtraPhotos] = useState<string[]>([]);
   // Workout entry — the exercise list is the strength trophy catalog, and the
@@ -1060,7 +330,10 @@ export default function CameraScreen() {
   // it was silently filing already-posted photos as drafts. The capture screen
   // shows a "Drafts" chip that opens the drafts gallery (/drafts); picking one
   // there hands its id back via the resume mailbox.
-  const [draftSummary, setDraftSummary] = useState<{ count: number; previewUri: string | null }>({ count: 0, previewUri: null });
+  const [draftSummary, setDraftSummary] = useState<{ count: number; previewUri: string | null }>({
+    count: 0,
+    previewUri: null
+  });
   // The draft currently open in this camera session — posting deletes it.
   const draftIdRef = useRef<string | null>(null);
   const clearDraft = useCallback(() => {
@@ -1084,7 +357,7 @@ export default function CameraScreen() {
     if (draft.extraPhotos) setExtraPhotos(draft.extraPhotos);
     if (draft.videoUri) setVideoUri(draft.videoUri);
     if (draft.caption) setCaption(draft.caption);
-    if (draft.liftExercise) setLiftExercise(draft.liftExercise as LiftExercise);
+    if (draft.liftExercise && isLiftExercise(draft.liftExercise)) setLiftExercise(draft.liftExercise);
     if (draft.liftValue) setLiftValue(draft.liftValue);
     if (draft.tags) setTags(draft.tags);
     if (draft.communities) setCommunities(draft.communities);
@@ -1142,7 +415,25 @@ export default function CameraScreen() {
       storyTags,
       videoTrim: videoTrimRef.current
     };
-  }, [mode, dailyStep, liftStep, photoUri, dualFrontUri, extraPhotos, videoUri, caption, track, storyTrack, liftExercise, liftValue, tags, communities, gym, photoTags, storyTags]);
+  }, [
+    mode,
+    dailyStep,
+    liftStep,
+    photoUri,
+    dualFrontUri,
+    extraPhotos,
+    videoUri,
+    caption,
+    track,
+    storyTrack,
+    liftExercise,
+    liftValue,
+    tags,
+    communities,
+    gym,
+    photoTags,
+    storyTags
+  ]);
 
   // Explicitly save the current post as a draft and exit (details-page button).
   // Re-saving a resumed draft updates it in place instead of duplicating.
@@ -1245,7 +536,13 @@ export default function CameraScreen() {
   }, [storyPreviewStatus.currentTime]);
 
   useEffect(() => {
-    if (Platform.OS !== "web" && permission && !permission.granted && permission.canAskAgain && !permissionAsked.current) {
+    if (
+      Platform.OS !== "web" &&
+      permission &&
+      !permission.granted &&
+      permission.canAskAgain &&
+      !permissionAsked.current
+    ) {
       permissionAsked.current = true;
       void requestPermission();
     }
@@ -1313,7 +610,8 @@ export default function CameraScreen() {
     }
   }, [mode, locationSettled, withinGym, gym, nearestGym]);
 
-  const liftOption = LIFT_OPTION_BY_ID[liftExercise];
+  const liftOptions = getLiftOptions();
+  const liftOption = getLiftOption(liftExercise) ?? liftOptions[0];
   const liftUnit = liftOption.unit;
   const liftName = liftOption.name;
   const liftNum = Number.parseInt(liftValue || "0", 10);
@@ -1323,7 +621,6 @@ export default function CameraScreen() {
     .filter((friend) => tags.includes(friend.id))
     .map((friend) => ({ id: friend.id, name: friend.display_name, handle: `@${friend.username}` }));
   const selectedCommunities = (myCommunities.data ?? []).filter((community) => communities.includes(community.id));
-
 
   /** Flip front/back, debounced so spamming can't outrun the camera session.
    *  Allowed mid-recording (#8) — expo-camera keeps the clip going across the
@@ -1460,8 +757,7 @@ export default function CameraScreen() {
       if (result === "saved") {
         trackAnalyticsEvent("photo_saved", { mode: "daily", dual: Boolean(dualFrontUri) });
         showToast("Saved to camera roll");
-      }
-      else if (result === "denied") showToast("Allow photo access in Settings to save");
+      } else if (result === "denied") showToast("Allow photo access in Settings to save");
       else showToast("Saving photos isn't available on this device");
     } catch {
       showToast("Couldn't save photo");
@@ -1524,29 +820,25 @@ export default function CameraScreen() {
     let uri: string | undefined;
     try {
       // skipProcessing cuts the biggest capture-latency source (EXIF/orientation
-      // post-processing) so the shutter feels instant; quality stays high (0.95)
-      // so photos are still sharp. No automatic crop — the photo keeps its full
-      // frame; cropping is user-driven in the editor.
+      // post-processing) so the shutter feels instant; quality 1 for daily —
+      // this file is the master every later step re-encodes from.
       const photo = await cameraRef.current?.takePictureAsync({
-        quality: mode === "story" ? 0.9 : 0.95,
+        quality: mode === "story" ? 0.9 : 1,
         skipProcessing: true
       });
       if (photo?.uri) {
         // Flip: the OS un-mirrors front-camera captures; flip back so the saved
-        // photo matches the mirrored selfie preview. Crop: daily photos keep
-        // only the POST_PHOTO_RATIO band shown between the capture masks, so
-        // the feed displays exactly what was framed (WYSIWYG). Stories keep the
-        // full frame — they display full-screen. One re-encode covers both.
-        // Stories: lighter encode — they're ephemeral and the full-quality
-        // mirror re-encode was the "too much delay" on selfie captures.
+        // photo matches the mirrored selfie preview. Daily trims to the 3:4
+        // viewfinder — the sensor is already 3:4 so this is normally a no-op,
+        // and on sensors that aren't it removes only what the aspect-filling
+        // preview hid, so the post is exactly what was on screen. Stories
+        // display full-screen from the same preview, so they keep the full
+        // frame (and a lighter encode — they're ephemeral).
         uri = await finalizeCapture(photo, {
           mirror: facing === "front",
           ratio: mode === "story" ? null : POST_PHOTO_RATIO,
-          compress: mode === "story" ? 0.85 : 0.95,
-          // Daily promises WYSIWYG via the crop mask, so drop what the preview
-          // hid off the sides too. Stories display full-screen from the same
-          // aspect-filled preview, so their frame already matches.
-          previewRatio: mode === "story" ? null : winW / winH
+          compress: mode === "story" ? 0.85 : 1,
+          previewRatio: mode === "story" ? null : POST_PHOTO_RATIO
         });
       }
     } catch {
@@ -1560,24 +852,24 @@ export default function CameraScreen() {
     // Stories land directly in edit mode (2a) — no separate "Edit" step. When
     // the editor is done, the review screen (music/tags/share) shows.
     if (mode === "story" && uri) setEditing(true);
-  }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission, winW, winH]);
+  }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission]);
 
   // Dual capture (BeReal-style): grab the current lens, flip, let the session
   // reconfigure, grab the other lens. expo-camera can't run both at once, so
   // this is a fast sequence (~0.7s) rather than a true simultaneous capture.
   const shootOnce = useCallback(
-    async (mirror: boolean, ratio: number | null): Promise<string | undefined> => {
+    async (mirror: boolean, ratio: number | null, previewRatio: number | null): Promise<string | undefined> => {
       try {
-        // 0.95 to match the single-shot path — a dual post's main frame is a
-        // full post photo and was being encoded softer than a normal one.
-        const photo = await cameraRef.current?.takePictureAsync({ quality: 0.95, skipProcessing: true });
+        // quality 1 to match the single-shot path — this is the master file
+        // every later step (editor, upload compress) re-encodes from.
+        const photo = await cameraRef.current?.takePictureAsync({ quality: 1, skipProcessing: true });
         if (!photo?.uri) return undefined;
-        return await finalizeCapture(photo, { mirror, ratio, previewRatio: ratio ? winW / winH : null });
+        return await finalizeCapture(photo, { mirror, ratio, compress: 1, previewRatio });
       } catch {
         return undefined;
       }
     },
-    [winW, winH]
+    []
   );
 
   const toggleDualMode = useCallback(() => {
@@ -1609,7 +901,12 @@ export default function CameraScreen() {
     try {
       if (dualPhase === "selfie") {
         // Daily dual: the selfie lands in the 3:4 inset frame — crop to match.
-        const front = await shootOnce(true, mode === "daily" ? INSET_RATIO : null);
+        // Its live preview IS the 3:4 tile, so the visible region is 3:4 too.
+        const front = await shootOnce(
+          true,
+          mode === "daily" ? INSET_RATIO : null,
+          mode === "daily" ? INSET_RATIO : null
+        );
         if (!front) {
           showToast("Couldn't capture the selfie — try again");
           return;
@@ -1626,7 +923,12 @@ export default function CameraScreen() {
         }
         return;
       }
-      const back = await shootOnce(false, mode === "daily" ? POST_PHOTO_RATIO : null);
+      // Main frame: the 3:4 viewfinder, same as the single-shot daily path.
+      const back = await shootOnce(
+        false,
+        mode === "daily" ? POST_PHOTO_RATIO : null,
+        mode === "daily" ? POST_PHOTO_RATIO : null
+      );
       if (!back) {
         showToast("Couldn't take the dual shot — try again");
         return;
@@ -1714,17 +1016,17 @@ export default function CameraScreen() {
 
   const chooseGym = (next: SelectedGym) => {
     setGym(next);
-    setCommunities((ids) => ids.filter((id) => {
-      const community = (myCommunities.data ?? []).find((item) => item.id === id);
-      return !community || community.type !== "gym" || (next.type === "gym" && community.gym_id === next.id);
-    }));
+    setCommunities((ids) =>
+      ids.filter((id) => {
+        const community = (myCommunities.data ?? []).find((item) => item.id === id);
+        return !community || community.type !== "gym" || (next.type === "gym" && community.gym_id === next.id);
+      })
+    );
     sheet.close();
   };
 
   const openGymSheet = () => {
-    sheet.open(
-      <GymSheet selected={gym} coords={coords} locationSettled={locationSettled} onSelect={chooseGym} />
-    );
+    sheet.open(<GymSheet selected={gym} coords={coords} locationSettled={locationSettled} onSelect={chooseGym} />);
   };
 
   const submitPost = () => {
@@ -1775,12 +1077,14 @@ export default function CameraScreen() {
         let unlockedData: TrophyShareData | null = null;
         if (logged) {
           const oldBest = userLifts.data?.[liftExercise] ?? 0;
-          await logLift.mutateAsync({ userId, exercise: liftExercise, value: liftNum, unit: liftUnit, postId }).catch(() => {});
+          await logLift
+            .mutateAsync({ userId, exercise: liftExercise, value: liftNum, unit: liftUnit, postId })
+            .catch(() => {});
           const crossed = newlyUnlockedTiers(liftExercise, oldBest, liftNum);
           if (crossed.length > 0) {
             const top = crossed[0];
             unlockedData = {
-              icon: liftOption.def.icon,
+              icon: liftOption.def?.icon ?? "trophy",
               name: top.name,
               familyName: liftOption.name,
               earnedAt: new Date().toISOString(),
@@ -1940,18 +1244,17 @@ export default function CameraScreen() {
 
   if (isCapture) {
     const dualMode = dualPhase !== "off";
-    // WYSIWYG capture band (daily): the 9:16 sensor frame cover-fills the
-    // screen; the post keeps only the central POST_PHOTO_RATIO band of it.
-    // Dim everything outside that band so the framing is honest — what's
-    // bright is exactly what posts.
-    // The preview aspect-fills, so the visible width is always the full screen
-    // width whatever the session preset is — which makes the kept band simply
-    // "screen width at the post ratio", with no sensor-ratio term. (The old
-    // formula hard-coded the 16:9 video session and ignored the hidden sides,
-    // so it under-reported the mask and broke outright in a 4:3 photo session.)
-    const keptH = winW / POST_PHOTO_RATIO;
-    const cropMaskH = Math.max(0, Math.round((winH - keptH) / 2));
-    const showCropMask = mode === "daily" && dualPhase !== "selfie" && cropMaskH > 0;
+    // Daily capture is WYSIWYG through the 3:4 viewfinder (see `viewfinder`):
+    // the preview box IS the posted frame, so there are no crop masks — what
+    // is inside the box posts, and the feed shows all of it.
+    const viewfinderStyle = {
+      position: "absolute" as const,
+      top: viewfinderTop,
+      left: 0,
+      width: winW,
+      height: viewfinderHeight,
+      overflow: "hidden" as const
+    };
     const stepLabel =
       dualPhase === "selfie"
         ? "DUAL · SELFIE"
@@ -1966,7 +1269,7 @@ export default function CameraScreen() {
       <View style={{ flex: 1, backgroundColor: colors.black }}>
         {permission?.granted && isFocused ? (
           <GestureDetector gesture={pinchZoom}>
-            <View style={{ position: "absolute", inset: 0, backgroundColor: colors.graphite }}>
+            <View style={{ position: "absolute", inset: 0, backgroundColor: viewfinder ? colors.black : colors.graphite }}>
               <CameraView
                 // Remount on mode change (onCameraReady re-fires for the new
                 // video session) AND on every screen refocus (fresh native
@@ -2005,19 +1308,23 @@ export default function CameraScreen() {
                         borderWidth: 2,
                         borderColor: colors.white
                       }
-                    : { position: "absolute", inset: 0 }
+                    : viewfinder
+                      ? viewfinderStyle
+                      : { position: "absolute", inset: 0 }
                 }
               />
               {dualPhase === "main" && dualFrontUri ? (
+                // Pinned where the feed inset lands (12/12, 31% of the frame)
+                // when the viewfinder is up, so the dual composition is WYSIWYG.
                 <View
                   pointerEvents="none"
                   style={{
                     position: "absolute",
-                    top: insets.top + 76,
-                    left: 16,
-                    width: "32%",
+                    top: viewfinder ? viewfinderTop + 12 : insets.top + 76,
+                    left: viewfinder ? 12 : 16,
+                    width: viewfinder ? "31%" : "32%",
                     aspectRatio: 3 / 4,
-                    borderRadius: 16,
+                    borderRadius: viewfinder ? 12 : 16,
                     overflow: "hidden",
                     borderWidth: 2,
                     borderColor: colors.white,
@@ -2035,7 +1342,15 @@ export default function CameraScreen() {
                   <Text style={{ fontFamily: "Geist_700Bold", fontSize: 18, color: colors.white, textAlign: "center" }}>
                     Frame your selfie
                   </Text>
-                  <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13, lineHeight: 19, color: colors.fog, textAlign: "center" }}>
+                  <Text
+                    style={{
+                      fontFamily: "Geist_400Regular",
+                      fontSize: 13,
+                      lineHeight: 19,
+                      color: colors.fog,
+                      textAlign: "center"
+                    }}
+                  >
                     Tap the shutter to lock the inset, then frame the main photo.
                   </Text>
                 </View>
@@ -2048,26 +1363,15 @@ export default function CameraScreen() {
               >
                 <View style={{ flex: 1 }} />
               </Pressable>
-              {/* Daily crop band — the dimmed strips fall outside the posted frame. */}
-              {showCropMask ? (
-                <>
-                  <View
-                    pointerEvents="none"
-                    style={{ position: "absolute", top: 0, left: 0, right: 0, height: cropMaskH, backgroundColor: "rgba(0,0,0,0.55)", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.28)" }}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: cropMaskH, backgroundColor: "rgba(0,0,0,0.55)", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.28)" }}
-                  />
-                </>
-              ) : null}
               {/* Selfie "flash": misty white screen ring + brightness slider. */}
               {flashOn && facing === "front" ? <FrontFlash /> : null}
             </View>
           </GestureDetector>
         ) : (
           <Pressable
-            onPress={() => { if (permission?.canAskAgain) void requestPermission(); }}
+            onPress={() => {
+              if (permission?.canAskAgain) void requestPermission();
+            }}
             style={{ position: "absolute", inset: 0, backgroundColor: colors.graphite }}
             accessibilityLabel="Request camera permission"
           >
@@ -2076,7 +1380,18 @@ export default function CameraScreen() {
         )}
         {/* Zoom readout — "0.5×" in ultra-wide, "N.Nx" while zoomed in. */}
         {ultraActive || cameraZoom > 0.01 ? (
-          <View pointerEvents="none" style={{ position: "absolute", top: insets.top + 60, alignSelf: "center", paddingVertical: 4, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.55)" }}>
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: insets.top + 60,
+              alignSelf: "center",
+              paddingVertical: 4,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              backgroundColor: tokens.bg.scrim
+            }}
+          >
             <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 11, color: colors.white }}>
               {`${zoomLabel.toFixed(1)}x`}
             </Text>
@@ -2111,7 +1426,11 @@ export default function CameraScreen() {
               </CircleButton>
             ) : null}
             <CircleButton label={flashOn ? "Flash on" : "Flash off"} onPress={() => setFlashOn((v) => !v)}>
-              {flashOn ? <Zap color={tokens.accent.gold} size={19} strokeWidth={2} fill={tokens.accent.gold} /> : <ZapOff color={colors.white} size={19} strokeWidth={2} />}
+              {flashOn ? (
+                <Zap color={tokens.accent.gold} size={19} strokeWidth={2} fill={tokens.accent.gold} />
+              ) : (
+                <ZapOff color={colors.white} size={19} strokeWidth={2} />
+              )}
             </CircleButton>
             {/* Self-timer: cycles off → 3s → 5s → 10s → off. */}
             {!recording ? (
@@ -2120,7 +1439,9 @@ export default function CameraScreen() {
                 onPress={cycleTimer}
               >
                 {timerSecs ? (
-                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: tokens.accent.gold }}>{`${timerSecs}s`}</Text>
+                  <Text
+                    style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: tokens.accent.gold }}
+                  >{`${timerSecs}s`}</Text>
                 ) : (
                   <TimerIcon color={colors.white} size={19} strokeWidth={2} />
                 )}
@@ -2191,7 +1512,7 @@ export default function CameraScreen() {
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: colors.slate,
-                  backgroundColor: "rgba(0,0,0,0.6)"
+                  backgroundColor: tokens.bg.scrim
                 }}
               >
                 {draftSummary.previewUri ? (
@@ -2201,7 +1522,16 @@ export default function CameraScreen() {
                     style={{ width: 26, height: 26, borderRadius: 13 }}
                   />
                 ) : (
-                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.graphite, alignItems: "center", justifyContent: "center" }}>
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: colors.graphite,
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
                     <ImageIcon size={14} color={colors.mist} strokeWidth={2} />
                   </View>
                 )}
@@ -2222,10 +1552,10 @@ export default function CameraScreen() {
                 borderRadius: 999,
                 borderWidth: 1,
                 borderColor: colors.slate,
-                backgroundColor: "rgba(0,0,0,0.6)"
+                backgroundColor: tokens.bg.scrim
               }}
             >
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#EF4444" }} />
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: tokens.status.danger }} />
               <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 12, color: colors.white }}>
                 {`0:${String(recordSeconds).padStart(2, "0")}`}
                 {recordLocked ? "  ·  LOCKED" : ""}
@@ -2261,19 +1591,47 @@ export default function CameraScreen() {
             <View style={{ width: 40 }} />
           </View>
           {recording ? (
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 1, color: "rgba(255,255,255,0.75)" }}>
+            <Text
+              style={{
+                fontFamily: "GeistMono_400Regular",
+                fontSize: 10.5,
+                letterSpacing: 1,
+                color: "rgba(255,255,255,0.75)"
+              }}
+            >
               {recordLocked ? "TAP TO STOP" : "SLIDE TO LOCK"}
             </Text>
           ) : dualPhase === "selfie" ? (
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.7)" }}>
+            <Text
+              style={{
+                fontFamily: "GeistMono_400Regular",
+                fontSize: 9.5,
+                letterSpacing: 0.8,
+                color: "rgba(255,255,255,0.7)"
+              }}
+            >
               TAP TO LOCK SELFIE
             </Text>
           ) : dualPhase === "main" ? (
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.7)" }}>
+            <Text
+              style={{
+                fontFamily: "GeistMono_400Regular",
+                fontSize: 9.5,
+                letterSpacing: 0.8,
+                color: "rgba(255,255,255,0.7)"
+              }}
+            >
               TAP TO TAKE DUAL PHOTO
             </Text>
           ) : (
-            <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, color: "rgba(255,255,255,0.55)" }}>
+            <Text
+              style={{
+                fontFamily: "GeistMono_400Regular",
+                fontSize: 9.5,
+                letterSpacing: 0.8,
+                color: "rgba(255,255,255,0.55)"
+              }}
+            >
               {"TAP FOR PHOTO \u00b7 HOLD FOR VIDEO"}
             </Text>
           )}
@@ -2282,7 +1640,19 @@ export default function CameraScreen() {
         {/* Perceived-instant stop (#2): the moment the finger lifts, the screen
             responds \u2014 the encoder finishes the file underneath. */}
         {finalizing ? (
-          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: tokens.bg.scrim,
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12
+            }}
+          >
             <ActivityIndicator color={colors.white} />
             <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, letterSpacing: 1, color: colors.mist }}>
               SAVING CLIP
@@ -2303,18 +1673,28 @@ export default function CameraScreen() {
             accessibilityLabel="Tap photo to edit"
             style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
           >
-            <ScenePhoto uri={photoUri} scene="s2" legibility={false} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+            <ScenePhoto
+              uri={photoUri}
+              scene="s2"
+              legibility={false}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            />
           </Pressable>
         ) : videoUri ? (
           <LiftVideoThumb uri={videoUri} />
         ) : (
-          /* Daily photo at its posted ratio (the capture crop) — review shows
-             exactly the frame the feed will show, letterboxed on black. */
+          /* Daily photo at its own full ratio — review shows exactly the frame
+             the feed will show (nothing cropped), letterboxed on black. */
           <View style={{ position: "absolute", inset: 0, backgroundColor: colors.black, justifyContent: "center" }}>
             <View
               ref={reviewCaptureRef}
               collapsable={false}
-              style={{ width: "100%", aspectRatio: POST_PHOTO_RATIO, overflow: "hidden", backgroundColor: colors.black }}
+              style={{
+                width: "100%",
+                aspectRatio: reviewAspect,
+                overflow: "hidden",
+                backgroundColor: colors.black
+              }}
             >
               {/* Tap to edit, same as a story (2a). Dual posts included: the
                   editor shows the PIP but does not bake it, so the selfie is
@@ -2333,7 +1713,20 @@ export default function CameraScreen() {
               </Pressable>
               {/* Dual-camera front frame — placed like the feed inset (12/12, 31%). */}
               {dualFrontUri ? (
-                <View pointerEvents="none" style={{ position: "absolute", top: 12, left: 12, width: "31%", aspectRatio: 3 / 4, borderRadius: 12, overflow: "hidden", borderWidth: 2, borderColor: colors.black }}>
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    left: 12,
+                    width: "31%",
+                    aspectRatio: 3 / 4,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    borderWidth: 2,
+                    borderColor: colors.black
+                  }}
+                >
                   <ExpoImage source={{ uri: dualFrontUri }} contentFit="cover" style={{ flex: 1 }} />
                 </View>
               ) : null}
@@ -2342,7 +1735,7 @@ export default function CameraScreen() {
         )}
 
         <LinearGradient
-          colors={["rgba(0,0,0,0.55)", "transparent"]}
+          colors={[tokens.bg.scrim, "transparent"]}
           pointerEvents="none"
           style={{ position: "absolute", top: 0, left: 0, right: 0, height: insets.top + 90 }}
         />
@@ -2377,7 +1770,16 @@ export default function CameraScreen() {
           {mode === "story" ? (
             // Edit is tap-the-photo now (2a); this stays a lightweight affordance.
             <Pressable onPress={() => setEditing(true)} accessibilityLabel="Edit story" hitSlop={8}>
-              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "rgba(0,0,0,0.45)",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
                 <Pencil size={18} color={colors.white} strokeWidth={2.2} />
               </View>
             </Pressable>
@@ -2393,7 +1795,18 @@ export default function CameraScreen() {
               }}
               accessibilityLabel="Add another photo"
             >
-              <View style={{ height: 40, paddingHorizontal: 14, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.45)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <View
+                style={{
+                  height: 40,
+                  paddingHorizontal: 14,
+                  borderRadius: 20,
+                  backgroundColor: "rgba(0,0,0,0.45)",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6
+                }}
+              >
                 <Plus size={15} color={colors.white} strokeWidth={2.4} />
                 <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: colors.white }}>
                   {extraPhotos.length ? `${extraPhotos.length + 1}/4` : "Add"}
@@ -2481,7 +1894,10 @@ export default function CameraScreen() {
                   }}
                 >
                   <Music size={14} color={colors.white} strokeWidth={2} />
-                  <Text numberOfLines={1} style={{ maxWidth: 220, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ maxWidth: 220, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}
+                  >
                     {storyTrack ? `${storyTrack.title} · ${storyTrack.artist}` : "Add music"}
                   </Text>
                 </View>
@@ -2506,7 +1922,10 @@ export default function CameraScreen() {
                   }}
                 >
                   <Tag size={14} color={colors.white} strokeWidth={2} />
-                  <Text numberOfLines={1} style={{ maxWidth: 220, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ maxWidth: 220, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}
+                  >
                     {storyTags.length ? `${storyTags.length} tagged` : "Tag friends"}
                   </Text>
                 </View>
@@ -2554,7 +1973,15 @@ export default function CameraScreen() {
     if (!videoUri) {
       // No saved clip (record failed or state got here early) — offer the way back.
       return (
-        <View style={{ flex: 1, backgroundColor: colors.black, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: colors.black,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 32
+          }}
+        >
           <Text style={{ fontFamily: "Geist_400Regular", fontSize: 13.5, color: colors.fog, textAlign: "center" }}>
             No clip saved. Record it again.
           </Text>
@@ -2580,21 +2007,33 @@ export default function CameraScreen() {
 
   if (mode === "lift" && liftStep === "liftmeta") {
     return (
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.black }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: colors.black }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
-          <PanelHeader title="Log your lift" onBack={() => { setLiftStep("review"); setFacing("back"); }} />
+          <PanelHeader
+            title="Log your lift"
+            onBack={() => {
+              setLiftStep("review");
+              setFacing("back");
+            }}
+          />
           <MediaPreview mode="lift" videoUri={videoUri} lift={liftName} weight={resolvedWeight} width="62%" />
           <Text style={{ paddingHorizontal: 18, paddingTop: 12, fontSize: 12.5, lineHeight: 18, color: colors.fog }}>
             Enter what you hit — posting checks it against your trophies. Your friends see the video, so keep it honest.
           </Text>
           <SectionLabel>Exercise</SectionLabel>
-          {LIFT_OPTIONS.map((opt) => (
+          {liftOptions.map((opt) => (
             <ChoiceRow
               key={opt.id}
               title={opt.name}
               sub={opt.unit === "lb" ? "Weight (lb)" : "Reps"}
               selected={liftExercise === opt.id}
-              onPress={() => { setLiftExercise(opt.id); setLiftValue(""); }}
+              onPress={() => {
+                setLiftExercise(opt.id);
+                setLiftValue("");
+              }}
             />
           ))}
           <SectionLabel>{liftUnit === "lb" ? "Weight (lb)" : "Reps"}</SectionLabel>
@@ -2623,14 +2062,33 @@ export default function CameraScreen() {
             />
           </View>
           <View style={{ paddingHorizontal: 18, paddingTop: 18 }}>
-            <Button disabled={liftNum <= 0} onPress={() => setLiftStep("compose")}>Continue</Button>
+            <Button disabled={liftNum <= 0} onPress={() => setLiftStep("compose")}>
+              Continue
+            </Button>
           </View>
         </ScrollView>
         {Platform.OS === "ios" ? (
           <InputAccessoryView nativeID="weightDone">
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", backgroundColor: colors.ink, borderTopWidth: 1, borderTopColor: colors.iron, paddingHorizontal: 16, paddingVertical: 8 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                backgroundColor: colors.ink,
+                borderTopWidth: 1,
+                borderTopColor: colors.iron,
+                paddingHorizontal: 16,
+                paddingVertical: 8
+              }}
+            >
               <Pressable onPress={() => Keyboard.dismiss()} accessibilityLabel="Done entering weight">
-                <View style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.white }}>
+                <View
+                  style={{
+                    paddingHorizontal: 18,
+                    paddingVertical: 8,
+                    borderRadius: 999,
+                    backgroundColor: colors.white
+                  }}
+                >
                   <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Done</Text>
                 </View>
               </Pressable>
@@ -2660,7 +2118,7 @@ export default function CameraScreen() {
       >
         <PanelHeader
           title={mode === "daily" ? "Today's post" : "Video"}
-          onBack={() => mode === "daily" ? setDailyStep("review") : setLiftStep("liftmeta")}
+          onBack={() => (mode === "daily" ? setDailyStep("review") : setLiftStep("liftmeta"))}
         />
         <MediaPreview
           mode={mode}
@@ -2682,7 +2140,9 @@ export default function CameraScreen() {
         <OptRow
           icon={<Tag size={16} color={colors.silver} />}
           label={mode === "daily" && photoUri ? "Tag people on photo" : "Tag friends"}
-          value={selectedFriends.length ? selectedFriends.map((friend) => friend.name.split(" ")[0]).join(", ") : "None"}
+          value={
+            selectedFriends.length ? selectedFriends.map((friend) => friend.name.split(" ")[0]).join(", ") : "None"
+          }
           isSet={selectedFriends.length > 0}
           // Photo posts get Instagram-style positional tagging (M1); video keeps
           // the simple friend list.
@@ -2713,15 +2173,19 @@ export default function CameraScreen() {
         <OptRow
           icon={<Users size={16} color={colors.silver} />}
           label="Post to a community"
-          value={selectedCommunities.length ? selectedCommunities.map((community) => community.name).join(", ") : "None"}
+          value={
+            selectedCommunities.length ? selectedCommunities.map((community) => community.name).join(", ") : "None"
+          }
           isSet={selectedCommunities.length > 0}
-          onPress={() => sheet.open(
-            <CommunitySheet
-              chosenGymId={gym?.type === "gym" ? gym.id : null}
-              initial={communities}
-              onDone={setCommunities}
-            />
-          )}
+          onPress={() =>
+            sheet.open(
+              <CommunitySheet
+                chosenGymId={gym?.type === "gym" ? gym.id : null}
+                initial={communities}
+                onDone={setCommunities}
+              />
+            )
+          }
         />
         <SectionLabel>Caption</SectionLabel>
         <TextInput
@@ -2793,7 +2257,6 @@ export default function CameraScreen() {
 
       {/* Trophy unlock — shown after a lift post crosses a new tier; closing it
           continues to the feed. */}
-
     </KeyboardAvoidingView>
   );
 }

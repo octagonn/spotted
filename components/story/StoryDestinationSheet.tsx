@@ -253,9 +253,7 @@ function MemberForm({
   const toggle = (id: string) =>
     setEditing({
       ...editing,
-      memberIds: editing.memberIds.includes(id)
-        ? editing.memberIds.filter((m) => m !== id)
-        : [...editing.memberIds, id]
+      memberIds: editing.memberIds.includes(id) ? editing.memberIds.filter((m) => m !== id) : [...editing.memberIds, id]
     });
 
   return (
@@ -321,8 +319,12 @@ function MemberForm({
           {editing.id ? "Save changes" : `Create${editing.memberIds.length ? ` (${editing.memberIds.length})` : ""}`}
         </Button>
         {onDelete ? (
-          <Pressable accessibilityLabel="Delete private story" onPress={onDelete} style={{ alignItems: "center", paddingVertical: 8 }}>
-            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: "#FF5C5C" }}>
+          <Pressable
+            accessibilityLabel="Delete private story"
+            onPress={onDelete}
+            style={{ alignItems: "center", paddingVertical: 8 }}
+          >
+            <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: tokens.status.danger }}>
               Delete private story
             </Text>
           </Pressable>

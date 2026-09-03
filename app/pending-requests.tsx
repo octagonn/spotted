@@ -1,15 +1,19 @@
 import { useRouter } from "expo-router";
+import { UserPlus } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Avatar } from "@/components/ui/Avatar";
+import { RelButton } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
-import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
+import { SkeletonRows } from "@/components/ui/Skeleton";
+import { UserRow } from "@/components/ui/UserRow";
 import { useCancelFriendRequest, useOutgoingRequests } from "@/hooks/queries/useFriends";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { colors } from "@/theme/colors";
+import { icon, space } from "@/theme/tokens";
 
 /**
  * Requests you've SENT that haven't been answered yet, with a way to withdraw
@@ -64,77 +68,41 @@ export default function PendingRequestsScreen() {
       />
 
       {total > 6 ? (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+        <View style={{ paddingHorizontal: space[4], paddingBottom: space[2] + 2 }}>
           <SearchBar value={query} onChangeText={setQuery} placeholder="Search pending" />
         </View>
       ) : null}
 
       {/* ScrollView, not View — with 7+ requests the rows ran past the fold
           and the screen simply cut off ("can't scroll through pending"). */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + space[6] }}>
         {sent.isLoading ? (
-          <Text style={{ paddingTop: 48, textAlign: "center", fontSize: 13, color: colors.fog }}>Loading…</Text>
+          <SkeletonRows count={4} />
         ) : rows.length === 0 ? (
-          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
-            <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
-              {query
-                ? "No matches."
-                : "No pending requests. Anyone you add shows up here until they answer."}
-            </Text>
-          </View>
+          <EmptyState
+            icon={<UserPlus size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />}
+            title={query ? "No matches" : "No pending requests"}
+            body={query ? "Try a different name." : "Anyone you add shows up here until they answer."}
+          />
         ) : (
           rows.map((request) => {
             const busy = cancelling.has(request.targetId);
             return (
-              <Pressable
+              <UserRow
                 key={request.targetId}
+                name={request.profile.display_name}
+                avatarUrl={request.profile.avatar_url}
+                sub={`@${request.profile.username} · Requested`}
                 onPress={() => router.push(`/user/${request.profile.username}`)}
-                accessibilityLabel={request.profile.display_name}
-                haptic={false}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    paddingVertical: 9,
-                    paddingHorizontal: 16
-                  }}
-                >
-                  <Avatar name={request.profile.display_name} uri={request.profile.avatar_url} size={46} />
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      numberOfLines={1}
-                      style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}
-                    >
-                      {request.profile.display_name}
-                    </Text>
-                    <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12, color: colors.fog }}>
-                      {`@${request.profile.username} · Requested`}
-                    </Text>
-                  </View>
-                  <Pressable
+                right={
+                  <RelButton
+                    label={busy ? "…" : "Cancel"}
+                    kind="ghost"
+                    disabled={busy}
                     onPress={() => cancel(request.targetId)}
-                    accessibilityLabel={`Cancel request to ${request.profile.display_name}`}
-                    hitSlop={6}
-                  >
-                    <View
-                      style={{
-                        paddingVertical: 8,
-                        paddingHorizontal: 16,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: colors.iron,
-                        opacity: busy ? 0.5 : 1
-                      }}
-                    >
-                      <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}>
-                        {busy ? "…" : "Cancel"}
-                      </Text>
-                    </View>
-                  </Pressable>
-                </View>
-              </Pressable>
+                  />
+                }
+              />
             );
           })
         )}

@@ -31,7 +31,7 @@ export function PanelHeader({ title, sub, onBack, right, onTitlePress }: PanelHe
   return (
     <View style={{ position: "relative" }}>
       <LinearGradient
-        colors={["#000000", "#000000", "transparent"]}
+        colors={[colors.black, colors.black, "transparent"]}
         locations={[0, 0.78, 1]}
         pointerEvents="none"
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: -14 }}
@@ -46,11 +46,7 @@ export function PanelHeader({ title, sub, onBack, right, onTitlePress }: PanelHe
           paddingBottom: 12
         }}
       >
-        <Pressable
-          onPress={onBack ?? (() => router.back())}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
+        <Pressable onPress={onBack ?? (() => router.back())} accessibilityRole="button" accessibilityLabel="Back">
           <View
             style={{
               width: 34,

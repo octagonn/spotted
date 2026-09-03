@@ -1,0 +1,48 @@
+{
+  "$comment": "CANONICAL raw design values. theme/colors.ts, theme/tokens.ts and tailwind.config.js all derive from this file \u2014 never redefine a hex, radius or spacing step anywhere else. Documented in docs/DESIGN_SYSTEM.md. Verified in sync by tests/theme.test.ts.",
+  "colors": {
+    "black": "#000000",
+    "ink": "#0A0A0A",
+    "graphite": "#131315",
+    "charcoal": "#1C1C1F",
+    "iron": "#27272A",
+    "slate": "#3F3F46",
+    "ash": "#52525B",
+    "fog": "#909099",
+    "silver": "#A1A1AA",
+    "mist": "#D4D4D8",
+    "bone": "#E4E4E7",
+    "white": "#FAFAFA",
+    "pure": "#FFFFFF",
+    "gold": "#E8B44C",
+    "goldSoft": "rgba(232,180,76,0.18)",
+    "goldSubtle": "rgba(232,180,76,0.15)",
+    "glass": "rgba(255,255,255,0.06)",
+    "glassStrong": "rgba(255,255,255,0.10)",
+    "glassSoft": "rgba(255,255,255,0.04)",
+    "hairline": "rgba(255,255,255,0.08)",
+    "hairlineStrong": "rgba(255,255,255,0.14)",
+    "scrim": "rgba(0,0,0,0.6)"
+  },
+  "status": {
+    "danger": "#EF4444",
+    "success": "#22C55E",
+    "like": "#FF2D55"
+  },
+  "radius": {
+    "sm": 12,
+    "md": 16,
+    "lg": 24,
+    "pill": 999
+  },
+  "space": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48
+  }
+}

@@ -1,38 +1,30 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Bell, ChevronRight, ExternalLink } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  AppState,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  Text,
-  View
-} from "react-native";
+import { AppState, Linking, Modal, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Button } from "@/components/ui/Button";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
-import { SettingRow as Row, SettingSectionLabel as SectionLabel, SettingToggle as Toggle } from "@/components/ui/SettingRow";
+import {
+  SettingChoice,
+  SettingRow as Row,
+  SettingSectionLabel as SectionLabel,
+  SettingToggle as Toggle
+} from "@/components/ui/SettingRow";
 import { SkeletonToggleRows } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
 import {
   useNotificationPrefs,
   useUpdateNotificationPrefs,
   type FriendCheckinScope,
   type NotificationPrefs
 } from "@/hooks/queries/useNotificationPrefs";
-import {
-  getPushPermissionStatus,
-  registerDeviceToken,
-  type PushPermissionStatus
-} from "@/lib/notifications";
+import { getPushPermissionStatus, registerDeviceToken, type PushPermissionStatus } from "@/lib/notifications";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
-import { tokens } from "@/theme/tokens";
-
-
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 const SCOPES: { key: FriendCheckinScope; label: string }[] = [
   { key: "my_gym", label: "My gym" },
@@ -69,6 +61,7 @@ function TimePicker({
   onSave: (value: string) => void;
 }) {
   const [draft, setDraft] = useState(timeDate(value));
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     setDraft(timeDate(value));
@@ -86,73 +79,46 @@ function TimePicker({
   };
 
   if (Platform.OS === "android") {
-    return (
-      <DateTimePicker
-        value={draft}
-        mode="time"
-        minuteInterval={5}
-        onChange={onChange}
-      />
-    );
+    return <DateTimePicker value={draft} mode="time" minuteInterval={5} onChange={onChange} />;
   }
 
   const title =
-    field === "dailyNudgeTime"
-      ? "Daily nudge"
-      : field === "quietHoursStart"
-        ? "Quiet hours start"
-        : "Quiet hours end";
+    field === "dailyNudgeTime" ? "Daily nudge" : field === "quietHoursStart" ? "Quiet hours start" : "Quiet hours end";
 
   return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.62)" }}>
+    <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: tokens.bg.scrim }}>
         <View
           style={{
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            borderWidth: 1,
-            borderBottomWidth: 0,
-            borderColor: colors.iron,
+            borderTopLeftRadius: radius.lg,
+            borderTopRightRadius: radius.lg,
             backgroundColor: colors.ink,
-            paddingHorizontal: 20,
-            paddingTop: 18,
-            paddingBottom: 24
+            paddingHorizontal: space[4] + 4,
+            paddingTop: space[4] + 2,
+            paddingBottom: insets.bottom + space[4]
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Pressable onPress={onClose} style={{ paddingVertical: 8, paddingRight: 16 }}>
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.fog }}>
+            <Pressable
+              onPress={onClose}
+              haptic="none"
+              accessibilityLabel="Cancel"
+              style={{ paddingVertical: space[2], paddingRight: space[4] }}
+            >
+              <Text variant="meta-strong" className="text-fog">
                 Cancel
               </Text>
             </Pressable>
-            <Text
-              style={{
-                flex: 1,
-                textAlign: "center",
-                fontFamily: "Geist_700Bold",
-                fontSize: 15,
-                color: colors.white
-              }}
-            >
+            <Text variant="subheading" className="flex-1 text-center">
               {title}
             </Text>
             <Pressable
               onPress={() => onSave(databaseTime(draft))}
-              style={{ paddingVertical: 8, paddingLeft: 16 }}
+              haptic="selection"
+              accessibilityLabel="Done"
+              style={{ paddingVertical: space[2], paddingLeft: space[4] }}
             >
-              <Text
-                style={{
-                  fontFamily: "Geist_700Bold",
-                  fontSize: 14,
-                  color: tokens.accent.gold
-                }}
-              >
+              <Text variant="meta-strong" className="text-gold">
                 Done
               </Text>
             </Pressable>
@@ -177,21 +143,15 @@ function TimeButton({ value, onPress, disabled = false }: { value: string; onPre
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      haptic={false}
+      haptic="none"
       accessibilityRole="button"
       accessibilityLabel={`Change time, currently ${displayTime(value)}`}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: disabled ? 0.45 : 1 }}>
-        <Text
-          style={{
-            fontFamily: "GeistMono_500Medium",
-            fontSize: 13,
-            color: colors.white
-          }}
-        >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space[1], opacity: disabled ? 0.45 : 1 }}>
+        <Text variant="numeral-sm" className="text-[13px]">
           {displayTime(value)}
         </Text>
-        <ChevronRight size={15} color={colors.fog} />
+        <ChevronRight size={icon.size.xs - 1} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
       </View>
     </Pressable>
   );
@@ -222,7 +182,9 @@ export default function NotificationSettingsScreen() {
 
   useEffect(() => {
     const refresh = () => {
-      void getPushPermissionStatus().then(setOsStatus).catch(() => setOsStatus("denied"));
+      void getPushPermissionStatus()
+        .then(setOsStatus)
+        .catch(() => setOsStatus("denied"));
     };
     refresh();
     const subscription = AppState.addEventListener("change", (state) => {
@@ -260,18 +222,21 @@ export default function NotificationSettingsScreen() {
       {!p ? (
         <SkeletonToggleRows count={8} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 32 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: space[4] + 4, paddingBottom: insets.bottom + space[8] }}
+        >
+          {/* Permission card — the one raised surface on this screen. */}
           <View
             style={{
-              marginTop: 12,
-              borderRadius: 18,
-              borderWidth: 1,
-              borderColor: osStatus === "granted" ? colors.iron : tokens.accent.gold,
-              backgroundColor: colors.ink,
-              padding: 16
+              marginTop: space[3],
+              borderRadius: radius.md,
+              borderWidth: osStatus === "granted" ? 0 : 1,
+              borderColor: tokens.accent.gold,
+              backgroundColor: tokens.bg.raised,
+              padding: space[4]
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
               <View
                 style={{
                   width: 42,
@@ -282,10 +247,10 @@ export default function NotificationSettingsScreen() {
                   backgroundColor: tokens.accent.goldSubtle
                 }}
               >
-                <Bell size={19} color={tokens.accent.gold} />
+                <Bell size={icon.size.sm - 1} color={tokens.accent.gold} strokeWidth={icon.stroke.regular} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}>
+                <Text variant="username">
                   {osStatus === "granted"
                     ? p.pushEnabled
                       ? "Push notifications are on"
@@ -294,7 +259,7 @@ export default function NotificationSettingsScreen() {
                       ? "Notifications are blocked"
                       : "Turn on push notifications"}
                 </Text>
-                <Text style={{ marginTop: 3, fontSize: 12.5, lineHeight: 17, color: colors.fog }}>
+                <Text variant="meta" className="mt-[3px]">
                   {osStatus === "granted"
                     ? "These controls apply to this account. System controls apply to this device."
                     : osStatus === "denied"
@@ -305,51 +270,29 @@ export default function NotificationSettingsScreen() {
             </View>
 
             {osStatus === "granted" ? (
-              <View style={{ marginTop: 14 }}>
+              <View style={{ marginTop: space[3] + 2 }}>
                 <Row
                   title="Allow push notifications"
                   right={
-                    <Toggle
-                      value={p.pushEnabled}
-                      onToggle={() => update.mutate({ pushEnabled: !p.pushEnabled })}
-                    />
+                    <Toggle value={p.pushEnabled} onToggle={() => update.mutate({ pushEnabled: !p.pushEnabled })} />
                   }
                 />
                 <Pressable
                   onPress={() => void Linking.openSettings()}
-                  haptic={false}
-                  style={{ paddingTop: 12, flexDirection: "row", alignItems: "center", gap: 6 }}
+                  haptic="none"
+                  accessibilityLabel="Device notification settings"
+                  style={{ paddingTop: space[3], flexDirection: "row", alignItems: "center", gap: space[1] + 2 }}
                 >
-                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.silver }}>
-                    Device notification settings
-                  </Text>
-                  <ExternalLink size={13} color={colors.fog} />
+                  <Text variant="meta-strong">Device notification settings</Text>
+                  <ExternalLink size={13} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
                 </Pressable>
               </View>
             ) : (
-              <Pressable
-                onPress={() => void enableNotifications()}
-                disabled={permissionBusy}
-                style={{ marginTop: 14 }}
-              >
-                <View
-                  style={{
-                    minHeight: 44,
-                    borderRadius: 999,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: colors.white
-                  }}
-                >
-                  {permissionBusy ? (
-                    <ActivityIndicator color={colors.black} />
-                  ) : (
-                    <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>
-                      {osStatus === "denied" ? "Open device settings" : "Enable notifications"}
-                    </Text>
-                  )}
-                </View>
-              </Pressable>
+              <View style={{ marginTop: space[3] + 2 }}>
+                <Button onPress={() => void enableNotifications()} loading={permissionBusy} disabled={permissionBusy}>
+                  {osStatus === "denied" ? "Open device settings" : "Enable notifications"}
+                </Button>
+              </View>
             )}
           </View>
 
@@ -357,13 +300,7 @@ export default function NotificationSettingsScreen() {
           <Row
             title="Gym and post reminders"
             sub="Your daily nudge and check-in confirmations."
-            right={
-              <CategoryToggle
-                value={p.gymRemindersEnabled}
-                field="gymRemindersEnabled"
-                update={update}
-              />
-            }
+            right={<CategoryToggle value={p.gymRemindersEnabled} field="gymRemindersEnabled" update={update} />}
           />
           <Row
             title="Daily nudge time"
@@ -382,42 +319,11 @@ export default function NotificationSettingsScreen() {
             title="Friend check-ins"
             sub="When friends hit the gym."
             right={
-              <View style={{ flexDirection: "row", gap: 5 }}>
-                {SCOPES.map((scope) => {
-                  const selected = p.friendCheckinsScope === scope.key;
-                  return (
-                    <Pressable
-                      key={scope.key}
-                      onPress={() => update.mutate({ friendCheckinsScope: scope.key })}
-                      haptic={false}
-                      accessibilityLabel={scope.label}
-                      accessibilityState={{ selected }}
-                      hitSlop={8}
-                    >
-                      <View
-                        style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 999,
-                          backgroundColor: selected ? colors.white : "transparent",
-                          borderWidth: 1,
-                          borderColor: selected ? colors.white : colors.iron
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: "Geist_600SemiBold",
-                            fontSize: 11.5,
-                            color: selected ? colors.black : colors.silver
-                          }}
-                        >
-                          {scope.label}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <SettingChoice
+                options={SCOPES}
+                value={p.friendCheckinsScope}
+                onSelect={(key) => update.mutate({ friendCheckinsScope: key })}
+              />
             }
           />
           <Row
@@ -471,13 +377,7 @@ export default function NotificationSettingsScreen() {
           <Row
             title="No notifications overnight"
             sub="Pushes are suppressed during this window in your current timezone."
-            right={
-              <CategoryToggle
-                value={p.quietHoursEnabled}
-                field="quietHoursEnabled"
-                update={update}
-              />
-            }
+            right={<CategoryToggle value={p.quietHoursEnabled} field="quietHoursEnabled" update={update} />}
           />
           <Row
             title="Starts"
@@ -499,7 +399,7 @@ export default function NotificationSettingsScreen() {
               />
             }
           />
-          <Text style={{ marginTop: 12, fontSize: 11.5, lineHeight: 17, color: colors.fog }}>
+          <Text variant="meta" className="mt-3">
             Turning off a push category never removes its activity from your in-app Notifications inbox.
           </Text>
         </ScrollView>

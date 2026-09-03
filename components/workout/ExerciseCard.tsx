@@ -1,6 +1,6 @@
-import { Activity, Check, Dumbbell, Flame, Plus, Trash2, X } from "lucide-react-native";
-import { useEffect, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Check, Plus, Trash2, X } from "lucide-react-native";
+import { memo, useEffect, useState } from "react";
+import { TextInput, View } from "react-native";
 import Animated, {
   FadeIn,
   useAnimatedStyle,
@@ -10,24 +10,16 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 
+import { Pressable } from "@/components/ui/Pressable";
+import { Text } from "@/components/ui/Text";
+import { ExerciseIcon, exerciseKind } from "@/components/workout/ExerciseIcon";
+import { PrBadge } from "@/components/workout/PrBadge";
 import type { CardioSet, LiftSet, WorkoutExercise } from "@/hooks/queries/useWorkouts";
-import { radius, tokens } from "@/theme/tokens";
-import { MED, NUM, SEMI, W } from "@/components/workout/wtheme";
+import { colors } from "@/theme/colors";
+import { durations, springs } from "@/theme/motion";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 export type EditField = "w" | "r" | "min" | "mi" | "inc";
-
-function Micro({ children, style }: { children: React.ReactNode; style?: object }) {
-  return (
-    <Text
-      style={[
-        { fontFamily: MED, fontSize: 11, letterSpacing: 0.6, textTransform: "uppercase", color: W.faint },
-        style
-      ]}
-    >
-      {children}
-    </Text>
-  );
-}
 
 const CAPS: Record<EditField, { max: number; int: boolean }> = {
   w: { max: 999, int: false },
@@ -37,10 +29,14 @@ const CAPS: Record<EditField, { max: number; int: boolean }> = {
   inc: { max: 45, int: false }
 };
 
+/** Width of the trailing ✓ / ✕ cluster — column labels reserve the same space. */
+const TRAIL_W = 80;
+const INDEX_W = 24;
+
 /**
- * Inline set-value input (WHOOP-style bordered cell). Keeps a local draft so
- * the field can be cleared mid-typing; commits the sanitized number on every
- * parseable change and falls back to the last committed value on blur.
+ * Inline set-value input. Keeps a local draft so the field can be cleared
+ * mid-typing; commits the sanitized number on every parseable change and
+ * falls back to the last committed value on blur. Mono numerals, 44pt tall.
  */
 function SetInput({
   field,
@@ -86,70 +82,82 @@ function SetInput({
       }}
       selectTextOnFocus
       inputMode={cfg.int ? "numeric" : "decimal"}
+      keyboardType={cfg.int ? "number-pad" : "decimal-pad"}
+      returnKeyType="done"
       accessibilityLabel={label}
       style={{
         flex: 1,
         // Web: <input> has an intrinsic min width that overflows the row
         // without this; native ignores it.
         minWidth: 0,
-        marginHorizontal: 4,
-        paddingVertical: 9,
+        marginHorizontal: space[1],
+        height: 44,
         borderRadius: radius.sm,
         borderWidth: 1,
-        borderColor: focused ? W.strong : W.line,
-        backgroundColor: "rgba(255,255,255,0.03)",
+        borderColor: focused ? tokens.border.strong : tokens.border.default,
+        backgroundColor: focused ? colors.glassSoft : "transparent",
         textAlign: "center",
-        fontFamily: NUM,
-        fontSize: 15,
-        color: dimmed ? W.muted : W.text,
+        fontFamily: "GeistMono_500Medium",
+        fontSize: 16,
+        color: dimmed ? tokens.text.tertiary : tokens.text.primary,
         padding: 0
       }}
     />
   );
 }
 
-/** The ✓ log toggle — pops when checked. */
+/** The ✓ log toggle — pops when checked. 36pt visual, 44pt with hitSlop. */
 function CheckButton({ done, onPress, label }: { done: boolean; onPress: () => void; label: string }) {
   const scale = useSharedValue(1);
   useEffect(() => {
     if (done) {
       scale.value = withSequence(
         withTiming(0.7, { duration: 0 }),
-        withSpring(1.18, { damping: 12, stiffness: 380 }),
-        withSpring(1, { damping: 16, stiffness: 300 })
+        withSpring(1.18, springs.bouncy),
+        withSpring(1, springs.snappy)
       );
     }
   }, [done, scale]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} haptic="none">
       <Animated.View
         style={[
           {
-            width: 30,
-            height: 30,
-            borderRadius: 15,
+            width: 36,
+            height: 36,
+            borderRadius: radius.pill,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: done ? W.text : "transparent",
+            backgroundColor: done ? tokens.text.primary : "transparent",
             borderWidth: done ? 1 : 1.5,
-            borderColor: done ? W.text : W.strong
+            borderColor: done ? tokens.text.primary : tokens.border.strong
           },
           style
         ]}
       >
-        <Check size={16} strokeWidth={3} color={done ? W.ink : W.faint} />
+        <Check size={18} strokeWidth={3} color={done ? colors.black : tokens.text.tertiary} />
       </Animated.View>
     </Pressable>
   );
 }
 
+function ColumnLabel({ children }: { children: string }) {
+  return (
+    <View style={{ flex: 1, marginHorizontal: space[1] }}>
+      <Text variant="micro" className="text-center">
+        {children}
+      </Text>
+    </View>
+  );
+}
+
 /**
- * WHOOP-style exercise editor card: icon tile + name + set count header,
- * column labels, inline set rows (index · editable inputs · ✓ log · ✕
- * remove), and an ADD SET footer with the exercise delete on the right.
+ * Exercise editor card: icon tile + name + set count header, column labels,
+ * inline set rows (index · inputs · ✓ log · ✕ remove), and an add-set footer
+ * with the exercise delete on the right. Logged rows recede (dimmed numbers).
  */
-export function ExerciseCard({
+function ExerciseCardInner({
   exercise,
   onSetValue,
   onToggleDone,
@@ -167,18 +175,16 @@ export function ExerciseCard({
   const cardio = exercise.kind === "cardio";
   const sports = exercise.muscle === "Sports";
   const inc = cardio && exercise.hasInc;
-  const Icon = sports ? Activity : cardio ? Flame : Dumbbell;
   const unit = sports ? "Session" : cardio ? "Interval" : "Set";
+  const unitLower = unit.toLowerCase();
   const setsLabel = `${exercise.sets.length} ${exercise.sets.length === 1 ? unit : `${unit}s`}`;
   const anyPR = exercise.sets.some((s) => s.pr);
 
   return (
     <Animated.View
-      entering={FadeIn.duration(220)}
+      entering={FadeIn.duration(durations.toast)}
       style={{
-        backgroundColor: W.card,
-        borderWidth: 1,
-        borderColor: W.line,
+        backgroundColor: tokens.bg.raised,
         borderRadius: radius.md,
         // Row spacing is owned by the draggable list wrapper.
         overflow: "hidden"
@@ -189,69 +195,49 @@ export function ExerciseCard({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 12,
-          backgroundColor: "rgba(255,255,255,0.03)"
+          gap: space[3],
+          paddingHorizontal: space[3],
+          paddingVertical: space[3]
         }}
       >
-        <View
-          style={{
-            width: 46,
-            height: 46,
-            borderRadius: radius.sm,
-            backgroundColor: W.card2,
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <Icon size={20} color={W.text} strokeWidth={1.8} />
-        </View>
+        <ExerciseIcon kind={exerciseKind(exercise.kind, exercise.muscle)} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text numberOfLines={1} style={{ fontFamily: SEMI, fontSize: 15.5, color: W.text, flexShrink: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>
+            <Text variant="username" numberOfLines={1} className="flex-shrink">
               {exercise.name}
             </Text>
-            {anyPR ? (
-              <View style={{ backgroundColor: tokens.accent.gold, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                <Text style={{ fontFamily: NUM, fontSize: 9, letterSpacing: 1, color: W.ink }}>PR</Text>
-              </View>
-            ) : null}
+            {anyPR ? <PrBadge /> : null}
           </View>
-          <Text style={{ marginTop: 2, fontFamily: "Geist_400Regular", fontSize: 12.5, color: W.muted }}>
+          <Text variant="meta" className="mt-[2px]">
             {setsLabel} · {exercise.muscle}
           </Text>
         </View>
       </View>
 
       {/* column labels */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
-        <View style={{ width: 24 }} />
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: space[4],
+          paddingTop: space[2],
+          paddingBottom: space[1]
+        }}
+      >
+        <View style={{ width: INDEX_W }} />
         {cardio ? (
           <>
-            <View style={{ flex: 1, marginHorizontal: 4 }}>
-              <Micro style={{ textAlign: "center" }}>Time (min)</Micro>
-            </View>
-            <View style={{ flex: 1, marginHorizontal: 4 }}>
-              <Micro style={{ textAlign: "center" }}>Miles</Micro>
-            </View>
-            {inc ? (
-              <View style={{ flex: 1, marginHorizontal: 4 }}>
-                <Micro style={{ textAlign: "center" }}>Incline %</Micro>
-              </View>
-            ) : null}
+            <ColumnLabel>Time (min)</ColumnLabel>
+            <ColumnLabel>Miles</ColumnLabel>
+            {inc ? <ColumnLabel>Incline %</ColumnLabel> : null}
           </>
         ) : (
           <>
-            <View style={{ flex: 1, marginHorizontal: 4 }}>
-              <Micro style={{ textAlign: "center" }}>Reps</Micro>
-            </View>
-            <View style={{ flex: 1, marginHorizontal: 4 }}>
-              <Micro style={{ textAlign: "center" }}>Weight (lbs)</Micro>
-            </View>
+            <ColumnLabel>Reps</ColumnLabel>
+            <ColumnLabel>Weight (lb)</ColumnLabel>
           </>
         )}
-        <View style={{ width: 66 }} />
+        <View style={{ width: TRAIL_W }} />
       </View>
 
       {/* set rows */}
@@ -261,12 +247,14 @@ export function ExerciseCard({
           style={{
             flexDirection: "row",
             alignItems: "center",
-            paddingHorizontal: 16,
-            paddingVertical: 5
+            paddingHorizontal: space[4],
+            paddingVertical: space[1]
           }}
         >
-          <View style={{ width: 24 }}>
-            <Text style={{ fontFamily: SEMI, fontSize: 14, color: W.muted }}>{i + 1}</Text>
+          <View style={{ width: INDEX_W }}>
+            <Text variant="numeral-sm" className={s.done ? "text-fog" : "text-silver"}>
+              {String(i + 1)}
+            </Text>
           </View>
           {cardio ? (
             <>
@@ -312,19 +300,29 @@ export function ExerciseCard({
               />
             </>
           )}
-          <View style={{ width: 66, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+          <View
+            style={{
+              width: TRAIL_W,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: space[2]
+            }}
+          >
             <CheckButton
               done={s.done}
-              label={s.done ? `Unlog ${cardio ? "interval" : "set"} ${i + 1}` : `Log ${cardio ? "interval" : "set"} ${i + 1}`}
+              label={s.done ? `Unlog ${unitLower} ${i + 1}` : `Log ${unitLower} ${i + 1}`}
               onPress={() => onToggleDone(s.id)}
             />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Remove ${cardio ? "interval" : "set"} ${i + 1}`}
+              accessibilityLabel={`Remove ${unitLower} ${i + 1}`}
               onPress={() => onRemoveSet(s.id)}
-              hitSlop={8}
+              hitSlop={10}
+              haptic="none"
+              style={{ width: 28, height: 36, alignItems: "center", justifyContent: "center" }}
             >
-              <X size={16} color={W.faint} strokeWidth={2.2} />
+              <X size={icon.size.xs} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
             </Pressable>
           </View>
         </View>
@@ -336,30 +334,37 @@ export function ExerciseCard({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingHorizontal: 16,
-          paddingVertical: 12
+          paddingHorizontal: space[4],
+          paddingVertical: space[2]
         }}
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Add ${unit.toLowerCase()}`}
+          accessibilityLabel={`Add ${unitLower}`}
           onPress={onAddSet}
           hitSlop={8}
-          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+          haptic="none"
+          style={{ flexDirection: "row", alignItems: "center", gap: space[2], minHeight: 36 }}
         >
-          <Micro style={{ color: W.text, fontSize: 12 }}>Add {unit.toLowerCase()}</Micro>
-          <Plus size={15} color={W.text} strokeWidth={2.4} />
+          <Text variant="micro" className="text-white">
+            Add {unitLower}
+          </Text>
+          <Plus size={15} color={tokens.text.primary} strokeWidth={icon.stroke.bold} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Remove ${exercise.name}`}
           onPress={onRemoveExercise}
           hitSlop={8}
-          style={{ padding: 2 }}
+          haptic="none"
+          style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
         >
-          <Trash2 size={16} color={W.faint} />
+          <Trash2 size={icon.size.xs} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
         </Pressable>
       </View>
     </Animated.View>
   );
 }
+
+/** Memoized: the route re-renders on every set edit; only the edited card should. */
+export const ExerciseCard = memo(ExerciseCardInner);

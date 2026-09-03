@@ -1,5 +1,6 @@
-import { Flame, X } from "lucide-react-native";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { X } from "lucide-react-native";
+import { Modal, Pressable, Text } from "react-native";
 import Animated, { FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 
 import { colors } from "@/theme/colors";
@@ -53,18 +54,12 @@ export function StreakPopup({
               <X size={18} color={colors.fog} strokeWidth={2.4} />
             </Pressable>
 
-            <View
-              style={{
-                width: 68,
-                height: 68,
-                borderRadius: 34,
-                backgroundColor: colors.goldSoft,
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              <Flame size={34} color={colors.gold} strokeWidth={2} />
-            </View>
+            <Image
+              source={require("../../assets/images/streak-flame.png")}
+              contentFit="contain"
+              style={{ width: 76, height: 76 }}
+              accessible={false}
+            />
 
             <Text
               style={{

@@ -1,90 +1,45 @@
-import { useMemo, useRef, useState } from "react";
 import { useRouter, type Href } from "expo-router";
-import { Check, Dumbbell, Lock, Plus, Users } from "lucide-react-native";
-import { Platform, ScrollView, Text, View, type LayoutChangeEvent } from "react-native";
+import { Lock, Plus, Users } from "lucide-react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Platform, ScrollView, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Avatar } from "@/components/ui/Avatar";
-import { CachedImage } from "@/components/ui/CachedImage";
+import { CommunityDivider, CommunityRow } from "@/components/communities/CommunityRow";
+import { CommunityHeroCard } from "@/components/communities/CommunityHeroCard";
+import { LockedCommunitySheet } from "@/components/communities/LockedCommunitySheet";
+import { Button, RelButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
-import { SheetTitle, useSheet } from "@/components/ui/Sheet";
+import { SectionLabel } from "@/components/ui/SectionLabel";
+import { useSheet } from "@/components/ui/Sheet";
 import { SkeletonRows } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
 import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
-import { useDiscoverCommunities, useJoinCommunity, useMyCommunities, type CommunitySummary } from "@/hooks/queries/useCommunities";
+import {
+  useDiscoverCommunities,
+  useJoinCommunity,
+  useMyCommunities,
+  type CommunitySummary
+} from "@/hooks/queries/useCommunities";
 import { useGymSearch, type GymSearchResult } from "@/hooks/queries/useGymSearch";
-import { rankBoard, useCommunityBoard, useCommunityPresence, useCrewActivity, useHomeGymHub, useMarkCommunityRead } from "@/hooks/queries/useCommunitiesHome";
-import { useAuthStore } from "@/stores/auth";
+import {
+  rankBoard,
+  useCommunityBoard,
+  useCommunityPresence,
+  useCrewActivity,
+  useHomeGymHub,
+  useMarkCommunityRead
+} from "@/hooks/queries/useCommunitiesHome";
 import { useMyProfile } from "@/hooks/queries/useProfile";
-import { COMMUNITY_ICONS } from "@/lib/communityTypes";
-import { TENURE_LABEL, tenureBadge } from "@/lib/communityTenure";
+import { tenureBadge } from "@/lib/communityTenure";
 import { relDay } from "@/lib/relDay";
+import { useAuthStore } from "@/stores/auth";
 import { usePresenceStore } from "@/stores/presence";
 import { showToast } from "@/stores/ui";
-import { gymLogo, gymLogoIsFullBleed } from "@/lib/gymChains";
 import { colors } from "@/theme/colors";
-import { radius, tokens } from "@/theme/tokens";
-
-const NAV_H = 84;
-/** State color only (member / here-now) — gold stays the app's one accent. */
-const OK = "#5BBF7A";
-const OK_SOFT = "rgba(91,191,122,0.14)";
-
-function Label({ children, right }: { children: string; right?: React.ReactNode }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", paddingHorizontal: 18, paddingTop: 18, paddingBottom: 10 }}>
-      <Text accessibilityRole="header" style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 10.5 * 0.12, textTransform: "uppercase", color: colors.fog }}>
-        {children}
-      </Text>
-      {right}
-    </View>
-  );
-}
-
-function Chip({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "ok" | "gold" }) {
-  const color = tone === "ok" ? OK : tone === "gold" ? tokens.accent.gold : colors.silver;
-  const border = tone === "ok" ? "rgba(91,191,122,0.35)" : tone === "gold" ? "rgba(232,180,76,0.35)" : colors.slate;
-  const bg = tone === "ok" ? OK_SOFT : tone === "gold" ? tokens.accent.goldSubtle : "transparent";
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill, borderWidth: 1, borderColor: border, backgroundColor: bg }}>
-      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 0.8, textTransform: "uppercase", color }}>{children}</Text>
-    </View>
-  );
-}
-
-function Tile({ community, size = 48, locked = false }: { community: CommunitySummary; size?: number; locked?: boolean }) {
-  const Icon = COMMUNITY_ICONS[community.type];
-  // Gym communities: the chain logo (one bundled image per chain) unless a
-  // custom photo was set. Locked previews still show it — it's public brand art.
-  const gymRef = { chain: community.gymChain, institution: community.gymInstitution, name: community.name };
-  const logo = community.type === "gym" && !community.photoUrl ? gymLogo(gymRef) : null;
-  if (logo) {
-    const fullBleed = gymLogoIsFullBleed(gymRef);
-    return (
-      <View style={{ width: size, height: size, borderRadius: radius.sm, backgroundColor: fullBleed ? tokens.bg.subtle : "#FFFFFF", overflow: "hidden", alignItems: "center", justifyContent: "center", opacity: locked ? 0.8 : 1 }}>
-        <CachedImage
-          source={logo}
-          contentFit={fullBleed ? "cover" : "contain"}
-          style={fullBleed ? { width: size, height: size } : { width: size * 0.68, height: size * 0.68 }}
-        />
-      </View>
-    );
-  }
-  return (
-    <View style={{ width: size, height: size, borderRadius: radius.sm, backgroundColor: tokens.bg.subtle, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-      {locked ? (
-        <Lock size={size * 0.36} color={colors.fog} strokeWidth={2} />
-      ) : community.photoUrl ? (
-        <CachedImage source={{ uri: community.photoUrl }} contentFit="cover" style={{ width: size, height: size }} />
-      ) : community.type === "gym" ? (
-        <Dumbbell size={size * 0.42} color={colors.mist} strokeWidth={2} />
-      ) : (
-        <Icon size={size * 0.42} color={colors.mist} />
-      )}
-    </View>
-  );
-}
+import { tabBarClearance } from "@/theme/layout";
+import { icon, space, tokens } from "@/theme/tokens";
 
 /** A gym with no community row yet, shaped like one for the tile + preview. */
 function gymAsCommunity(gym: GymSearchResult): CommunitySummary {
@@ -106,38 +61,14 @@ function gymAsCommunity(gym: GymSearchResult): CommunitySummary {
   };
 }
 
-/** Locked preview: name, member count, thumbnail — and nothing real, ever. */
-function LockedCommunitySheet({ community }: { community: CommunitySummary }) {
-  const sheet = useSheet();
+function LabelAction({ label, onPress, icon: glyph }: { label: string; onPress: () => void; icon?: React.ReactNode }) {
   return (
-    <View style={{ paddingBottom: 8 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20 }}>
-        <Tile community={community} size={48} locked />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <SheetTitle>{community.name}</SheetTitle>
-          <Text style={{ marginTop: -6, paddingHorizontal: 20, fontSize: 13, color: colors.fog }}>
-            {`${community.memberCount} ${community.memberCount === 1 ? "member" : "members"}`}
-          </Text>
-        </View>
+    <Pressable onPress={onPress} haptic="none" accessibilityLabel={label} hitSlop={8}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space[1] }}>
+        {glyph}
+        <Text variant="meta-strong">{label}</Text>
       </View>
-      <View style={{ marginHorizontal: 20, marginTop: 16, paddingVertical: 14, borderRadius: radius.sm, borderWidth: 1, borderStyle: "dashed", borderColor: colors.slate, alignItems: "center" }}>
-        <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 1.3, textTransform: "uppercase", color: colors.fog }}>
-          Board · feed · chat — members only
-        </Text>
-      </View>
-      <View style={{ marginHorizontal: 20, marginTop: 12, flexDirection: "row", gap: 10, padding: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: tokens.border.default }}>
-        <Lock size={16} color={colors.fog} strokeWidth={1.9} style={{ marginTop: 2 }} />
-        <Text style={{ flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.silver }}>
-          You&apos;ll only ever see a gym&apos;s board, feed, and chat once you&apos;re a member —{" "}
-          <Text style={{ color: colors.white, fontFamily: "Geist_600SemiBold" }}>check in there to join.</Text> Browsing never unlocks it.
-        </Text>
-      </View>
-      <Pressable onPress={() => sheet.close()} accessibilityLabel="Got it" style={{ marginHorizontal: 20, marginTop: 16 }}>
-        <View style={{ height: 46, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.white }}>Got it</Text>
-        </View>
-      </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -166,6 +97,12 @@ export function CommunitiesHub({ onEnterCode, onFindGym }: { onEnterCode?: () =>
   // at the top, and results include gyms (locked preview) — most gyms have
   // no community row yet, so a communities-only search found "nothing".
   const searching = query.trim().length > 0;
+  // Entering search mode unmounts everything above the field; without this the
+  // ScrollView kept its old offset and the (now much shorter) content scrolled
+  // off the top, leaving a blank gap under the results.
+  useEffect(() => {
+    if (searching) scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [searching]);
   const gymSearch = useGymSearch(query, null, searching);
   const scrollRef = useRef<ScrollView>(null);
   const [searchY, setSearchY] = useState(0);
@@ -222,10 +159,19 @@ export function CommunitiesHub({ onEnterCode, onFindGym }: { onEnterCode?: () =>
     return { text: `${activity.last.senderName.split(" ")[0]}: ${activity.last.preview}`, quiet: false };
   };
 
-  const heroTenure = hero ? tenureBadge(hero.joinedAt, hero.createdAt) : null;
-  const heroLine = hero ? chatLine(hero.id) : null;
-  const heroUnread = hero ? Boolean(crew.data?.[hero.id]?.unread) : false;
-  const here = presence.data;
+  const heroBoard = myRank
+    ? {
+        label: "Board · streak",
+        value: `You're #${myRank.rank}${myRank.row.streak > 0 ? ` · ${myRank.row.streak}-day streak` : " · no streak yet"}`,
+        emphasis: true
+      }
+    : {
+        label: "Today",
+        value: hub.data && hub.data.checkedInToday > 0 ? `${hub.data.checkedInToday} checked in` : "Nobody yet today",
+        emphasis: Boolean(hub.data && hub.data.checkedInToday > 0)
+      };
+
+  const lockGlyph = <Lock size={icon.size.xs - 2} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />;
 
   return (
     <ScrollView
@@ -233,218 +179,133 @@ export function CommunitiesHub({ onEnterCode, onFindGym }: { onEnterCode?: () =>
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
-      contentContainerStyle={{ paddingBottom: NAV_H + insets.bottom + 12 + (keyboardHeight ? keyboardHeight + 240 : 0) }}
+      contentContainerStyle={{
+        paddingBottom: keyboardHeight ? keyboardHeight + space[6] : tabBarClearance(insets.bottom)
+      }}
     >
       {searching ? null : (
         <>
-      {communities.isLoading ? (
-        <SkeletonRows count={4} avatar={44} />
-      ) : hero ? (
-        <>
-          <Label right={heroIsHere ? <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.silver }}>Checked in</Text> : undefined}>
-            {heroIsHere ? "You're here" : "Your gym"}
-          </Label>
-          <View style={{ marginHorizontal: 18, backgroundColor: tokens.bg.raised, borderWidth: 1, borderColor: tokens.border.default, borderRadius: radius.md, overflow: "hidden" }}>
-            <Pressable onPress={() => open(hero)} accessibilityLabel={`Open ${hero.name}`}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, paddingBottom: 0 }}>
-                <Tile community={hero} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text numberOfLines={1} style={{ fontFamily: "Geist_700Bold", fontSize: 16, letterSpacing: -0.2, color: colors.white }}>
-                    {hero.name}
-                  </Text>
-                  <View style={{ marginTop: 4, flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <Chip tone="ok">✓ Member</Chip>
-                    {heroTenure ? <Chip tone="gold">{TENURE_LABEL[heroTenure]}</Chip> : null}
-                    <Text style={{ fontSize: 12.5, color: colors.fog }}>{`${hero.memberCount} ${hero.memberCount === 1 ? "member" : "members"}`}</Text>
-                  </View>
-                </View>
-              </View>
-            </Pressable>
-            {/* Presence — rendered only when someone is actually there (no fake activity). */}
-            {here && here.count > 0 ? (
-              <View style={{ margin: 14, marginBottom: 0, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: radius.sm, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.hairline }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: OK }} />
-                <Text style={{ flex: 1, fontSize: 13, color: colors.bone }} numberOfLines={2}>
-                  <Text style={{ fontFamily: "Geist_600SemiBold", color: colors.white }}>
-                    {here.people.map((p) => p.name.split(" ")[0]).join(", ")}
-                  </Text>
-                  {here.count > here.people.length ? ` and ${here.count - here.people.length} more` : ""}
-                  {here.count === 1 ? " is here now" : " are here now"}
-                </Text>
-                <View style={{ flexDirection: "row" }}>
-                  {here.people.map((p, i) => (
-                    <View key={p.id} style={{ marginLeft: i === 0 ? 0 : -8 }}>
-                      <Avatar name={p.name} uri={p.avatar_url} size={26} borderColor={tokens.bg.raised} borderWidth={2} />
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-            {/* Signals */}
-            <View style={{ marginTop: 14, flexDirection: "row", borderTopWidth: 1, borderTopColor: tokens.border.default }}>
-              <Pressable onPress={() => open(hero, "Chat")} style={{ flex: 1, padding: 12, paddingHorizontal: 14, borderRightWidth: 1, borderRightColor: tokens.border.default }} accessibilityLabel="Latest chat">
-                <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 1.1, textTransform: "uppercase", color: colors.fog }}>Chat</Text>
-                <Text numberOfLines={1} style={{ marginTop: 4, fontSize: 13.5, fontFamily: heroLine?.quiet ? "Geist_400Regular" : "Geist_600SemiBold", color: heroLine?.quiet ? colors.fog : colors.white }}>
-                  {heroLine?.text}
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => open(hero, "Board")} style={{ flex: 1, padding: 12, paddingHorizontal: 14 }} accessibilityLabel="Board">
-                <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, letterSpacing: 1.1, textTransform: "uppercase", color: colors.fog }}>
-                  {myRank ? "Board · streak" : "Today"}
-                </Text>
-                {myRank ? (
-                  <Text numberOfLines={1} style={{ marginTop: 4, fontSize: 13.5, fontFamily: "Geist_600SemiBold", color: colors.white }}>
-                    You&apos;re <Text style={{ color: tokens.accent.gold }}>#{myRank.rank}</Text>
-                    <Text style={{ color: colors.fog, fontFamily: "Geist_400Regular" }}>
-                      {myRank.row.streak > 0 ? ` · ${myRank.row.streak}-day streak` : " · no streak yet"}
-                    </Text>
-                  </Text>
-                ) : (
-                  <Text numberOfLines={1} style={{ marginTop: 4, fontSize: 13.5, fontFamily: "Geist_600SemiBold", color: hub.data && hub.data.checkedInToday > 0 ? colors.white : colors.fog }}>
-                    {hub.data && hub.data.checkedInToday > 0 ? `${hub.data.checkedInToday} checked in` : "Nobody yet today"}
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-            <View style={{ flexDirection: "row", gap: 8, padding: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: tokens.border.default }}>
-              <Pressable onPress={() => open(hero, "Chat")} accessibilityLabel="Open chat" style={{ flex: 1 }}>
-                <View style={{ height: 40, borderRadius: radius.sm, backgroundColor: colors.white, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: colors.black }}>Open chat</Text>
-                  {heroUnread ? (
-                    <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: radius.pill, backgroundColor: "rgba(0,0,0,0.18)" }}>
-                      <Text style={{ fontFamily: "GeistMono_500Medium", fontSize: 10, color: colors.black }}>NEW</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </Pressable>
-              <Pressable onPress={() => open(hero, hero.type === "gym" ? "Board" : "Feed")} accessibilityLabel={hero.type === "gym" ? "Open board" : "Open feed"} style={{ flex: 1 }}>
-                <View style={{ height: 40, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13, color: colors.white }}>{hero.type === "gym" ? "Board" : "Feed"}</Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-        </>
-      ) : (
-        <EmptyState
-          icon={<Users size={22} color={colors.silver} strokeWidth={2} />}
-          title="No gym community yet"
-          body="Check in at your gym and you'll be invited to its group — chat, a board that only counts that gym, and everyone who trains there."
-          paddingTop={28}
-        >
-          {onFindGym ? (
-            <Pressable onPress={onFindGym} accessibilityLabel="Find your gym">
-              <View style={{ height: 44, borderRadius: radius.sm, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Find your gym</Text>
-              </View>
-            </Pressable>
-          ) : null}
-        </EmptyState>
-      )}
+          {communities.isLoading ? (
+            <SkeletonRows count={4} avatar={44} />
+          ) : hero ? (
+            <>
+              <SectionLabel right={heroIsHere ? <Text variant="meta-strong">Checked in</Text> : undefined}>
+                {heroIsHere ? "You're here" : "Your gym"}
+              </SectionLabel>
+              <CommunityHeroCard
+                community={hero}
+                tenure={tenureBadge(hero.joinedAt, hero.createdAt)}
+                presence={presence.data}
+                chatLine={chatLine(hero.id)}
+                unread={Boolean(crew.data?.[hero.id]?.unread)}
+                boardLabel={heroBoard.label}
+                boardValue={heroBoard.value}
+                boardEmphasis={heroBoard.emphasis}
+                onOpen={() => open(hero)}
+                onOpenChat={() => open(hero, "Chat")}
+                onOpenBoard={() => open(hero, hero.type === "gym" ? "Board" : "Feed")}
+              />
+            </>
+          ) : (
+            <EmptyState
+              icon={<Users size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />}
+              title="No gym community yet"
+              body="Check in at your gym and you'll be invited to its group — chat, a board that only counts that gym, and everyone who trains there."
+              paddingTop={28}
+            >
+              {onFindGym ? <Button onPress={onFindGym}>Find your gym</Button> : null}
+            </EmptyState>
+          )}
 
-      {/* Your communities */}
-      <Label
-        right={
-          <Pressable onPress={() => router.push("/community-new" as Href)} accessibilityLabel="Start a crew" hitSlop={8}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Plus size={12} color={colors.silver} strokeWidth={2.4} />
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.silver }}>New crew</Text>
-            </View>
-          </Pressable>
-        }
-      >
-        Your communities
-      </Label>
-      {others.length === 0 ? (
-        <Text style={{ paddingHorizontal: 18, fontSize: 12.5, color: colors.fog }}>
-          {hero ? "Just this one for now." : "Nothing yet — join your gym's group or start a crew."}
-        </Text>
-      ) : (
-        others.map((community, index) => {
-          const line = chatLine(community.id);
-          const activity = crew.data?.[community.id];
-          return (
-            <View key={community.id}>
-              {index > 0 ? <View style={{ height: 1, backgroundColor: tokens.border.default, marginHorizontal: 18 }} /> : null}
-              <Pressable onPress={() => open(community)} accessibilityLabel={`Open ${community.name}`}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, paddingHorizontal: 18 }}>
-                  <Tile community={community} size={44} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: colors.white }}>
-                        {community.name}
-                      </Text>
-                      <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: "rgba(91,191,122,0.35)", backgroundColor: OK_SOFT, alignItems: "center", justifyContent: "center" }}>
-                        <Check size={9} color={OK} strokeWidth={3} />
-                      </View>
-                    </View>
-                    <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12.5, color: colors.fog, fontStyle: line.quiet ? "italic" : "normal" }}>
-                      {line.text}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: "flex-end", gap: 5 }}>
-                    {activity?.last ? (
-                      <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 10.5, color: colors.fog }}>{relDay(activity.last.sentAt)}</Text>
-                    ) : null}
-                    {activity?.unread ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white }} /> : null}
-                  </View>
-                </View>
-              </Pressable>
-            </View>
-          );
-        })
-      )}
-
-      {/* Nearby, not joined — the lock is stated before any tap. */}
-      {nearbyLocked.length > 0 ? (
-        <>
-          <Label>Nearby · not joined</Label>
-          {nearbyLocked.slice(0, 6).map((community, index) => (
-            <View key={community.id}>
-              {index > 0 ? <View style={{ height: 1, backgroundColor: tokens.border.default, marginHorizontal: 18 }} /> : null}
-              <Pressable onPress={() => sheet.open(<LockedCommunitySheet community={community} />)} accessibilityLabel={`Preview ${community.name}`}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, paddingHorizontal: 18 }}>
-                  <Tile community={community} size={44} locked />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: colors.white }}>{community.name}</Text>
-                    <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12.5, color: colors.fog }}>
-                      {`${community.memberCount} ${community.memberCount === 1 ? "member" : "members"} · `}
-                      <Text style={{ color: colors.silver }}>Board &amp; feed locked</Text>
-                      {" · check in to join"}
-                    </Text>
-                  </View>
-                  <View style={{ height: 30, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.white }}>Preview</Text>
-                  </View>
-                </View>
-              </Pressable>
-            </View>
-          ))}
-          <View style={{ marginHorizontal: 18, marginTop: 12, padding: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: tokens.border.default }}>
-            <Text style={{ fontSize: 12, lineHeight: 18, color: colors.fog }}>
-              You only ever see a gym&apos;s board, feed, and chat once you&apos;re a member —{" "}
-              <Text style={{ color: colors.silver, fontFamily: "Geist_500Medium" }}>check in there to join.</Text> Browsing never unlocks it.
+          {/* Your communities */}
+          <SectionLabel
+            right={
+              <LabelAction
+                label="New crew"
+                onPress={() => router.push("/community-new" as Href)}
+                icon={<Plus size={12} color={colors.silver} strokeWidth={icon.stroke.bold} />}
+              />
+            }
+          >
+            Your communities
+          </SectionLabel>
+          {others.length === 0 ? (
+            <Text variant="meta" className="px-4">
+              {hero ? "Just this one for now." : "Nothing yet — join your gym's group or start a crew."}
             </Text>
-          </View>
-        </>
-      ) : null}
+          ) : (
+            others.map((community, index) => {
+              const line = chatLine(community.id);
+              const activity = crew.data?.[community.id];
+              return (
+                <View key={community.id}>
+                  {index > 0 ? <CommunityDivider /> : null}
+                  <CommunityRow
+                    community={community}
+                    state="member"
+                    onPress={() => open(community)}
+                    accessibilityLabel={`Open ${community.name}`}
+                    sub={
+                      <Text
+                        variant={line.quiet ? "italic" : "meta"}
+                        numberOfLines={1}
+                        className="mt-[2px] text-[13px] leading-[18px] text-fog"
+                      >
+                        {line.text}
+                      </Text>
+                    }
+                    right={
+                      <View style={{ alignItems: "flex-end", gap: 5 }}>
+                        {activity?.last ? <Text variant="micro">{relDay(activity.last.sentAt)}</Text> : null}
+                        {activity?.unread ? (
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white }} />
+                        ) : null}
+                      </View>
+                    }
+                  />
+                </View>
+              );
+            })
+          )}
+
+          {/* Nearby, not joined — the lock is stated before any tap. */}
+          {nearbyLocked.length > 0 ? (
+            <>
+              <SectionLabel>Nearby · not joined</SectionLabel>
+              {nearbyLocked.slice(0, 6).map((community, index) => (
+                <View key={community.id}>
+                  {index > 0 ? <CommunityDivider /> : null}
+                  <CommunityRow
+                    community={community}
+                    state="locked"
+                    onPress={() => sheet.open(<LockedCommunitySheet community={community} />)}
+                    accessibilityLabel={`Preview ${community.name}`}
+                    sub={`${community.memberCount} ${community.memberCount === 1 ? "member" : "members"} · locked · check in to join`}
+                    right={
+                      <RelButton
+                        label="Preview"
+                        kind="quiet"
+                        onPress={() => sheet.open(<LockedCommunitySheet community={community} />)}
+                      />
+                    }
+                  />
+                </View>
+              ))}
+              <Text variant="meta" className="px-4 pt-3">
+                You only ever see a gym&apos;s board, feed, and chat once you&apos;re a member — check in there to join.
+                Browsing never unlocks it.
+              </Text>
+            </>
+          ) : null}
         </>
       )}
 
       {/* More — public crews anyone can join, plus invite codes. */}
-      <Label
-        right={
-          onEnterCode ? (
-            <Pressable onPress={onEnterCode} accessibilityLabel="Enter invite code" hitSlop={8}>
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.silver }}>Have a code?</Text>
-            </Pressable>
-          ) : undefined
-        }
-      >
+      <SectionLabel right={onEnterCode ? <LabelAction label="Have a code?" onPress={onEnterCode} /> : undefined}>
         More communities
-      </Label>
+      </SectionLabel>
       <View
-        style={{ paddingHorizontal: 18, paddingBottom: 10 }}
+        style={{ paddingHorizontal: space[4], paddingBottom: space[2] + 2 }}
         onLayout={(e: LayoutChangeEvent) => setSearchY(e.nativeEvent.layout.y)}
       >
         <SearchBar
@@ -459,26 +320,19 @@ export function CommunitiesHub({ onEnterCode, onFindGym }: { onEnterCode?: () =>
         />
       </View>
       {searching && gymHits.length > 0 ? (
-        <View style={{ paddingBottom: 6 }}>
+        <View style={{ paddingBottom: space[1] + 2 }}>
           {gymHits.map((gym) => {
             const asCommunity = gymAsCommunity(gym);
             return (
-              <Pressable
+              <CommunityRow
                 key={`gym-${gym.id}`}
+                community={asCommunity}
+                state="locked"
                 onPress={() => sheet.open(<LockedCommunitySheet community={asCommunity} />)}
                 accessibilityLabel={`Preview ${gym.name}`}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, paddingHorizontal: 18 }}>
-                  <Tile community={asCommunity} size={44} locked />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: colors.white }}>{gym.name}</Text>
-                    <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12.5, color: colors.fog }}>
-                      {gym.address ?? "Gym · check in there to join"}
-                    </Text>
-                  </View>
-                  <Lock size={14} color={colors.fog} strokeWidth={2} />
-                </View>
-              </Pressable>
+                sub={gym.address ?? "Gym · check in there to join"}
+                right={lockGlyph}
+              />
             );
           })}
         </View>
@@ -487,39 +341,32 @@ export function CommunitiesHub({ onEnterCode, onFindGym }: { onEnterCode?: () =>
         <SkeletonRows count={3} avatar={34} />
       ) : morePublic.length === 0 ? (
         gymHits.length === 0 ? (
-          <Text style={{ paddingHorizontal: 18, paddingBottom: 12, fontSize: 12.5, color: colors.fog }}>
+          <Text variant="meta" className="px-4 pb-3">
             {searching ? "No gyms or communities match that name." : "Nothing else to discover yet."}
           </Text>
         ) : null
       ) : (
         morePublic.slice(0, 10).map((community, index) => (
           <View key={community.id}>
-            {index > 0 ? <View style={{ height: 1, backgroundColor: tokens.border.default, marginHorizontal: 18 }} /> : null}
-            <Pressable onPress={() => router.push(`/community/${community.id}` as Href)} accessibilityLabel={`Open ${community.name}`}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, paddingHorizontal: 18 }}>
-                <Tile community={community} size={44} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: colors.white }}>{community.name}</Text>
-                  <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12.5, color: colors.fog }}>
-                    {`${community.memberCount} ${community.memberCount === 1 ? "member" : "members"}`}
-                    {community.location ? ` · ${community.location}` : ""}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={`Join ${community.name}`}
+            {index > 0 ? <CommunityDivider /> : null}
+            <CommunityRow
+              community={community}
+              onPress={() => router.push(`/community/${community.id}` as Href)}
+              accessibilityLabel={`Open ${community.name}`}
+              sub={`${community.memberCount} ${community.memberCount === 1 ? "member" : "members"}${community.location ? ` · ${community.location}` : ""}`}
+              right={
+                <RelButton
+                  label="Join"
+                  kind="quiet"
                   onPress={() =>
                     joinPublic.mutate(community.id, {
                       onSuccess: () => showToast(`Joined ${community.name}`),
                       onError: () => showToast("Couldn't join — try again")
                     })
                   }
-                >
-                  <View style={{ height: 30, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.slate, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12, color: colors.white }}>Join</Text>
-                  </View>
-                </Pressable>
-              </View>
-            </Pressable>
+                />
+              }
+            />
           </View>
         ))
       )}

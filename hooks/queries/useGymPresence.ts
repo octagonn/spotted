@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { mockFriendPresence, mockGyms } from "@/lib/mockData";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { isDemoMode, supabase } from "@/lib/supabase";
 import type { FriendPresence, Gym, Profile } from "@/types/domain";
 
 type CheckinRow = {
@@ -17,7 +17,7 @@ export function useGymPresence() {
   return useQuery({
     queryKey: ["gym-presence"],
     queryFn: async (): Promise<{ presence: FriendPresence[] }> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return { presence: mockFriendPresence };
       }
       // NOTE: no gyms-table fetch here — with US-wide coverage that table is
@@ -54,7 +54,7 @@ export function useGym(gymId?: string | null) {
     enabled: Boolean(gymId),
     staleTime: 10 * 60_000,
     queryFn: async (): Promise<Gym | null> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockGyms.find((g) => g.id === gymId) ?? mockGyms[0] ?? null;
       }
       const { data, error } = await supabase

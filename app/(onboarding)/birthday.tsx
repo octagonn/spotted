@@ -7,6 +7,7 @@ import Animated from "react-native-reanimated";
 
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/ui/Button";
+import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Text } from "@/components/ui/Text";
 import { usePageFade } from "@/hooks/usePageFade";
 import { colors } from "@/theme/colors";
@@ -104,10 +105,7 @@ function Wheel({
           const selected = itemIndex === index;
           return (
             <View key={item} style={{ height: ITEM_HEIGHT }} className="items-center justify-center">
-              <Text
-                variant={selected ? "body-strong" : "body"}
-                className={selected ? "text-white" : "text-fog"}
-              >
+              <Text variant={selected ? "body-strong" : "body"} className={selected ? "text-white" : "text-fog"}>
                 {item}
               </Text>
             </View>
@@ -257,67 +255,55 @@ export default function BirthdayScreen() {
 
   return (
     <Animated.View style={[{ flex: 1 }, fadeStyle]}>
-    <Screen transparent>
-      <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-        <Text variant="micro" className="text-mist">
-          STEP 2 OF 7
-        </Text>
-      </View>
-      <Text variant="display-md" className="mt-6">
-        WHEN WERE YOU BORN?
-      </Text>
+      <Screen transparent>
+        <OnboardingHeader step={2} title="WHEN WERE YOU BORN?" />
 
-      {ageChecking ? (
-        <View
-          className="mt-10 items-center justify-center"
-          style={{ minHeight: WHEEL_HEIGHT + 96 }}
-          accessibilityLiveRegion="polite"
-          accessibilityLabel="Checking your age range with Apple"
-        >
-          <ActivityIndicator color={colors.mist} />
-          <Text variant="caption" className="mt-4 text-mist">
-            Checking your age range with Apple…
-          </Text>
-        </View>
-      ) : (
-        <>
-          {/* Three EQUAL columns, evenly spread — mismatched widths made the
-              wheels sit off-center. */}
-          <View className="mt-10 flex-row rounded-card border border-hairline-strong bg-glass-strong px-2 py-2">
-            <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} label="Month" />
-            <Wheel
-              items={days}
-              index={Math.min(dayIndex, maxDays - 1)}
-              onChange={setDayIndex}
-              label="Day"
-            />
-            <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} label="Year" />
-          </View>
-
-          {tooYoung ? (
-            <View
-              className="mt-6 rounded-card border border-hairline-strong bg-glass-strong p-4"
-              accessibilityLiveRegion="assertive"
-            >
-              <Text variant="micro" className="text-white">
-                NOT OLD ENOUGH
-              </Text>
-              <Text variant="caption" className="mt-2 text-mist">
-                Spotted is for people {MIN_AGE} and up. You can't create an account yet.
-              </Text>
-            </View>
-          ) : appleAgeConfirmed ? (
+        {ageChecking ? (
+          <View
+            className="mt-10 items-center justify-center"
+            style={{ minHeight: WHEEL_HEIGHT + 96 }}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="Checking your age range with Apple"
+          >
+            <ActivityIndicator color={colors.mist} />
             <Text variant="caption" className="mt-4 text-mist">
-              Age range confirmed with Apple. Your birthday sets up your profile.
+              Checking your age range with Apple…
             </Text>
-          ) : null}
+          </View>
+        ) : (
+          <>
+            {/* Three EQUAL columns, evenly spread — mismatched widths made the
+              wheels sit off-center. */}
+            <View className="mt-10 flex-row rounded-card border border-hairline-strong bg-glass-strong px-2 py-2">
+              <Wheel items={MONTHS} index={monthIndex} onChange={setMonthIndex} label="Month" />
+              <Wheel items={days} index={Math.min(dayIndex, maxDays - 1)} onChange={setDayIndex} label="Day" />
+              <Wheel items={years} index={yearListIndex} onChange={setYearListIndex} label="Year" />
+            </View>
 
-          <Button className="mt-10" onPress={handleContinue} loading={submitting} disabled={tooYoung}>
-            Continue
-          </Button>
-        </>
-      )}
-    </Screen>
+            {tooYoung ? (
+              <View
+                className="mt-6 rounded-card border border-hairline-strong bg-glass-strong p-4"
+                accessibilityLiveRegion="assertive"
+              >
+                <Text variant="micro" className="text-white">
+                  NOT OLD ENOUGH
+                </Text>
+                <Text variant="caption" className="mt-2 text-mist">
+                  Spotted is for people {MIN_AGE} and up. You can't create an account yet.
+                </Text>
+              </View>
+            ) : appleAgeConfirmed ? (
+              <Text variant="caption" className="mt-4 text-mist">
+                Age range confirmed with Apple. Your birthday sets up your profile.
+              </Text>
+            ) : null}
+
+            <Button className="mt-10" onPress={handleContinue} loading={submitting} disabled={tooYoung}>
+              Continue
+            </Button>
+          </>
+        )}
+      </Screen>
     </Animated.View>
   );
 }

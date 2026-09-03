@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 
 import { FIND_PEOPLE } from "@/lib/redesignData";
+import { isDemoMode } from "@/lib/supabase";
 import { showToast } from "@/stores/ui";
 import type { RelationshipState } from "@/types/redesign";
 
@@ -28,7 +30,8 @@ type RelationshipsStore = {
 };
 
 const seededFromFixtures: Record<string, RelationshipState> = {};
-for (const person of FIND_PEOPLE) {
+// Fixture people exist only in the dev demo mode — never seed them in release.
+for (const person of isDemoMode ? FIND_PEOPLE : []) {
   seededFromFixtures[person.id] = person.state;
   // Fixture people are also addressable by handle (user/[username] routes use it).
   seededFromFixtures[person.handle] = person.state;
@@ -37,8 +40,7 @@ for (const person of FIND_PEOPLE) {
 export const useRelationshipsStore = create<RelationshipsStore>((set) => ({
   states: seededFromFixtures,
   setRelationship: (id, state) => set((prev) => ({ states: { ...prev.states, [id]: state } })),
-  seed: (id, state) =>
-    set((prev) => (id in prev.states ? prev : { states: { ...prev.states, [id]: state } })),
+  seed: (id, state) => set((prev) => (id in prev.states ? prev : { states: { ...prev.states, [id]: state } })),
   reset: () => set({ states: { ...seededFromFixtures } })
 }));
 
@@ -127,11 +129,15 @@ export function useRelationships(): RelationshipsApi {
   const states = useRelationshipsStore((store) => store.states);
   const seed = useRelationshipsStore((store) => store.seed);
   const setRelationship = useRelationshipsStore((store) => store.setRelationship);
-  return {
-    states,
-    stateFor: (id, fallback = "none") => states[id] ?? fallback,
-    seed,
-    setRelationship,
-    advance: advanceRelationship
-  };
+  // Memoized so callers can list it in hook deps without re-running every render.
+  return useMemo(
+    () => ({
+      states,
+      stateFor: (id, fallback = "none") => states[id] ?? fallback,
+      seed,
+      setRelationship,
+      advance: advanceRelationship
+    }),
+    [states, seed, setRelationship]
+  );
 }

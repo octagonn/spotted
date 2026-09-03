@@ -90,7 +90,28 @@ async function configureAndroidChannels() {
   );
 }
 
+// What this process last wrote server-side, so a re-sync that finds nothing
+// changed makes NO network calls. (Incident 2026-09-01: every sync wrote the
+// permission status twice and re-registered the token, and on iOS
+// getExpoPushTokenAsync re-fires the push-token listener → sync → … — 34k
+// notification_preferences upserts/day from a handful of open apps.)
+const lastWritten: { userId: string | null; status: PushPermissionStatus | null; token: string | null } = {
+  userId: null,
+  status: null,
+  token: null
+};
+
+function forgetWritesFor(userId: string) {
+  if (lastWritten.userId !== userId) {
+    lastWritten.userId = userId;
+    lastWritten.status = null;
+    lastWritten.token = null;
+  }
+}
+
 async function recordPermissionStatus(userId: string, status: PushPermissionStatus, prompted: boolean) {
+  forgetWritesFor(userId);
+  if (!prompted && lastWritten.status === status) return;
   const patch: Record<string, unknown> = {
     user_id: userId,
     push_permission_status: status,
@@ -102,15 +123,21 @@ async function recordPermissionStatus(userId: string, status: PushPermissionStat
     .upsert(patch as never, { onConflict: "user_id" });
   if (error) {
     logger.warn("push_permission_status_write_failed", { message: error.message });
+    return;
   }
+  lastWritten.status = status;
 }
 
 async function saveExpoToken(userId: string, expoPushToken: string) {
+  forgetWritesFor(userId);
+  // Same token already assigned to this account by this process — nothing to do.
+  if (lastWritten.token === expoPushToken) return;
   const { error } = await supabase.rpc("register_push_token", {
     p_token: expoPushToken,
     p_platform: Platform.OS
   });
   if (error) throw error;
+  lastWritten.token = expoPushToken;
   await AsyncStorage.setItem(TOKEN_STORAGE_KEY, expoPushToken);
   await recordPermissionStatus(userId, "granted", false);
 }
@@ -167,6 +194,8 @@ export async function unregisterCurrentPushToken() {
   if (!token) return;
   const { error } = await supabase.rpc("unregister_push_token", { p_token: token });
   if (error) throw error;
+  lastWritten.token = null;
+  lastWritten.status = null;
 }
 
 /**
@@ -180,23 +209,39 @@ export function usePushTokenSync(userId: string | null) {
   useEffect(() => {
     if (!isSupabaseConfigured || !userId || !supportsPush()) return;
     let cancelled = false;
+    let inFlight: Promise<void> | null = null;
 
-    const sync = async () => {
-      try {
-        if (cancelled || (await getPushPermissionStatus()) !== "granted") return;
-        await registerDeviceToken(userId, { requestPermission: false });
-      } catch (error) {
-        logger.warn("push_token_sync_failed", {
-          message: error instanceof Error ? error.message : String(error)
-        });
-      }
+    // One sync at a time: overlapping app-state/token events collapse into the
+    // running one instead of each hitting the backend.
+    const sync = () => {
+      if (inFlight) return inFlight;
+      inFlight = (async () => {
+        try {
+          if (cancelled || (await getPushPermissionStatus()) !== "granted") return;
+          await registerDeviceToken(userId, { requestPermission: false });
+        } catch (error) {
+          logger.warn("push_token_sync_failed", {
+            message: error instanceof Error ? error.message : String(error)
+          });
+        } finally {
+          inFlight = null;
+        }
+      })();
+      return inFlight;
     };
 
     void sync();
     const appState = AppState.addEventListener("change", (state) => {
       if (state === "active") void sync();
     });
-    const tokenRoll = Notifications.addPushTokenListener(() => {
+    // iOS re-emits the device token every time registerDeviceToken asks for
+    // it, so only a token that actually changed is worth a sync — otherwise
+    // this listener and the sync feed each other forever.
+    let lastNativeToken: string | null = null;
+    const tokenRoll = Notifications.addPushTokenListener((token) => {
+      const data = typeof token.data === "string" ? token.data : JSON.stringify(token.data);
+      if (data === lastNativeToken) return;
+      lastNativeToken = data;
       void sync();
     });
     const received = Notifications.addNotificationReceivedListener(() => {

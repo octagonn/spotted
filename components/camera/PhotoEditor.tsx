@@ -2,15 +2,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Check, Crop, Download, Eraser, Pen, RotateCw, Trash2, Type, Undo2, X } from "lucide-react-native";
 import { useRef, useState } from "react";
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  useWindowDimensions
-} from "react-native";
+import { Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -107,8 +99,7 @@ function DraggableOverlay({
       tx.value = start.value.x + e.translationX;
       ty.value = start.value.y + e.translationY;
       if (trashHot && screenWidth && screenHeight) {
-        trashHot.value =
-          ty.value > screenHeight - 200 && Math.abs(tx.value - screenWidth / 2) < 130 ? 1 : 0;
+        trashHot.value = ty.value > screenHeight - 200 && Math.abs(tx.value - screenWidth / 2) < 130 ? 1 : 0;
       }
     })
     .onEnd(() => {
@@ -132,10 +123,12 @@ function DraggableOverlay({
     .onUpdate((e) => {
       rot.value = baseRot.value + e.rotation;
     });
-  const tap = Gesture.Tap().maxDistance(10).onEnd(() => {
-    runOnJS(onSelect)();
-    if (onTap) runOnJS(onTap)();
-  });
+  const tap = Gesture.Tap()
+    .maxDistance(10)
+    .onEnd(() => {
+      runOnJS(onSelect)();
+      if (onTap) runOnJS(onTap)();
+    });
   // Drag/pinch/rotate take priority; the tap only lands when nothing moved.
   const gesture = Gesture.Exclusive(Gesture.Simultaneous(pan, pinch, rotate), tap);
 
@@ -153,9 +146,7 @@ function DraggableOverlay({
       {/* Generous padding = a bigger multi-touch target so pinch-to-resize and
           rotate register on small emoji/text. No visible background or border —
           the element sits clean on the photo like Instagram/Snapchat. */}
-      <Animated.View style={[{ position: "absolute", top: 0, left: 0, padding: 16 }, style]}>
-        {children}
-      </Animated.View>
+      <Animated.View style={[{ position: "absolute", top: 0, left: 0, padding: 16 }, style]}>{children}</Animated.View>
     </GestureDetector>
   );
 }
@@ -370,7 +361,12 @@ export function PhotoEditor({
         for (const sPts of segs) {
           out.push({
             id: uid(),
-            d: `M ${sPts[0][0]} ${sPts[0][1]}` + sPts.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join(""),
+            d:
+              `M ${sPts[0][0]} ${sPts[0][1]}` +
+              sPts
+                .slice(1)
+                .map((p) => ` L ${p[0]} ${p[1]}`)
+                .join(""),
             color: stroke.color,
             width: stroke.width
           });
@@ -436,7 +432,10 @@ export function PhotoEditor({
       return;
     }
     actionsRef.current.push("text");
-    setTexts((prev) => [...prev, { id: uid(), text, color: penColor, font: textFont, x: width / 2 - 60, y: height / 2 - 20 }]);
+    setTexts((prev) => [
+      ...prev,
+      { id: uid(), text, color: penColor, font: textFont, x: width / 2 - 60, y: height / 2 - 20 }
+    ]);
     setTool("none");
   };
 
@@ -538,8 +537,7 @@ export function PhotoEditor({
       if (result === "saved") {
         trackAnalyticsEvent("photo_saved", { mode: "story", dual: Boolean(insetUri) });
         showToast("Saved to camera roll");
-      }
-      else if (result === "denied") showToast("Allow photo access in Settings to save");
+      } else if (result === "denied") showToast("Allow photo access in Settings to save");
       else showToast("Saving photos isn't available on this device");
     } catch {
       showToast("Couldn't save photo");
@@ -554,7 +552,13 @@ export function PhotoEditor({
     setSaving(false);
     // Hand the raw overlay text back so it can be scanned for slurs server-side
     // (it's baked into the image otherwise, unreadable to text moderation).
-    onDone(out, texts.map((t) => t.text).join(" ").trim());
+    onDone(
+      out,
+      texts
+        .map((t) => t.text)
+        .join(" ")
+        .trim()
+    );
   };
 
   // One definition, rendered either inside the captured frame (stories, where
@@ -591,7 +595,15 @@ export function PhotoEditor({
 
         <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
           {strokes.map((s) => (
-            <SvgPath key={s.id} d={s.d} stroke={s.color} strokeWidth={s.width} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <SvgPath
+              key={s.id}
+              d={s.d}
+              stroke={s.color}
+              strokeWidth={s.width}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
           ))}
         </Svg>
 
@@ -671,14 +683,35 @@ export function PhotoEditor({
       ) : null}
 
       {/* Top bar: cancel / done */}
-      <View style={{ position: "absolute", top: insets.top + 8, left: 14, right: 14, flexDirection: "row", justifyContent: "space-between" }}>
+      <View
+        style={{
+          position: "absolute",
+          top: insets.top + 8,
+          left: 14,
+          right: 14,
+          flexDirection: "row",
+          justifyContent: "space-between"
+        }}
+      >
         <RoundBtn onPress={onCancel} accessibilityLabel="Cancel">
           <X size={22} color={colors.white} strokeWidth={2.2} />
         </RoundBtn>
         <Pressable onPress={() => void done()} disabled={saving} accessibilityLabel="Done">
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 40, paddingHorizontal: 18, borderRadius: 20, backgroundColor: colors.white }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              height: 40,
+              paddingHorizontal: 18,
+              borderRadius: 20,
+              backgroundColor: colors.white
+            }}
+          >
             <Check size={17} color={colors.black} strokeWidth={2.6} />
-            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>{saving ? "Saving…" : "Done"}</Text>
+            <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>
+              {saving ? "Saving…" : "Done"}
+            </Text>
           </View>
         </Pressable>
       </View>
@@ -727,20 +760,49 @@ export function PhotoEditor({
                 }}
                 accessibilityLabel={`Color ${c}`}
               >
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c, borderWidth: !erasing && !showWheel && penColor === c ? 3 : 1, borderColor: !erasing && !showWheel && penColor === c ? colors.white : "rgba(255,255,255,0.5)" }} />
+                <View
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: c,
+                    borderWidth: !erasing && !showWheel && penColor === c ? 3 : 1,
+                    borderColor: !erasing && !showWheel && penColor === c ? colors.white : "rgba(255,255,255,0.5)"
+                  }}
+                />
               </Pressable>
             ))}
             {/* 8th: the RGB wheel — opens the hue bar at the bottom. */}
-            <Pressable onPress={() => { setShowWheel((v) => !v); setErasing(false); }} accessibilityLabel="Color wheel" accessibilityState={{ selected: showWheel }}>
+            <Pressable
+              onPress={() => {
+                setShowWheel((v) => !v);
+                setErasing(false);
+              }}
+              accessibilityLabel="Color wheel"
+              accessibilityState={{ selected: showWheel }}
+            >
               <LinearGradient
                 colors={["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={{ width: 26, height: 26, borderRadius: 13, borderWidth: showWheel ? 3 : 1, borderColor: showWheel ? colors.white : "rgba(255,255,255,0.5)" }}
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  borderWidth: showWheel ? 3 : 1,
+                  borderColor: showWheel ? colors.white : "rgba(255,255,255,0.5)"
+                }}
               />
             </Pressable>
             {/* Eraser — carves strokes where you drag. */}
-            <Pressable onPress={() => { setErasing((v) => !v); setShowWheel(false); }} accessibilityLabel="Eraser" accessibilityState={{ selected: erasing }}>
+            <Pressable
+              onPress={() => {
+                setErasing((v) => !v);
+                setShowWheel(false);
+              }}
+              accessibilityLabel="Eraser"
+              accessibilityState={{ selected: erasing }}
+            >
               <View
                 style={{
                   width: 26,
@@ -759,7 +821,11 @@ export function PhotoEditor({
           </>
         ) : (
           <>
-            <RoundBtn active={tool === "crop"} onPress={() => (tool === "crop" ? cancelCrop() : enterCrop())} accessibilityLabel="Crop">
+            <RoundBtn
+              active={tool === "crop"}
+              onPress={() => (tool === "crop" ? cancelCrop() : enterCrop())}
+              accessibilityLabel="Crop"
+            >
               <Crop size={20} color={colors.white} strokeWidth={2.2} />
             </RoundBtn>
             <RoundBtn onPress={undo} accessibilityLabel="Undo">
@@ -805,8 +871,20 @@ export function PhotoEditor({
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
             {PEN_WIDTHS.map((w) => (
               <Pressable key={w} onPress={() => setPenWidth(w)} accessibilityLabel={`Width ${w}`}>
-                <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: penWidth === w ? 2 : 1, borderColor: penWidth === w ? colors.white : "rgba(255,255,255,0.4)" }}>
-                  <View style={{ width: w + 2, height: w + 2, borderRadius: (w + 2) / 2, backgroundColor: colors.white }} />
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: penWidth === w ? 2 : 1,
+                    borderColor: penWidth === w ? colors.white : "rgba(255,255,255,0.4)"
+                  }}
+                >
+                  <View
+                    style={{ width: w + 2, height: w + 2, borderRadius: (w + 2) / 2, backgroundColor: colors.white }}
+                  />
                 </View>
               </Pressable>
             ))}
@@ -824,14 +902,30 @@ export function PhotoEditor({
           style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)" }]}
         >
           <View style={{ position: "absolute", top: insets.top + 10, right: 14 }}>
-            <View style={{ height: 40, paddingHorizontal: 20, borderRadius: 20, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+                height: 40,
+                paddingHorizontal: 20,
+                borderRadius: 20,
+                backgroundColor: colors.white,
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Done</Text>
             </View>
           </View>
           {/* Input centers in the VISIBLE area (screen minus keyboard) —
               middle of the screen per partner ask, never hidden under keys. */}
           <View
-            style={{ position: "absolute", top: insets.top + 60, left: 24, right: 24, bottom: keyboardHeight, justifyContent: "center" }}
+            style={{
+              position: "absolute",
+              top: insets.top + 60,
+              left: 24,
+              right: 24,
+              bottom: keyboardHeight,
+              justifyContent: "center"
+            }}
             pointerEvents="box-none"
           >
             <TextInput
@@ -853,9 +947,29 @@ export function PhotoEditor({
               {TEXT_FONTS.map((f) => {
                 const on = textFont === f.family;
                 return (
-                  <Pressable key={f.family} onPress={() => setTextFont(f.family)} accessibilityLabel={`Font ${f.label}`}>
-                    <View style={{ width: 72, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 999, backgroundColor: on ? colors.white : "rgba(0,0,0,0.4)", borderWidth: 1, borderColor: on ? colors.white : "rgba(255,255,255,0.35)" }}>
-                      <Text numberOfLines={1} style={{ fontFamily: f.family, fontSize: 13, color: on ? colors.black : colors.white }}>{f.label}</Text>
+                  <Pressable
+                    key={f.family}
+                    onPress={() => setTextFont(f.family)}
+                    accessibilityLabel={`Font ${f.label}`}
+                  >
+                    <View
+                      style={{
+                        width: 72,
+                        height: 34,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 999,
+                        backgroundColor: on ? colors.white : "rgba(0,0,0,0.4)",
+                        borderWidth: 1,
+                        borderColor: on ? colors.white : "rgba(255,255,255,0.35)"
+                      }}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontFamily: f.family, fontSize: 13, color: on ? colors.black : colors.white }}
+                      >
+                        {f.label}
+                      </Text>
                     </View>
                   </Pressable>
                 );
@@ -864,11 +978,29 @@ export function PhotoEditor({
             <View style={{ marginTop: 12, flexDirection: "row", justifyContent: "center", gap: 10 }}>
               {PEN_COLORS.map((c) => (
                 <Pressable key={c} onPress={() => setPenColor(c)} accessibilityLabel={`Color ${c}`}>
-                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c, borderWidth: penColor === c ? 3 : 1, borderColor: penColor === c ? colors.white : "rgba(255,255,255,0.5)" }} />
+                  <View
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: c,
+                      borderWidth: penColor === c ? 3 : 1,
+                      borderColor: penColor === c ? colors.white : "rgba(255,255,255,0.5)"
+                    }}
+                  />
                 </Pressable>
               ))}
             </View>
-            <Text style={{ marginTop: 14, textAlign: "center", fontFamily: "GeistMono_400Regular", fontSize: 10, letterSpacing: 1, color: "rgba(255,255,255,0.6)" }}>
+            <Text
+              style={{
+                marginTop: 14,
+                textAlign: "center",
+                fontFamily: "GeistMono_400Regular",
+                fontSize: 10,
+                letterSpacing: 1,
+                color: "rgba(255,255,255,0.6)"
+              }}
+            >
               TAP ANYWHERE TO FINISH
             </Text>
           </View>
@@ -877,7 +1009,10 @@ export function PhotoEditor({
 
       {/* Hint */}
       {selected && Platform.OS !== "web" ? (
-        <View pointerEvents="none" style={{ position: "absolute", top: insets.top + 60, left: 0, right: 0, alignItems: "center" }}>
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", top: insets.top + 60, left: 0, right: 0, alignItems: "center" }}
+        >
           <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9.5, color: "rgba(255,255,255,0.7)" }}>
             DRAG · PINCH · TWIST · TAP TEXT TO EDIT · DRAG TO TRASH TO DELETE
           </Text>
@@ -887,7 +1022,10 @@ export function PhotoEditor({
       {/* Snapchat-style trash: appears only while dragging an element, grows
           when the element hovers it, and dropping there deletes. */}
       {dragging ? (
-        <View pointerEvents="none" style={{ position: "absolute", bottom: insets.bottom + 74, left: 0, right: 0, alignItems: "center" }}>
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", bottom: insets.bottom + 74, left: 0, right: 0, alignItems: "center" }}
+        >
           <Animated.View
             style={[
               {
@@ -916,7 +1054,10 @@ export function PhotoEditor({
             <View style={StyleSheet.absoluteFill} />
           </GestureDetector>
           {/* Frame guides */}
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }]} />
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }]}
+          />
           <View
             style={{
               position: "absolute",
@@ -930,17 +1071,44 @@ export function PhotoEditor({
             }}
           >
             <Pressable onPress={cancelCrop} accessibilityLabel="Cancel crop" hitSlop={10}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: "rgba(0,0,0,0.5)",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
                 <X size={22} color={colors.white} strokeWidth={2.2} />
               </View>
             </Pressable>
             <Pressable onPress={rotate90} accessibilityLabel="Rotate 90 degrees" hitSlop={10}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: "rgba(0,0,0,0.5)",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
                 <RotateCw size={22} color={colors.white} strokeWidth={2.2} />
               </View>
             </Pressable>
             <Pressable onPress={applyCrop} accessibilityLabel="Apply crop" hitSlop={10}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: colors.white,
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
                 <Check size={22} color={colors.black} strokeWidth={2.6} />
               </View>
             </Pressable>

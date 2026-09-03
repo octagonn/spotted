@@ -12,6 +12,7 @@ import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useKeyboardHeight } from "@/hooks/useKeyboardVisible";
+import { usePhotoAspect } from "@/lib/mediaAspect";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
 
@@ -43,6 +44,9 @@ export function PhotoTagOverlay({
   // exact — the same pattern the story reply bar uses.
   const keyboardHeight = useKeyboardHeight();
   const [frame, setFrame] = useState<LayoutRectangle | null>(null);
+  // Match the feed's frame for THIS photo (its own aspect ratio) so the
+  // normalized tag coords land on the same spot the feed shows.
+  const frameRatio = usePhotoAspect(uri);
   const [tags, setTags] = useState<PhotoTag[]>(initial);
   const [pending, setPending] = useState<{ x: number; y: number } | null>(null);
   const [query, setQuery] = useState("");
@@ -71,13 +75,15 @@ export function PhotoTagOverlay({
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <View
           onLayout={(e) => setFrame(e.nativeEvent.layout)}
-          // Same ratio as PostMedia's feed frame (and the capture crop) so the
-          // normalized tag coords land on the same spot the feed shows.
-          style={{ width: "100%", aspectRatio: 3 / 3.6, overflow: "hidden" }}
+          style={{ width: "100%", aspectRatio: frameRatio, overflow: "hidden" }}
         >
           <GestureDetector gesture={tapPhoto}>
             <View style={{ flex: 1 }}>
-              <Image source={{ uri }} contentFit="cover" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+              <Image
+                source={{ uri }}
+                contentFit="cover"
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+              />
               {frame
                 ? tags.map((t) => (
                     <DraggablePill
@@ -85,7 +91,9 @@ export function PhotoTagOverlay({
                       tag={t}
                       frameW={frame.width}
                       frameH={frame.height}
-                      onMove={(x, y) => setTags((prev) => prev.map((p) => (p.userId === t.userId ? { ...p, x, y } : p)))}
+                      onMove={(x, y) =>
+                        setTags((prev) => prev.map((p) => (p.userId === t.userId ? { ...p, x, y } : p)))
+                      }
                       onRemove={() => setTags((prev) => prev.filter((p) => p.userId !== t.userId))}
                     />
                   ))
@@ -94,21 +102,58 @@ export function PhotoTagOverlay({
           </GestureDetector>
         </View>
         {tags.length === 0 && !pending ? (
-          <Text style={{ position: "absolute", fontFamily: "GeistMono_400Regular", fontSize: 10.5, letterSpacing: 1, color: "rgba(255,255,255,0.7)" }}>
+          <Text
+            style={{
+              position: "absolute",
+              fontFamily: "GeistMono_400Regular",
+              fontSize: 10.5,
+              letterSpacing: 1,
+              color: "rgba(255,255,255,0.7)"
+            }}
+          >
             TAP THE PHOTO TO TAG
           </Text>
         ) : null}
       </View>
 
       {/* Top bar: close + done */}
-      <View style={{ position: "absolute", top: 50, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" }}>
+      <View
+        style={{
+          position: "absolute",
+          top: 50,
+          left: 16,
+          right: 16,
+          flexDirection: "row",
+          justifyContent: "space-between"
+        }}
+      >
         <Pressable onPress={onClose} accessibilityLabel="Cancel tagging" hitSlop={10}>
-          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
             <X size={20} color={colors.white} strokeWidth={2.2} />
           </View>
         </Pressable>
         <Pressable onPress={() => onDone(tags)} accessibilityLabel="Done tagging" hitSlop={10}>
-          <View style={{ height: 44, paddingHorizontal: 20, borderRadius: 22, backgroundColor: colors.white, flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center" }}>
+          <View
+            style={{
+              height: 44,
+              paddingHorizontal: 20,
+              borderRadius: 22,
+              backgroundColor: colors.white,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              justifyContent: "center"
+            }}
+          >
             <Check size={17} color={colors.black} strokeWidth={2.6} />
             <Text style={{ fontFamily: "Geist_700Bold", fontSize: 14, color: colors.black }}>Done</Text>
           </View>
@@ -117,7 +162,10 @@ export function PhotoTagOverlay({
 
       {/* Friend picker — appears after tapping a point on the photo. */}
       {pending ? (
-        <Pressable onPress={() => setPending(null)} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)" }}>
+        <Pressable
+          onPress={() => setPending(null)}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)" }}
+        >
           <Pressable
             onPress={(e) => e.stopPropagation()}
             style={{
@@ -138,14 +186,27 @@ export function PhotoTagOverlay({
               paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 8
             }}
           >
-            <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.border.strong, marginBottom: 8 }} />
+            <View
+              style={{
+                alignSelf: "center",
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: tokens.border.strong,
+                marginBottom: 8
+              }}
+            />
             <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white, paddingBottom: 8 }}>Tag a friend</Text>
+              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 16, color: colors.white, paddingBottom: 8 }}>
+                Tag a friend
+              </Text>
               <SearchBar value={query} onChangeText={setQuery} placeholder="Search friends" />
             </View>
             <View style={{ maxHeight: keyboardHeight > 0 ? 220 : 320 }}>
               {rows.length === 0 ? (
-                <Text style={{ paddingTop: 24, paddingBottom: 16, textAlign: "center", fontSize: 12.5, color: colors.fog }}>
+                <Text
+                  style={{ paddingTop: 24, paddingBottom: 16, textAlign: "center", fontSize: 12.5, color: colors.fog }}
+                >
                   {q ? "No friends match." : "No more friends to tag."}
                 </Text>
               ) : (
@@ -209,7 +270,19 @@ function DraggablePill({
       {/* Anchored so the pill's left-center sits at the tapped point (-14 lifts
           it onto the point vertically). */}
       <Animated.View style={[{ position: "absolute", top: -14, left: 0 }, style]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.72)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            paddingVertical: 5,
+            paddingHorizontal: 10,
+            borderRadius: 999,
+            backgroundColor: "rgba(0,0,0,0.72)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.3)"
+          }}
+        >
           <Text style={{ fontFamily: "Geist_700Bold", fontSize: 12.5, color: colors.white }}>@{tag.username}</Text>
           <X size={12} color="rgba(255,255,255,0.75)" strokeWidth={2.4} />
         </View>

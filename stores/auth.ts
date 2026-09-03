@@ -6,7 +6,7 @@ import { flushAnalytics, trackAnalyticsEvent } from "@/lib/analytics";
 import { userNeedsPasswordSetup } from "@/lib/authRouting";
 import { unregisterCurrentPushToken } from "@/lib/notifications";
 import { wipeQueryCaches } from "@/lib/queryClient";
-import { clearSignedUrlCache, isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { clearSignedUrlCache, isDemoMode, isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export type AuthStatus =
   | "loading"
@@ -16,11 +16,11 @@ export type AuthStatus =
   | "needs-onboarding"
   | "ready";
 
-export type OnboardingStage = "permissions" | "home-gym";
+export type OnboardingStage = "permissions" | "home-gym" | "friends";
 
 // Legacy "schedule" is intentionally absent: profiles left mid-onboarding at
 // that (now-removed) step fall through to "ready" and land on the feed.
-const ONBOARDING_STAGES: OnboardingStage[] = ["permissions", "home-gym"];
+const ONBOARDING_STAGES: OnboardingStage[] = ["permissions", "home-gym", "friends"];
 
 type AuthState = {
   status: AuthStatus;
@@ -100,12 +100,12 @@ async function resolveStatusForSession(session: Session | null): Promise<Resolve
   if (userNeedsPasswordSetup(session.user)) {
     return { status: "needs-password", userId, profileId: null, onboardingStage: null, needsBirthdate: false };
   }
-  if (!isSupabaseConfigured) {
+  if (isDemoMode) {
     return { status: "ready", userId, profileId: userId, onboardingStage: null, needsBirthdate: false };
   }
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, onboarding_stage")
+    .select("id, onboarding_stage, home_gym_id")
     .eq("id", userId)
     .maybeSingle();
   if (error || !data) {
@@ -121,6 +121,18 @@ async function resolveStatusForSession(session: Session | null): Promise<Resolve
       needsBirthdate: false
     };
   }
+  // Re-gate accounts that finished onboarding back when home gym was skippable
+  // but never set one: without it the core check-in loop can't fire at all.
+  // They resume at the gym picker and flow through the friends step from there.
+  if (!data.home_gym_id) {
+    return {
+      status: "needs-onboarding",
+      userId,
+      profileId: data.id,
+      onboardingStage: "home-gym",
+      needsBirthdate: false
+    };
+  }
   return { status: "ready", userId, profileId: data.id, onboardingStage: null, needsBirthdate: false };
 }
 
@@ -132,8 +144,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   onboardingStage: null,
   needsBirthdate: false,
   hydrate: async () => {
-    if (!isSupabaseConfigured) {
+    // Offline demo mode (mock "Octavio" profile) is a DEV-ONLY convenience;
+    // isDemoMode is hard-false in release. A release bundle without backend
+    // config is a packaging failure — an EAS Update shipped exactly that on
+    // 2026-09-02 and every user who took it opened the app "signed in" as the
+    // mock profile. In release that bundle is signed-out (and app/_layout.tsx
+    // shows <ConfigBlocker> instead of the app), so nothing can be read,
+    // written or impersonated.
+    if (isDemoMode) {
       set({ status: "ready", session: null, userId: "mock-user", profileId: "mock-user" });
+      return;
+    }
+    if (!isSupabaseConfigured) {
+      set({ status: "signed-out", session: null, userId: null, profileId: null });
       return;
     }
     const { data } = await supabase.auth.getSession();

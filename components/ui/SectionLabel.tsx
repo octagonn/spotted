@@ -6,12 +6,20 @@ import { colors } from "@/theme/colors";
 type SectionLabelProps = {
   children: ReactNode;
   style?: ViewStyle;
+  /** Trailing action (e.g. "New crew", "Have a code?") on the label's baseline. */
+  right?: ReactNode;
 };
 
 /** Section label per spec §2.6: mono 10.5, ls 0.12em, uppercase, fog, padding 18 18 10. */
-export function SectionLabel({ children, style }: SectionLabelProps) {
+export function SectionLabel({ children, style, right }: SectionLabelProps) {
   return (
-    <View style={[{ paddingTop: 18, paddingHorizontal: 18, paddingBottom: 10 }, style]}>
+    <View
+      style={[
+        { paddingTop: 18, paddingHorizontal: 18, paddingBottom: 10 },
+        right ? { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" } : null,
+        style
+      ]}
+    >
       <Text
         accessibilityRole="header"
         style={{
@@ -24,6 +32,7 @@ export function SectionLabel({ children, style }: SectionLabelProps) {
       >
         {children}
       </Text>
+      {right}
     </View>
   );
 }

@@ -2,16 +2,44 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const black = `${String.fromCharCode(35)}000000`;
 
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+// HARD GATE: never ship an artifact without the backend config. Without it the
+// app silently falls into the offline demo mode (mock "Octavio" profile, no
+// real auth) — which is exactly what an EAS Update did on 2026-09-02, because
+// `eas update` reads EAS-hosted environment variables (ignoring .env) and the
+// production environment had none. Builds AND updates evaluate this file, so
+// both are covered. Only an explicit opt-in allows an unconfigured config, for
+// running the demo mode locally.
+const producingArtifact = Boolean(process.env.EAS_BUILD) || Boolean(process.env.EAS_UPDATE_PUBLISH) || process.env.NODE_ENV === "production";
+if ((!supabaseUrl || !supabaseAnonKey) && process.env.SPOTTED_ALLOW_UNCONFIGURED !== "1") {
+  const hint = producingArtifact
+    ? "Refusing to build/publish. For `eas update` the values must exist in the EAS environment (`eas env:list --environment production`) and you must pass `--environment production`."
+    : "Add them to .env (see .env.example), or set SPOTTED_ALLOW_UNCONFIGURED=1 to run the offline demo mode on purpose.";
+  throw new Error(`[app.config] EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY are not set. ${hint}`);
+}
+
 export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   ...baseConfig,
   name: "Spotted",
   slug: "spotted",
   scheme: "spotted",
-  version: "1.2.0",
+  version: "1.2.1",
   orientation: "portrait",
   userInterfaceStyle: "dark",
   newArchEnabled: true,
   icon: "./assets/images/icon.png",
+  // OTA updates via EAS Update: JS/asset-only changes reach existing installs
+  // without an App Store build or review. Native changes still need a build —
+  // the appVersion runtime policy scopes each update to binaries of the same
+  // store version, so an OTA can never land on a binary missing its native code.
+  updates: {
+    url: "https://u.expo.dev/c64d03b4-83c0-48c9-863b-f225fb8de92d"
+  },
+  runtimeVersion: {
+    policy: "appVersion"
+  },
   splash: {
     image: "./assets/images/splash-icon.png",
     resizeMode: "contain",
@@ -36,8 +64,7 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       NSLocationAlwaysUsageDescription:
         "Spotted uses location to verify gym check-ins and keep your presence accurate.",
       NSLocationWhenInUseUsageDescription: "Spotted uses location to verify gym check-ins and find nearby gyms.",
-      NSPhotoLibraryUsageDescription:
-        "Spotted accesses a photo only when you choose it for a post or your profile.",
+      NSPhotoLibraryUsageDescription: "Spotted accesses a photo only when you choose it for a post or your profile.",
       NSPhotoLibraryAddUsageDescription:
         "Spotted adds a captured or edited photo to your library only when you tap Save."
     }
@@ -48,13 +75,7 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       backgroundColor: black,
       foregroundImage: "./assets/images/android-icon-foreground.png"
     },
-    permissions: [
-      "ACCESS_FINE_LOCATION",
-      "ACCESS_COARSE_LOCATION",
-      "CAMERA",
-      "RECORD_AUDIO",
-      "POST_NOTIFICATIONS"
-    ]
+    permissions: ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "CAMERA", "RECORD_AUDIO", "POST_NOTIFICATIONS"]
   },
   web: {
     output: "single",
@@ -108,14 +129,6 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       }
     ],
     [
-      "react-native-vision-camera",
-      {
-        cameraPermissionText: "Spotted uses the camera to capture your posts.",
-        enableMicrophonePermission: true,
-        microphonePermissionText: "Spotted uses the microphone for video posts."
-      }
-    ],
-    [
       "expo-splash-screen",
       {
         image: "./assets/images/splash-icon.png",
@@ -144,7 +157,7 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
     eas: {
       projectId: process.env.EAS_PROJECT_ID ?? "c64d03b4-83c0-48c9-863b-f225fb8de92d"
     },
-    supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? "",
-    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""
+    supabaseUrl,
+    supabaseAnonKey
   }
 });

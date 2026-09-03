@@ -1,21 +1,23 @@
-import { Image } from "expo-image";
 import { useIsFocused, useScrollToTop } from "@react-navigation/native";
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type ListRenderItem } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { Bell, WifiOff } from "lucide-react-native";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { RefreshControl, Text as RNText, View } from "react-native";
+import { WifiOff } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FeedHeader } from "@/components/post/FeedHeader";
 import { LockOverlay } from "@/components/post/LockOverlay";
 import { PendingPostsStrip } from "@/components/post/PendingPostsStrip";
 import { StoriesRail } from "@/components/post/StoriesRail";
 import { PostCard } from "@/components/post/PostCard";
 import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
-import { Pressable } from "@/components/ui/Pressable";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { EMPTY_ART } from "@/lib/emptyStateArt";
 import { Segmented } from "@/components/ui/Segmented";
 import { PostCardSkeleton } from "@/components/ui/Skeleton";
 import { useSheet } from "@/components/ui/Sheet";
+import { Text } from "@/components/ui/Text";
 import { useActivityUnreadCount } from "@/hooks/queries/useNotifications";
 import { useFeed, useRecordPostViews } from "@/hooks/queries/useFeed";
 import { useFriends } from "@/hooks/queries/useFriends";
@@ -24,9 +26,9 @@ import { usePostedState } from "@/hooks/queries/usePostedState";
 import { useAuthStore } from "@/stores/auth";
 import { useTabActions } from "@/stores/tabActions";
 import { colors } from "@/theme/colors";
+import { TAB_BAR_HEIGHT } from "@/theme/layout";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 import { trackAnalyticsEvent } from "@/lib/analytics";
-
-const NAV_H = 84;
 
 /** Deterministic shuffle (seeded) so a refresh reorders the feed but stays
  * stable between renders of the same refresh. */
@@ -70,7 +72,10 @@ function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
     insetUri: post.inset_url ?? undefined,
     underReview: post.moderation_status === "flagged",
     mediaUris: !isVideo && (post.media_urls?.length ?? 0) > 1 ? (post.media_urls as string[]) : undefined,
-    video: isVideo && post.media_url ? { uri: post.media_url, trimStart, trimEnd, posterUrl: post.thumbnail_url } : undefined,
+    video:
+      isVideo && post.media_url
+        ? { uri: post.media_url, trimStart, trimEnd, posterUrl: post.thumbnail_url }
+        : undefined,
     lift: isVideo ? { lift: post.lift_name ?? "Lift", weight: post.lift_weight ?? "" } : undefined,
     duration: clipSeconds ? `0:${String(clipSeconds).padStart(2, "0")}` : undefined,
     caption: post.caption ?? undefined,
@@ -83,9 +88,7 @@ function toMockShape(post: import("@/types/domain").FeedPost): FeedMockPost {
           clipStart: post.music_clip_start
         }
       : undefined,
-    taggedFriends: post.tag_usernames?.length
-      ? post.tag_usernames.map((u) => ({ handle: u, name: u }))
-      : undefined,
+    taggedFriends: post.tag_usernames?.length ? post.tag_usernames.map((u) => ({ handle: u, name: u })) : undefined,
     photoTags: post.photo_tags?.length ? post.photo_tags : undefined,
     answeredCall: post.answered_call ?? undefined,
     workouts: post.attached_workouts?.length
@@ -190,9 +193,12 @@ export default function HomeScreen() {
     void feed.refetch().finally(() => setPulling(false));
   };
 
-  const openReactionCapture = (postId: string) => {
-    sheet.open(<ReactionCaptureSheet postId={postId} onClose={sheet.close} />);
-  };
+  const openReactionCapture = useCallback(
+    (postId: string) => {
+      sheet.open(<ReactionCaptureSheet postId={postId} onClose={sheet.close} />);
+    },
+    [sheet]
+  );
 
   // Which post's music is audible: the first mostly-visible post with a
   // playable track — and only while this screen is focused, so opening a
@@ -219,6 +225,29 @@ export default function HomeScreen() {
     }
   ).current;
 
+  // Stable renderItem: PostCard is memoized, so only the card whose `audible`
+  // flips re-renders when the active post changes — not every visible card.
+  const renderItem = useCallback<ListRenderItem<FeedMockPost>>(
+    ({ item }) => (
+      <PostCard
+        post={item}
+        locked={locked}
+        audible={isFocused && item.id === activePostId}
+        onReact={openReactionCapture}
+      />
+    ),
+    [locked, isFocused, activePostId, openReactionCapture]
+  );
+
+  // Recycle like with like: a video card's expo-video player must never be
+  // handed a photo post (full subtree remount on every recycle otherwise).
+  const getItemType = useCallback((item: FeedMockPost) => {
+    if (item.video) return "video";
+    if (item.workouts?.length) return "workouts";
+    if ((item.mediaUris?.length ?? 0) > 1) return "carousel";
+    return "photo";
+  }, []);
+
   return (
     // Top inset lives on the container (not the scroll content) so the
     // pull-to-refresh spinner appears below the notch where it's visible.
@@ -232,118 +261,42 @@ export default function HomeScreen() {
         // the last post I saw and I have to scroll up"). Anyone near the top
         // now follows new posts to the top; mid-scroll readers keep their spot.
         maintainVisibleContentPosition={{ autoscrollToTopThreshold: 300 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={pulling}
-            onRefresh={refresh}
-            tintColor={colors.white}
-          />
-        }
-        contentContainerStyle={{ paddingBottom: NAV_H + 12 }}
+        refreshControl={<RefreshControl refreshing={pulling} onRefresh={refresh} tintColor={colors.white} />}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + 12 }}
         keyExtractor={(item: FeedMockPost) => item.id}
         ListHeaderComponent={
           <View>
-            {/* App head — brand (§2.4) */}
-            {/* 16px gutter matches the post cards (header/caption padding) so
-                the brand, stories rail, segmented, and posts share one edge.
-                Layout: mark left, wordmark centered (left/right zones are the
-                same width so the title is truly centered), bell right. */}
-            <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 8, paddingHorizontal: 16, paddingBottom: 4 }}>
-              <View style={{ width: 44, alignItems: "flex-start", justifyContent: "center" }}>
-                <Image
-                  source={require("../../assets/images/welcome-mark.png")}
-                  accessible={false}
-                  contentFit="contain"
-                  style={{ width: 42, height: 28 }}
-                />
-              </View>
-              <RNText
-                maxFontSizeMultiplier={1.4}
-                style={{
-                  flex: 1,
-                  textAlign: "center",
-                  fontFamily: "Boldonse_400Regular",
-                  fontSize: 19,
-                  lineHeight: 19 * 1.4 + 8,
-                  letterSpacing: 19 * 0.01,
-                  color: colors.white,
-                  includeFontPadding: false
-                }}
-              >
-                SPOTTED
-              </RNText>
-              <Pressable
-                onPress={() => router.push("/inbox")}
-                accessibilityLabel={
-                  unreadCount > 0
-                    ? `Notifications, ${unreadCount} unread`
-                    : "Notifications"
-                }
-                hitSlop={11}
-                style={{ width: 44, height: 44, alignItems: "flex-end", justifyContent: "center" }}
-              >
-                <View>
-                  <Bell size={26} color={colors.white} strokeWidth={2} />
-                  {unreadCount > 0 ? (
-                    // iOS-style red count badge (9+ cap).
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: -6,
-                        right: -8,
-                        minWidth: 17,
-                        height: 17,
-                        borderRadius: 9,
-                        paddingHorizontal: 4,
-                        backgroundColor: "#FF3B30",
-                        borderWidth: 1.5,
-                        borderColor: colors.black,
-                        alignItems: "center",
-                        justifyContent: "center"
-                      }}
-                    >
-                      <RNText
-                        style={{
-                          fontFamily: "Geist_700Bold",
-                          fontSize: 10,
-                          lineHeight: 12,
-                          color: "#FFFFFF",
-                          includeFontPadding: false
-                        }}
-                      >
-                        {unreadCount > 9 ? "9+" : unreadCount}
-                      </RNText>
-                    </View>
-                  ) : null}
-                </View>
-              </Pressable>
-            </View>
+            <FeedHeader unreadCount={unreadCount} onOpenInbox={() => router.push("/inbox")} />
             {/* Offline: cached posts still render (persisted feed + disk-cached
                 media) — this pill says why nothing new is arriving. */}
             {offline ? (
-              <View style={{ alignItems: "center", paddingTop: 6 }}>
+              <View style={{ alignItems: "center", paddingTop: space[2] }}>
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 6,
-                    backgroundColor: colors.graphite,
-                    borderWidth: 1,
-                    borderColor: colors.iron,
-                    borderRadius: 999,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6
+                    gap: space[2],
+                    backgroundColor: tokens.bg.raised,
+                    borderRadius: radius.pill,
+                    paddingHorizontal: space[3],
+                    paddingVertical: space[2]
                   }}
                 >
-                  <WifiOff size={12} color={colors.fog} strokeWidth={2.2} />
-                  <RNText style={{ fontFamily: "Geist_500Medium", fontSize: 11.5, color: colors.fog }}>
+                  <WifiOff size={12} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
+                  <Text variant="label" className="text-fog">
                     You&apos;re offline — showing recent posts
-                  </RNText>
+                  </Text>
                 </View>
               </View>
             ) : null}
             {tab === "Friends" ? <StoriesRail /> : null}
-            <Segmented options={["Friends", "Public"]} value={tab} onChange={setTab} />
+            <Segmented
+              variant="quiet"
+              options={["Friends", "Public"]}
+              value={tab}
+              onChange={setTab}
+              style={{ marginTop: space[2], marginBottom: space[3] }}
+            />
             {/* Posts captured offline, waiting in the upload queue. */}
             <PendingPostsStrip />
           </View>
@@ -356,9 +309,8 @@ export default function HomeScreen() {
         }}
         onEndReachedThreshold={0.6}
         ListFooterComponent={feed.isFetchingNextPage ? <PostCardSkeleton /> : null}
-        renderItem={({ item }: { item: FeedMockPost }) => (
-          <PostCard post={item} locked={locked} audible={isFocused && item.id === activePostId} onReact={openReactionCapture} />
-        )}
+        renderItem={renderItem}
+        getItemType={getItemType}
         ListEmptyComponent={
           feed.isLoading ? (
             // Skeleton placeholders instead of a blank screen while loading.
@@ -367,15 +319,25 @@ export default function HomeScreen() {
               <PostCardSkeleton />
             </View>
           ) : (
-            <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
-              <RNText style={{ fontFamily: "Geist_400Regular", fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 18 }}>
-                {offline
-                  ? "You're offline. Posts will show up as soon as you reconnect."
+            <EmptyState
+              icon={
+                offline ? (
+                  <WifiOff size={icon.size.md} color={tokens.text.secondary} strokeWidth={icon.stroke.regular} />
+                ) : undefined
+              }
+              art={offline ? undefined : EMPTY_ART.camera}
+              title={
+                offline ? "You're offline" : tab === "Friends" ? "Nothing from your crew yet" : "No public posts yet"
+              }
+              body={
+                offline
+                  ? "Posts will show up as soon as you reconnect."
                   : tab === "Friends"
-                    ? "Nothing from your crew yet. Add friends or post today's SPOTTED."
-                    : "No public posts yet. Set your profile to Public and post to show up here."}
-              </RNText>
-            </View>
+                    ? "Add friends or post today's SPOTTED."
+                    : "Set your profile to Public and post to show up here."
+              }
+              center
+            />
           )
         }
       />

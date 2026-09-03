@@ -81,6 +81,13 @@ function escapeSql(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+/** Coordinates come from third-party JSON/HTML; only a finite number may be spliced into SQL unquoted. */
+function sqlNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error(`sqlNumber: not a finite number: ${String(value)}`);
+  return String(n);
+}
+
 /** Campus/fitness rec facility? Sport tags can vouch for ambiguous names. */
 function isRecFacility(name, tags) {
   if (EXCLUDE.test(name)) return false;
@@ -138,7 +145,7 @@ for (let f = 0; f * ROWS_PER_INSERT * INSERTS_PER_FILE < rows.length; f++) {
   for (let b = 0; b < slice.length; b += ROWS_PER_INSERT) {
     const batch = slice.slice(b, b + ROWS_PER_INSERT);
     const values = batch
-      .map((g) => `(${escapeSql(g.name)}, ${escapeSql(g.address)}, ${g.latitude}, ${g.longitude}, 'gym', 'osm', ${escapeSql(g.externalId)})`)
+      .map((g) => `(${escapeSql(g.name)}, ${escapeSql(g.address)}, ${sqlNumber(g.latitude)}, ${sqlNumber(g.longitude)}, 'gym', 'osm', ${escapeSql(g.externalId)})`)
       .join(",\n");
     statements.push(
       `insert into gyms (name, address, latitude, longitude, category, source, external_id)

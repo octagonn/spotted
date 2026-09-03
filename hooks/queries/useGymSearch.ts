@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { mockGyms } from "@/lib/mockData";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { isDemoMode, supabase } from "@/lib/supabase";
 
 export const GYM_PAGE_SIZE = 20;
 
@@ -55,7 +55,7 @@ export function useGymSearch(query: string, coords: GymSearchCoords | null, enab
     initialPageParam: 0,
     staleTime: 60_000,
     queryFn: async ({ pageParam }): Promise<GymSearchResult[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockSearch(query, coords, pageParam);
       }
       const { data, error } = await supabase.rpc("search_gyms", {

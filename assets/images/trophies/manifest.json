@@ -1,0 +1,74 @@
+{
+  "generated": "2026-08-30",
+  "generator": "Higgsfield MCP",
+  "model": "nano_banana_pro (served as nano_banana_2), 2K source, 1:1",
+  "unlim_used": false,
+  "note": "App-facing files are 512x512 RGBA (empty-center medallions, trimmed to alpha bbox +4% glow margin) so TrophyIconDisc composites the family Lucide glyph over the face. 2K source renders live in originals/ (gitignored; re-creatable from the job IDs below). unlock-rays.png is 1024px, opaque black by design, currently unused by code.",
+  "assets": [
+    {
+      "file": "medal-gold.png",
+      "tier": "gold",
+      "master_job_id": "2126dd26-1b66-43e0-958f-7afd5b099004",
+      "empty_center_job_id": "d7acfc4b-4687-4f89-b4bd-a5fcb6905960",
+      "bright_face_job_id": "e1302739-f2f6-4b80-a079-7afdefde6545",
+      "cutout_job_id": "61af4829-3363-4962-8195-d8a096983a34"
+    },
+    {
+      "file": "medal-bronze.png",
+      "tier": "bronze",
+      "master_job_id": "f18a14cc-ce8e-4cca-a3e7-78f95b31e2fc",
+      "empty_center_job_id": "dbcf9e4e-ed05-4cbd-834d-c612bc2a3eac",
+      "cutout_job_id": "828fc969-9563-4ceb-80c2-2f79ea41506c"
+    },
+    {
+      "file": "medal-silver.png",
+      "tier": "silver",
+      "master_job_id": "cb4fa5df-1f51-4d95-9586-9098f3dc6ff0",
+      "empty_center_job_id": "13d317fa-9733-40b9-8a7b-98376252cac3",
+      "cutout_job_id": "17dcb376-2df0-48dd-a82b-d4fbdb131f78"
+    },
+    {
+      "file": "medal-diamond.png",
+      "tier": "diamond",
+      "master_job_id": "78a149d1-a040-4da9-a56b-f6387bd9c575",
+      "empty_center_job_id": "d0324fd2-723c-4412-8d73-cd364aeda4ad",
+      "cutout_job_id": "83fe5066-4fc5-4aa8-a375-24a0b73229f6"
+    },
+    {
+      "file": "badge-standalone.png",
+      "tier": "standalone",
+      "master_job_id": "ce0dd878-9f0e-4c21-9d9f-774832ff5c58",
+      "empty_center_job_id": "66ffa2c0-1a95-49be-a4fb-f8f47f115f55",
+      "bright_face_job_id": "7159b74c-60e9-44be-a235-8644b9ac1404",
+      "cutout_job_id": "a8632d9e-e8fd-4fcb-8ba2-2b3bb2f42fe2"
+    },
+    {
+      "file": "medal-locked.png",
+      "tier": "locked",
+      "master_job_id": "e1302739-f2f6-4b80-a079-7afdefde6545",
+      "empty_center_job_id": "fcd518e0-cef6-46b6-9da1-182c79bfe8db",
+      "cutout_job_id": "1ed104bb-3be9-486c-a9a8-2072998f991f",
+      "note": "Dormant gunmetal variant shown on locked trophies."
+    },
+    {
+      "file": "unlock-rays.png",
+      "tier": "backdrop",
+      "master_job_id": "989165e7-b21d-400c-94da-23fe11e1c0b9",
+      "empty_center_job_id": null,
+      "cutout_job_id": null
+    }
+  ],
+  "history": [
+    { "phase": "style lock (2 gold candidates)", "credits": 4 },
+    { "phase": "tier set bronze/silver/diamond", "credits": 6 },
+    { "phase": "standalone badge", "credits": 2 },
+    { "phase": "cutouts x5 (emblem versions)", "credits": 5 },
+    { "phase": "unlock rays", "credits": 2 },
+    { "phase": "empty-center edits x5", "credits": 10 },
+    { "phase": "cutouts x5 (empty-center)", "credits": 5 },
+    { "phase": "bright gold face edits x2 + cutouts x2", "credits": 6 },
+    { "phase": "empty-state/streak/mark/hero pack (9 renders + 8 cutouts)", "credits": 26 },
+    { "phase": "locked medallion + cutout", "credits": 3 }
+  ],
+  "credits": { "start": 110, "spent": 69, "end": 41 }
+}

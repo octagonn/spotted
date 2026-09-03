@@ -107,19 +107,35 @@ const COLUMN: Record<string, string> = {
   timezone: "timezone"
 };
 
+// Users whose row this process has already created/timezone-synced. Later
+// refetches (focus, invalidation after a toggle) are plain reads — the upsert
+// on every fetch was a large share of the runaway writes on 2026-09-01.
+const tzSynced = new Set<string>();
+
 /** Notification preferences (creates the row with defaults on first read). */
 export function useNotificationPrefs() {
   const userId = useAuthStore((state) => state.userId);
   return useQuery({
     queryKey: ["notification-prefs", userId],
     enabled: isSupabaseConfigured && Boolean(userId),
+    staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<NotificationPrefs> => {
-      const tz = deviceTimezone();
-      // Ensure the row exists and its timezone stays current on every app open.
+      const uid = userId as string;
+      if (!tzSynced.has(uid)) {
+        // Ensure the row exists and its timezone is current once per app session.
+        const { data, error } = await supabase
+          .from("notification_preferences")
+          .upsert({ user_id: uid, timezone: deviceTimezone() }, { onConflict: "user_id", ignoreDuplicates: false })
+          .select("*")
+          .single();
+        if (error) throw error;
+        tzSynced.add(uid);
+        return rowToPrefs(data as Row);
+      }
       const { data, error } = await supabase
         .from("notification_preferences")
-        .upsert({ user_id: userId as string, timezone: tz }, { onConflict: "user_id", ignoreDuplicates: false })
         .select("*")
+        .eq("user_id", uid)
         .single();
       if (error) throw error;
       return rowToPrefs(data as Row);

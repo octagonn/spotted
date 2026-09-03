@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 
 import { logger } from "@/lib/logger";
 import { mockFeed, mockGyms, mockPermanentDrops, mockProfiles, mockRoutine, mockStreak } from "@/lib/mockData";
-import { isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
+import { isDemoMode, isSupabaseConfigured, signedPostUrl, supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import type { Gym, PermanentDrop, Post, Profile, RoutineItem, Streak } from "@/types/domain";
 
@@ -57,9 +57,9 @@ export function useMyProfile() {
   const profileId = useAuthStore((state) => state.profileId);
   return useQuery({
     queryKey: ["profile", "me", profileId],
-    enabled: !isSupabaseConfigured || Boolean(profileId),
+    enabled: isDemoMode || Boolean(profileId),
     queryFn: async (): Promise<ProfileWithGym | null> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return { ...mockProfiles[0], gym: mockGyms[0] };
       }
       if (!profileId) {
@@ -86,7 +86,7 @@ export function useProfileByUsername(username?: string) {
       if (!username) {
         return null;
       }
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         const profile = mockProfiles.find((item) => item.username === username);
         return profile ? { ...profile, gym: mockGyms[0] } : null;
       }
@@ -111,7 +111,7 @@ export function useProfileById(profileId?: string) {
       if (!profileId) {
         return null;
       }
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         const profile = mockProfiles.find((item) => item.id === profileId) ?? mockProfiles[1];
         return { ...profile, gym: mockGyms[0] };
       }
@@ -131,9 +131,9 @@ export function useProfileById(profileId?: string) {
 export function useRoutine(userId?: string | null) {
   return useQuery({
     queryKey: ["routine", userId],
-    enabled: !isSupabaseConfigured || Boolean(userId),
+    enabled: isDemoMode || Boolean(userId),
     queryFn: async (): Promise<RoutineItem[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockRoutine;
       }
       if (!userId) {
@@ -159,7 +159,7 @@ export function useUserStreak(userId?: string | null) {
       if (!userId) {
         return null;
       }
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockStreak;
       }
       const { data, error } = await supabase
@@ -195,7 +195,7 @@ export function useUserPosts(userId?: string | null) {
       if (!userId) {
         return [];
       }
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockFeed
           .filter((post) => post.user_id === userId)
           .map((post) => ({
@@ -250,9 +250,9 @@ export function useUserPosts(userId?: string | null) {
 export function useSavedDrops(userId?: string | null) {
   return useQuery({
     queryKey: ["saved-drops", userId],
-    enabled: !isSupabaseConfigured || Boolean(userId),
+    enabled: isDemoMode || Boolean(userId),
     queryFn: async (): Promise<PermanentDrop[]> => {
-      if (!isSupabaseConfigured) {
+      if (isDemoMode) {
         return mockPermanentDrops;
       }
       if (!userId) {
@@ -303,7 +303,7 @@ export function useFriendshipStatus(otherUserId?: string | null) {
   const userId = useAuthStore((state) => state.userId);
   return useQuery({
     queryKey: ["friendship-status", userId, otherUserId],
-    enabled: Boolean(otherUserId) && (!isSupabaseConfigured || Boolean(userId)),
+    enabled: Boolean(otherUserId) && (isDemoMode || Boolean(userId)),
     queryFn: async (): Promise<FriendshipStatus> => {
       if (!otherUserId) {
         return "none";

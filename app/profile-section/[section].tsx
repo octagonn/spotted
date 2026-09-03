@@ -1,17 +1,19 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Trophy } from "lucide-react-native";
 import { useMemo } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DailyCell } from "@/components/profile/cards";
 import { TrophyCase } from "@/components/trophies/TrophyCase";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { SkeletonGrid } from "@/components/ui/Skeleton";
 import { useMyProfile, useUserPosts } from "@/hooks/queries/useProfile";
 import { localDateKey } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { icon, space } from "@/theme/tokens";
 
 type ProfileSection = "trophies" | "videos" | "posts";
 
@@ -52,10 +54,7 @@ export default function ProfileSectionScreen() {
   // other users; own profile keeps videos/posts too.
   const otherUser = user && user !== profile.data?.id ? user : null;
 
-  const archive = useMemo(
-    () => buildArchive((myPosts.data ?? []).map((post) => post.created_at)),
-    [myPosts.data]
-  );
+  const archive = useMemo(() => buildArchive((myPosts.data ?? []).map((post) => post.created_at)), [myPosts.data]);
 
   const title = section === "posts" ? "Daily posts" : `${section[0].toUpperCase()}${section.slice(1)}`;
   const sub =
@@ -69,12 +68,12 @@ export default function ProfileSectionScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + space[6] + 4 }}>
         <PanelHeader title={title} sub={sub} />
         {section === "trophies" ? <TrophyCase userId={otherUser} /> : null}
         {section === "videos" ? (
           <EmptyState
-            icon={<Trophy size={22} color={colors.white} />}
+            icon={<Trophy size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />}
             title="Videos are coming soon"
             body="Record a video from the camera once video posting ships, and your proof reel collects here."
             paddingTop={48}
@@ -84,19 +83,24 @@ export default function ProfileSectionScreen() {
           <View>
             {archive.length === 0 ? (
               myPosts.isLoading ? (
-                <View style={{ paddingHorizontal: 18, paddingTop: 24 }}>
+                <View style={{ paddingHorizontal: space[4] + 2, paddingTop: space[6] }}>
                   <SkeletonGrid count={12} aspectRatio={1} />
                 </View>
               ) : (
-                <Text style={{ paddingHorizontal: 18, paddingTop: 24, fontSize: 13, color: colors.fog }}>
-                  No dailies yet. Your posts will collect here.
-                </Text>
+                <EmptyState title="No dailies yet" body="Your posts will collect here, month by month." />
               )
             ) : (
               archive.map((month) => (
                 <View key={month.label}>
-                  <MonthLabel>{month.label}</MonthLabel>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 18 }}>
+                  <SectionLabel>{month.label}</SectionLabel>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      gap: space[1] + 2,
+                      paddingHorizontal: space[4] + 2
+                    }}
+                  >
                     {month.days.map((day) => (
                       <DailyCell
                         key={day.id}
@@ -113,24 +117,5 @@ export default function ProfileSectionScreen() {
         ) : null}
       </ScrollView>
     </View>
-  );
-}
-
-function MonthLabel({ children }: { children: string }) {
-  return (
-    <Text
-      style={{
-        paddingTop: 18,
-        paddingHorizontal: 18,
-        paddingBottom: 10,
-        fontFamily: "GeistMono_400Regular",
-        fontSize: 10.5,
-        letterSpacing: 10.5 * 0.14,
-        textTransform: "uppercase",
-        color: colors.fog
-      }}
-    >
-      {children}
-    </Text>
   );
 }

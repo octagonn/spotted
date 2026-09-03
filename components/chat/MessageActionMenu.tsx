@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeInDown, ZoomIn } from "react-native-reanimated";
 import EmojiPicker from "rn-emoji-keyboard";
 
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 /** Quick-bar emoji, iMessage-style. The + opens the full picker. */
 const QUICK_EMOJI = ["❤️", "😂", "🔥", "💪", "😮", "😢"];
@@ -63,7 +64,14 @@ export function MessageActionMenu({
   const firstDestructiveIndex = primary.length;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent accessibilityViewIsModal>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+      accessibilityViewIsModal
+    >
       {/* Blurred, dimmed backdrop — tap anywhere to dismiss. */}
       <BlurView intensity={Platform.OS === "ios" ? 42 : 90} tint="dark" style={{ flex: 1 }}>
         <Pressable
@@ -89,7 +97,10 @@ export function MessageActionMenu({
                   borderColor: colors.iron
                 }}
               >
-                <Text numberOfLines={4} style={{ fontSize: 15, lineHeight: 20, color: preview.mine ? colors.black : colors.bone }}>
+                <Text
+                  numberOfLines={4}
+                  style={{ fontSize: 15, lineHeight: 20, color: preview.mine ? colors.black : colors.bone }}
+                >
                   {preview.text}
                 </Text>
               </Animated.View>
@@ -117,7 +128,12 @@ export function MessageActionMenu({
                 }}
               >
                 {QUICK_EMOJI.map((emoji, i) => (
-                  <Animated.View key={emoji} entering={ZoomIn.delay(24 * i).springify().damping(13)}>
+                  <Animated.View
+                    key={emoji}
+                    entering={ZoomIn.delay(24 * i)
+                      .springify()
+                      .damping(13)}
+                  >
                     <QuickEmojiButton emoji={emoji} onPress={() => react(emoji)} />
                   </Animated.View>
                 ))}
@@ -183,7 +199,12 @@ export function MessageActionMenu({
           knob: colors.slate,
           container: colors.graphite,
           header: colors.mist,
-          category: { icon: colors.mist, iconActive: colors.white, container: colors.charcoal, containerActive: colors.iron },
+          category: {
+            icon: colors.mist,
+            iconActive: colors.white,
+            container: colors.charcoal,
+            containerActive: colors.iron
+          },
           search: { text: colors.white, placeholder: colors.fog, icon: colors.fog, background: colors.charcoal }
         }}
       />
@@ -206,7 +227,7 @@ function ActionRowItem({
 }) {
   const [pressed, setPressed] = useState(false);
   const Icon = action.icon;
-  const tint = action.destructive ? "#FF5C5C" : colors.white;
+  const tint = action.destructive ? tokens.status.danger : colors.white;
   return (
     <Pressable
       accessibilityRole="button"
@@ -229,7 +250,7 @@ function ActionRowItem({
       }}
     >
       <Text style={{ fontFamily: "Geist_500Medium", fontSize: 15.5, color: tint }}>{action.label}</Text>
-      {Icon ? <Icon size={18} color={action.destructive ? "#FF5C5C" : colors.mist} strokeWidth={2} /> : null}
+      {Icon ? <Icon size={18} color={action.destructive ? tokens.status.danger : colors.mist} strokeWidth={2} /> : null}
     </Pressable>
   );
 }

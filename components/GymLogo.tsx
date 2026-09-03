@@ -29,7 +29,12 @@ export function GymLogo({
   if (!source) return <>{fallback}</>;
   if (gymLogoIsFullBleed(gym)) {
     return (
-      <View style={[{ width: size, height: size, borderRadius: r, overflow: "hidden", borderWidth: 1, borderColor: colors.iron }, style]}>
+      <View
+        style={[
+          { width: size, height: size, borderRadius: r, overflow: "hidden", borderWidth: 1, borderColor: colors.iron },
+          style
+        ]}
+      >
         <Image source={source} contentFit="cover" style={{ width: size, height: size }} accessible={false} />
       </View>
     );
@@ -42,7 +47,7 @@ export function GymLogo({
           height: size,
           borderRadius: r,
           overflow: "hidden",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: colors.pure,
           borderWidth: 1,
           borderColor: colors.iron,
           alignItems: "center",
@@ -52,7 +57,12 @@ export function GymLogo({
       ]}
     >
       {/* 68% keeps wide wordmarks fully inside a circular tile (never clipped by the corners). */}
-      <Image source={source} contentFit="contain" style={{ width: size * 0.68, height: size * 0.68 }} accessible={false} />
+      <Image
+        source={source}
+        contentFit="contain"
+        style={{ width: size * 0.68, height: size * 0.68 }}
+        accessible={false}
+      />
     </View>
   );
 }

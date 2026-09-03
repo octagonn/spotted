@@ -21,6 +21,7 @@ import { SkeletonCommentRow } from "@/components/ui/Skeleton";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { splitMentions } from "@/lib/mentions";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 export type CommentRow = {
   id: string;
@@ -66,13 +67,18 @@ function CommentLine({
       </Pressable>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text onPress={() => onOpenProfile(comment.handle)} style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}>
+          <Text
+            onPress={() => onOpenProfile(comment.handle)}
+            style={{ fontFamily: "Geist_700Bold", fontSize: 14.5, color: colors.white }}
+          >
             {comment.handle}
           </Text>
           <Text style={metaText(12.5, colors.ash)}>{comment.time}</Text>
         </View>
         {/* @mentions inside a comment are live profile links. */}
-        <Text style={{ marginTop: 3, fontFamily: "Geist_400Regular", fontSize: 16, lineHeight: 23, color: colors.bone }}>
+        <Text
+          style={{ marginTop: 3, fontFamily: "Geist_400Regular", fontSize: 16, lineHeight: 23, color: colors.bone }}
+        >
           {splitMentions(comment.text).map((seg, i) =>
             seg.handle ? (
               <Text
@@ -116,19 +122,17 @@ function CommentLine({
                   accessibilityLabel="Confirm delete comment"
                   hitSlop={6}
                 >
-                  <Text style={{ fontSize: 13, fontFamily: "Geist_700Bold", color: "#E5484D" }}>Delete</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Geist_700Bold", color: tokens.status.danger }}>Delete</Text>
                 </Pressable>
                 <Pressable onPress={() => setConfirmingDelete(false)} accessibilityLabel="Cancel delete" hitSlop={6}>
                   <Text style={{ fontSize: 13, fontFamily: "Geist_600SemiBold", color: colors.fog }}>Cancel</Text>
                 </Pressable>
               </View>
             ) : (
-              <Pressable
-                onPress={() => setConfirmingDelete(true)}
-                accessibilityLabel="Delete comment"
-                hitSlop={6}
-              >
-                <Text style={{ fontSize: 13, fontFamily: "Geist_600SemiBold", color: "#E5484D" }}>Delete</Text>
+              <Pressable onPress={() => setConfirmingDelete(true)} accessibilityLabel="Delete comment" hitSlop={6}>
+                <Text style={{ fontSize: 13, fontFamily: "Geist_600SemiBold", color: tokens.status.danger }}>
+                  Delete
+                </Text>
               </Pressable>
             )
           ) : null}
@@ -232,9 +236,22 @@ export function CommentsSheet({
             <View style={{ alignItems: "center", paddingTop: 10 }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.slate }} />
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 12, paddingBottom: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingTop: 12,
+                paddingBottom: 12
+              }}
+            >
               <Text style={{ fontFamily: "Geist_700Bold", fontSize: 15, color: colors.white }}>Comments</Text>
-              <Pressable onPress={dismissAndClose} accessibilityLabel="Close" hitSlop={10} style={{ position: "absolute", right: 16, top: 10 }}>
+              <Pressable
+                onPress={dismissAndClose}
+                accessibilityLabel="Close"
+                hitSlop={10}
+                style={{ position: "absolute", right: 16, top: 10 }}
+              >
                 <X size={18} color={colors.fog} strokeWidth={2.4} />
               </Pressable>
             </View>
@@ -259,12 +276,25 @@ export function CommentsSheet({
                   .filter((c) => !c.parentId)
                   .map((comment) => (
                     <View key={comment.id}>
-                      <CommentLine comment={comment} onOpenProfile={openProfile} onReply={onReply} canDelete={Boolean(onDelete) && (canModerate || comment.userId === myUserId)} onDelete={onDelete} />
+                      <CommentLine
+                        comment={comment}
+                        onOpenProfile={openProfile}
+                        onReply={onReply}
+                        canDelete={Boolean(onDelete) && (canModerate || comment.userId === myUserId)}
+                        onDelete={onDelete}
+                      />
                       {comments
                         .filter((r) => r.parentId === comment.id)
                         .map((reply) => (
                           <View key={reply.id} style={{ paddingLeft: 44, paddingTop: 10 }}>
-                            <CommentLine comment={reply} onOpenProfile={openProfile} onReply={onReply} replyParent={comment} canDelete={Boolean(onDelete) && (canModerate || reply.userId === myUserId)} onDelete={onDelete} />
+                            <CommentLine
+                              comment={reply}
+                              onOpenProfile={openProfile}
+                              onReply={onReply}
+                              replyParent={comment}
+                              canDelete={Boolean(onDelete) && (canModerate || reply.userId === myUserId)}
+                              onDelete={onDelete}
+                            />
                           </View>
                         ))}
                     </View>
@@ -280,23 +310,37 @@ export function CommentsSheet({
                     key={f.id}
                     onPress={() => completeMention(f.username)}
                     accessibilityLabel={`Mention ${f.username}`}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 8 }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8
+                    }}
                   >
                     <Avatar name={f.display_name} uri={f.avatar_url} size={28} />
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}>
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontFamily: "Geist_600SemiBold", fontSize: 13.5, color: colors.white }}
+                      >
                         {f.display_name}
                       </Text>
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: colors.fog }}>@{f.username}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 12, color: colors.fog }}>
+                        @{f.username}
+                      </Text>
                     </View>
                   </Pressable>
                 ))}
               </View>
             ) : null}
             {replyTo ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 8 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 8 }}
+              >
                 <Text style={{ flex: 1, fontSize: 12.5, color: colors.silver }}>
-                  Replying to <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>@{replyTo.handle}</Text>
+                  Replying to{" "}
+                  <Text style={{ fontFamily: "Geist_700Bold", color: colors.white }}>@{replyTo.handle}</Text>
                 </Text>
                 <Pressable onPress={() => onReply?.(null)} accessibilityLabel="Cancel reply" hitSlop={8}>
                   <X size={15} color={colors.fog} strokeWidth={2.2} />
@@ -353,7 +397,14 @@ export function CommentsSheet({
                   Keyboard.dismiss();
                 }}
                 accessibilityLabel="Post comment"
-                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: colors.white,
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
               >
                 <Send size={15} color={colors.black} strokeWidth={2.2} />
               </Pressable>

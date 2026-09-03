@@ -1,24 +1,24 @@
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type ListRenderItem } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Users } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Platform, Text, View } from "react-native";
+import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Avatar } from "@/components/ui/Avatar";
+import { RelButton } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PanelHeader } from "@/components/ui/PanelHeader";
-import { Pressable } from "@/components/ui/Pressable";
 import { SearchBar } from "@/components/ui/SearchBar";
-import {
-  useFriends,
-  useFriendshipStates,
-  useRespondToRequest,
-  useSendFriendRequest
-} from "@/hooks/queries/useFriends";
+import { SkeletonRows } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
+import { UserRow } from "@/components/ui/UserRow";
+import { useFriends, useFriendshipStates, useRespondToRequest, useSendFriendRequest } from "@/hooks/queries/useFriends";
 import { useMutualFriends, useUserFriends } from "@/hooks/queries/useFollowing";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useAuthStore } from "@/stores/auth";
 import { relationshipButton, useRelationships } from "@/stores/relationships";
 import { colors } from "@/theme/colors";
+import { icon, space } from "@/theme/tokens";
 import type { Profile } from "@/types/domain";
 import type { RelationshipState } from "@/types/redesign";
 
@@ -109,42 +109,52 @@ export default function PeopleListScreen() {
       return people;
     }
     return people.filter(
-      (p) =>
-        (p.display_name ?? "").toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q)
+      (p) => (p.display_name ?? "").toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q)
     );
   }, [people, query]);
 
   const title = TITLES[type];
+  const statesData = states.data;
+
+  const renderItem: ListRenderItem<Profile> = useCallback(
+    ({ item }) => (
+      <PersonRow
+        person={item}
+        state={relationships.stateFor(item.id, statesData?.get(item.id) ?? "none")}
+        isSelf={item.id === authedId}
+        busy={pendingAdds.has(item.id)}
+        onOpen={() => router.push(`/user/${item.username}`)}
+        onMessage={() => router.push(`/chat/${item.id}`)}
+        onAdd={() => addFriend(item)}
+      />
+    ),
+    [relationships, statesData, authedId, pendingAdds, router, addFriend]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title={title} sub={`${people.length} ${people.length === 1 ? "person" : "people"}`} />
-      <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+      <View style={{ paddingHorizontal: space[4], paddingBottom: space[2] + 2 }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder={`Search ${title.toLowerCase()}`} />
       </View>
       <FlashList
         data={filtered}
-        keyExtractor={(item: Profile) => item.id}
+        keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-        renderItem={({ item }: { item: Profile }) => (
-          <PersonRow
-            person={item}
-            state={relationships.stateFor(item.id, states.data?.get(item.id) ?? "none")}
-            isSelf={item.id === authedId}
-            busy={pendingAdds.has(item.id)}
-            onOpen={() => router.push(`/user/${item.username}`)}
-            onMessage={() => router.push(`/chat/${item.id}`)}
-            onAdd={() => addFriend(item)}
-          />
-        )}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space[6] }}
+        renderItem={renderItem}
+        extraData={pendingAdds}
         ListEmptyComponent={
-          <View style={{ alignItems: "center", paddingTop: 60, paddingHorizontal: 40 }}>
-            <Text style={{ fontSize: 13, color: colors.fog, textAlign: "center", lineHeight: 19 }}>
-              {isLoading ? "Loading…" : query ? "No matches." : `No ${title.toLowerCase()} yet.`}
-            </Text>
-          </View>
+          isLoading ? (
+            <SkeletonRows count={6} />
+          ) : (
+            <EmptyState
+              icon={<Users size={icon.size.sm + 2} color={colors.silver} strokeWidth={icon.stroke.regular} />}
+              title={query ? "No matches" : `No ${title.toLowerCase()} yet`}
+              body={query ? "Try a different name or username." : undefined}
+            />
+          )
         }
       />
     </View>
@@ -174,74 +184,22 @@ function PersonRow({
   // someone else's friends is actionable instead of message-only.
   const button = relationshipButton(state);
   return (
-    <Pressable onPress={onOpen} accessibilityLabel={person.display_name} haptic={false}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          paddingVertical: 9,
-          paddingHorizontal: 16
-        }}
-      >
-        <Avatar name={person.display_name} uri={person.avatar_url} size={46} />
-        <View style={{ flex: 1 }}>
-          <Text numberOfLines={1} style={{ fontFamily: "Geist_600SemiBold", fontSize: 14, color: colors.white }}>
-            {person.display_name}
-          </Text>
-          <Text numberOfLines={1} style={{ marginTop: 1, fontFamily: "Geist_400Regular", fontSize: 12.5, color: colors.fog }}>
-            @{person.username}
-          </Text>
-        </View>
-        {isSelf ? (
+    <UserRow
+      name={person.display_name}
+      avatarUrl={person.avatar_url}
+      sub={`@${person.username}`}
+      onPress={onOpen}
+      right={
+        isSelf ? (
           /* Your own row: no Add (it would send a request to yourself and the
-             server rightly rejects it — reported as "I can see myself in the
-             list and Add errors"), and no Message-yourself either. */
-          <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.fog }}>You</Text>
+             server rightly rejects it), and no Message-yourself either. */
+          <Text variant="meta-strong">You</Text>
         ) : state === "friend" ? (
-          <Pressable onPress={onMessage} accessibilityLabel={`Message ${person.display_name}`}>
-            <View
-              style={{
-                paddingVertical: 7,
-                paddingHorizontal: 16,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.iron
-              }}
-            >
-              <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.bone }}>Message</Text>
-            </View>
-          </Pressable>
+          <RelButton label="Message" kind="ghost" onPress={onMessage} />
         ) : (
-          <Pressable
-            onPress={onAdd}
-            disabled={button.disabled || busy}
-            accessibilityLabel={`${button.label} ${person.display_name}`}
-          >
-            <View
-              style={{
-                paddingVertical: 7,
-                paddingHorizontal: 16,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: button.kind === "primary" ? colors.white : colors.iron,
-                backgroundColor: button.kind === "primary" ? colors.white : "transparent",
-                opacity: busy ? 0.6 : 1
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "Geist_600SemiBold",
-                  fontSize: 12.5,
-                  color: button.kind === "primary" ? colors.black : colors.bone
-                }}
-              >
-                {button.label}
-              </Text>
-            </View>
-          </Pressable>
-        )}
-      </View>
-    </Pressable>
+          <RelButton label={button.label} kind={button.kind} disabled={button.disabled || busy} onPress={onAdd} />
+        )
+      }
+    />
   );
 }

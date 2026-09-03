@@ -1,18 +1,17 @@
-import { appAlert } from "@/components/ui/AppDialog";
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type ListRenderItem } from "@shopify/flash-list";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { MoreHorizontal } from "lucide-react-native";
-import { Text, View } from "react-native";
+import { useCallback } from "react";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { RoleChip } from "@/components/communities/RoleChip";
-import { Avatar } from "@/components/ui/Avatar";
+import { MemberRow } from "@/components/communities/MemberRow";
+import { appAlert } from "@/components/ui/AppDialog";
 import { Button } from "@/components/ui/Button";
 import { ChoiceRow } from "@/components/ui/ChoiceRow";
 import { PanelHeader } from "@/components/ui/PanelHeader";
-import { Pressable } from "@/components/ui/Pressable";
 import { SheetSub, SheetTitle, useSheet } from "@/components/ui/Sheet";
 import { SkeletonRows } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
 import {
   NO_PERMISSIONS,
   roleErrorMessage,
@@ -24,10 +23,10 @@ import {
   type CommunityMember,
   type CommunityRole
 } from "@/hooks/queries/useCommunities";
-import { relDay } from "@/lib/relDay";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { space } from "@/theme/tokens";
 
 /**
  * Sheet for managers: pick a role for a member, or remove them. The server
@@ -92,14 +91,22 @@ function ManageMemberSheet({
           <ChoiceRow
             key={role.id}
             title={role.name}
-            sub={locked ? "Only admins can grant this" : role.is_admin ? "Every permission" : role.is_default ? "Default role" : undefined}
+            sub={
+              locked
+                ? "Only admins can grant this"
+                : role.is_admin
+                  ? "Every permission"
+                  : role.is_default
+                    ? "Default role"
+                    : undefined
+            }
             selected={role.id === currentRoleId}
             disabled={locked || setRole.isPending}
             onPress={() => assign(role)}
           />
         );
       })}
-      <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 8 }}>
+      <View style={{ paddingHorizontal: space[4] + 4, paddingTop: space[3] + 2, gap: space[2] }}>
         <Button
           variant="ghost"
           onPress={() => {
@@ -129,27 +136,50 @@ export default function CommunityMembersScreen() {
   const perms = community.data?.perms ?? NO_PERMISSIONS;
   const roles = useCommunityRoles(id, perms.manage_members);
   const ownerId = community.data?.createdBy ?? null;
+  const createdAt = community.data?.createdAt;
+  const rolesData = roles.data;
 
-  const openProfile = (member: CommunityMember) => {
-    if (!member.profile) return;
-    if (member.user_id === userId) router.push("/(tabs)/profile" as Href);
-    else router.push(`/user/${member.profile.username}` as Href);
-  };
+  const openProfile = useCallback(
+    (member: CommunityMember) => {
+      if (!member.profile) return;
+      if (member.user_id === userId) router.push("/(tabs)/profile" as Href);
+      else router.push(`/user/${member.profile.username}` as Href);
+    },
+    [router, userId]
+  );
 
-  const canManageRow = (member: CommunityMember) =>
-    perms.manage_members && member.user_id !== userId && member.user_id !== ownerId;
+  const openManage = useCallback(
+    (member: CommunityMember) => {
+      sheet.open(
+        <ManageMemberSheet
+          communityId={id}
+          member={member}
+          roles={rolesData ?? []}
+          canAdmin={perms.admin}
+          onProfile={() => openProfile(member)}
+        />
+      );
+    },
+    [sheet, id, rolesData, perms.admin, openProfile]
+  );
 
-  const openManage = (member: CommunityMember) => {
-    sheet.open(
-      <ManageMemberSheet
-        communityId={id}
-        member={member}
-        roles={roles.data ?? []}
-        canAdmin={perms.admin}
-        onProfile={() => openProfile(member)}
-      />
-    );
-  };
+  const renderItem: ListRenderItem<CommunityMember> = useCallback(
+    ({ item }) => {
+      const manageable = perms.manage_members && item.user_id !== userId && item.user_id !== ownerId;
+      return (
+        <MemberRow
+          member={item}
+          communityCreatedAt={createdAt}
+          isMe={item.user_id === userId}
+          isOwner={item.user_id === ownerId}
+          showDefaultRole={perms.manage_members}
+          onManage={manageable ? () => openManage(item) : undefined}
+          onPress={() => openProfile(item)}
+        />
+      );
+    },
+    [perms.manage_members, userId, ownerId, createdAt, openManage, openProfile]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
@@ -162,43 +192,11 @@ export default function CommunityMembersScreen() {
       ) : (
         <FlashList
           data={members.data ?? []}
-          keyExtractor={(item: CommunityMember) => item.user_id}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24, paddingTop: 4 }}
-          renderItem={({ item }: { item: CommunityMember }) => {
-            const name = item.profile?.display_name ?? "Member";
-            const manageable = canManageRow(item);
-            return (
-              <Pressable onPress={() => openProfile(item)} accessibilityLabel={`Open ${name}'s profile`}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 18 }}>
-                  <Avatar name={name} uri={item.profile?.avatar_url ?? null} size={44} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: colors.white }}>
-                        {name}
-                        {item.user_id === userId ? <Text style={{ color: colors.fog }}>  (you)</Text> : null}
-                      </Text>
-                      {item.user_id === ownerId ? (
-                        <Text style={{ fontFamily: "GeistMono_400Regular", fontSize: 9, letterSpacing: 0.8, color: colors.gold }}>OWNER</Text>
-                      ) : null}
-                    </View>
-                    <Text numberOfLines={1} style={{ marginTop: 1, fontSize: 12, color: colors.fog }}>
-                      @{item.profile?.username ?? "unknown"} · joined {relDay(item.joined_at)}
-                    </Text>
-                  </View>
-                  <RoleChip role={item.roleInfo} legacyRole={item.role} showDefault={perms.manage_members} />
-                  {manageable ? (
-                    <Pressable onPress={() => openManage(item)} accessibilityLabel={`Manage ${name}`} hitSlop={8}>
-                      <View style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
-                        <MoreHorizontal size={16} color={colors.mist} strokeWidth={2} />
-                      </View>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          }}
+          keyExtractor={(item) => item.user_id}
+          contentContainerStyle={{ paddingBottom: insets.bottom + space[6], paddingTop: space[1] }}
+          renderItem={renderItem}
           ListEmptyComponent={
-            <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
+            <Text variant="meta" className="pt-10 text-center">
               No members yet.
             </Text>
           }

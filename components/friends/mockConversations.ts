@@ -1,4 +1,5 @@
 import { INBOX_THREADS } from "@/lib/redesignData";
+import { isDemoMode } from "@/lib/supabase";
 import type { InboxThread } from "@/types/redesign";
 
 /**
@@ -88,7 +89,8 @@ export const MOCK_CONVERSATIONS: Record<string, MockConversation> = {
 
 /** True when a /chat/[id] param addresses a mock inbox thread (vs a real profile id). */
 export function isMockThreadId(id: string | undefined): id is keyof typeof MOCK_CONVERSATIONS {
-  return Boolean(id && id in MOCK_CONVERSATIONS);
+  // Mock threads are dev-demo-only; a release bundle never resolves one.
+  return isDemoMode && Boolean(id && id in MOCK_CONVERSATIONS);
 }
 
 /** Inbox fixture row for a mock thread id. */

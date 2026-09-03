@@ -1,20 +1,27 @@
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { Ban, Bell, BellOff, Flag, LogOut, Play, UserPlus, X } from "lucide-react-native";
 import { useState } from "react";
-import { Modal, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Modal, ScrollView, TextInput, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useVideoPlayer, VideoView } from "expo-video";
 
-import { appAlert } from "@/components/ui/AppDialog";
 import { ReportSheet } from "@/components/ReportSheet";
+import { appAlert } from "@/components/ui/AppDialog";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { ChoiceRow } from "@/components/ui/ChoiceRow";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { IconButton } from "@/components/ui/IconButton";
+import { MenuRow } from "@/components/ui/MenuRow";
 import { PanelHeader } from "@/components/ui/PanelHeader";
 import { Pressable } from "@/components/ui/Pressable";
+import { SectionLabel } from "@/components/ui/SectionLabel";
+import { SettingNavRow } from "@/components/ui/SettingRow";
 import { useSheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Text } from "@/components/ui/Text";
+import { UserRow } from "@/components/ui/UserRow";
 import { useFriends } from "@/hooks/queries/useFriends";
 import {
   useAddGroupMembers,
@@ -31,15 +38,31 @@ import { groupDisplayName } from "@/lib/groupName";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 const MAX_MEMBERS = 16;
 
+function VideoViewerBody({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.play();
+  });
+  return <VideoView player={player} style={{ flex: 1 }} contentFit="contain" nativeControls />;
+}
+
+function Section({ children }: { children: string }) {
+  return (
+    <SectionLabel style={{ paddingHorizontal: space[4], paddingTop: space[6], paddingBottom: space[2] }}>
+      {children}
+    </SectionLabel>
+  );
+}
+
 /**
- * Full-screen conversation details (IG/iMessage-style), opened by tapping the
- * name in the chat header. Groups: rename at the top (ANY member may rename,
- * like Snapchat), members with add-people, media gallery, mute / report /
- * leave. 1:1 (`?peer=<profileId>`): the person, media gallery, mute / block /
- * report — the only home for these since the chat's ⋯ menu was removed.
+ * Conversation details, opened by tapping the name in the chat header.
+ * Groups: rename (any member may), members + add people, media, mute /
+ * report / leave. 1:1 (`?peer=<profileId>`): the person, media, mute / block
+ * / report — the only home for these since the chat's ⋯ menu was removed.
  */
 export default function ChatDetailsScreen() {
   const { id: conversationId = "", peer } = useLocalSearchParams<{ id: string; peer?: string }>();
@@ -80,7 +103,7 @@ export default function ChatDetailsScreen() {
   const draft = nameDraft ?? storedTitle;
   const nameDirty = draft.trim() !== storedTitle;
 
-  const cellW = Math.floor((winW - 16 * 2 - 2 * 2) / 3);
+  const cellW = Math.floor((winW - space[4] * 2 - 2 * 2) / 3);
 
   const saveName = () => {
     const next = draft.trim();
@@ -117,8 +140,7 @@ export default function ChatDetailsScreen() {
   };
 
   const openReport = () => {
-    // Groups report the conversation; 1:1 reports the person (matches the old
-    // ⋯ menu semantics).
+    // Groups report the conversation; 1:1 reports the person.
     sheet.open(
       isGroup ? (
         <ReportSheet contentType="conversation" contentId={conversationId} label="chat" reportedUserId={null} />
@@ -151,12 +173,14 @@ export default function ChatDetailsScreen() {
       );
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
-        <PanelHeader title="Add people" sub={`${members.length}/${MAX_MEMBERS} members`} onBack={() => setAdding(false)} />
+        <PanelHeader
+          title="Add people"
+          sub={`${members.length}/${MAX_MEMBERS} members`}
+          onBack={() => setAdding(false)}
+        />
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}>
           {addable.length === 0 ? (
-            <Text style={{ paddingTop: 40, textAlign: "center", fontSize: 13, color: colors.fog }}>
-              All your friends are already here.
-            </Text>
+            <EmptyState title="All your friends are already here." center />
           ) : (
             addable.map((friend) => (
               <ChoiceRow
@@ -170,7 +194,7 @@ export default function ChatDetailsScreen() {
             ))
           )}
         </ScrollView>
-        <View style={{ position: "absolute", left: 20, right: 20, bottom: insets.bottom + 16 }}>
+        <View style={{ position: "absolute", left: space[4], right: space[4], bottom: insets.bottom + space[4] }}>
           <Button
             onPress={() => {
               if (selected.length === 0 || addMembers.isPending) return;
@@ -187,8 +211,9 @@ export default function ChatDetailsScreen() {
               );
             }}
             disabled={selected.length === 0 || addMembers.isPending}
+            loading={addMembers.isPending}
           >
-            {addMembers.isPending ? "Adding…" : selected.length ? `Add ${selected.length}` : "Add"}
+            {selected.length ? `Add ${selected.length}` : "Add"}
           </Button>
         </View>
       </View>
@@ -199,76 +224,90 @@ export default function ChatDetailsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.black }}>
       <PanelHeader title={title} sub={sub} />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
-        {/* Identity: big avatar; groups add rename (any member can rename). */}
-        <View style={{ alignItems: "center", paddingTop: 10 }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: insets.bottom + space[6] }}
+      >
+        <View style={{ alignItems: "center", paddingTop: space[2] }}>
           <Avatar name={title || "?"} uri={headerAvatarUri} size={84} />
         </View>
         {isGroup ? (
-        <>
-        <View style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <TextInput
-            value={draft}
-            onChangeText={setNameDraft}
-            onSubmitEditing={saveName}
-            maxLength={40}
-            returnKeyType="done"
-            placeholder={`Group name · ${displayName}`}
-            placeholderTextColor={colors.ash}
-            accessibilityLabel="Group name"
-            style={{
-              flex: 1,
-              backgroundColor: colors.charcoal,
-              borderWidth: 1,
-              borderColor: colors.iron,
-              borderRadius: 12,
-              paddingVertical: 11,
-              paddingHorizontal: 14,
-              fontSize: 15,
-              color: colors.bone,
-              fontFamily: "Geist_400Regular"
-            }}
-          />
-          {nameDirty && draft.trim() ? (
-            <Pressable onPress={saveName} accessibilityLabel="Save group name" disabled={renameGroup.isPending}>
-              <Text style={{ fontFamily: "Geist_700Bold", fontSize: 13.5, color: colors.white, paddingHorizontal: 6, paddingVertical: 10 }}>
-                {renameGroup.isPending ? "…" : "Save"}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <Text style={{ paddingHorizontal: 20, paddingTop: 6, fontSize: 11.5, color: colors.fog }}>
-          Anyone in the group can change the name.
-        </Text>
-        </>
+          <>
+            <View
+              style={{
+                paddingHorizontal: space[4],
+                paddingTop: space[4],
+                flexDirection: "row",
+                alignItems: "center",
+                gap: space[2]
+              }}
+            >
+              <TextInput
+                value={draft}
+                onChangeText={setNameDraft}
+                onSubmitEditing={saveName}
+                maxLength={40}
+                returnKeyType="done"
+                placeholder={`Group name · ${displayName}`}
+                placeholderTextColor={tokens.text.tertiary}
+                accessibilityLabel="Group name"
+                style={{
+                  flex: 1,
+                  backgroundColor: tokens.bg.raised,
+                  borderWidth: 1,
+                  borderColor: tokens.border.default,
+                  borderRadius: radius.sm,
+                  height: 44,
+                  paddingHorizontal: space[3] + 2,
+                  fontSize: 15,
+                  color: colors.bone,
+                  fontFamily: "Geist_400Regular"
+                }}
+              />
+              {nameDirty && draft.trim() ? (
+                <Pressable
+                  onPress={saveName}
+                  haptic="none"
+                  accessibilityLabel="Save group name"
+                  disabled={renameGroup.isPending}
+                  style={{ paddingHorizontal: space[2], paddingVertical: space[2] }}
+                >
+                  <Text variant="meta-strong" className="text-white">
+                    {renameGroup.isPending ? "…" : "Save"}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Text variant="meta" className="px-4 pt-[6px]">
+              Anyone in the group can change the name.
+            </Text>
+          </>
         ) : null}
 
-        {/* Members (groups) / the person (1:1). */}
         {isGroup ? (
           <>
-            <SectionHeading>{`Members · ${members.length}`}</SectionHeading>
+            <Section>{`Members · ${members.length}`}</Section>
             {addable.length > 0 && roomLeft > 0 ? (
-              <Pressable onPress={() => setAdding(true)} accessibilityLabel="Add people">
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, paddingHorizontal: 20 }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
-                    <UserPlus size={18} color={colors.white} strokeWidth={2} />
-                  </View>
-                  <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: colors.white }}>Add people</Text>
-                </View>
-              </Pressable>
+              <View style={{ paddingHorizontal: space[4] }}>
+                <SettingNavRow
+                  icon={<UserPlus size={icon.size.sm} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />}
+                  title="Add people"
+                  onPress={() => setAdding(true)}
+                />
+              </View>
             ) : null}
             {groupInfo.isLoading ? (
-              <View style={{ paddingHorizontal: 20, gap: 10, paddingTop: 6 }}>
-                <Skeleton height={40} radius={12} />
-                <Skeleton height={40} radius={12} />
+              <View style={{ paddingHorizontal: space[4], gap: space[2] + 2, paddingTop: space[1] + 2 }}>
+                <Skeleton height={40} radius={radius.sm} />
+                <Skeleton height={40} radius={radius.sm} />
               </View>
             ) : (
               members.map((member) => (
-                <ChoiceRow
+                <UserRow
                   key={member.id}
-                  title={member.id === userId ? `${member.name} (you)` : member.name}
+                  name={member.id === userId ? `${member.name} (you)` : member.name}
+                  avatarUrl={member.avatarUrl}
                   sub={`@${member.username}`}
-                  left={<Avatar name={member.name} uri={member.avatarUrl} size={40} />}
                   onPress={member.id === userId ? undefined : () => router.push(`/user/${member.username}`)}
                 />
               ))
@@ -276,43 +315,62 @@ export default function ChatDetailsScreen() {
           </>
         ) : (
           <>
-            <SectionHeading>Profile</SectionHeading>
-            <ChoiceRow
-              title={peerName}
+            <Section>Profile</Section>
+            <UserRow
+              name={peerName}
+              avatarUrl={peerProfile.data?.avatar_url ?? null}
               sub={peerProfile.data?.username ? `@${peerProfile.data.username}` : undefined}
-              left={<Avatar name={peerName} uri={peerProfile.data?.avatar_url ?? null} size={40} />}
-              onPress={peerProfile.data?.username ? () => router.push(`/user/${peerProfile.data?.username}`) : undefined}
+              onPress={
+                peerProfile.data?.username ? () => router.push(`/user/${peerProfile.data?.username}`) : undefined
+              }
             />
           </>
         )}
 
-        {/* Media — every photo/video sent in the chat (iMessage-style). */}
-        <SectionHeading>Media</SectionHeading>
+        {/* Media — every photo/video sent in the chat. */}
+        <Section>Media</Section>
         {media.isLoading ? (
-          <View style={{ flexDirection: "row", gap: 2, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: "row", gap: 2, paddingHorizontal: space[4] }}>
             <Skeleton width={cellW} height={cellW} radius={6} />
             <Skeleton width={cellW} height={cellW} radius={6} />
             <Skeleton width={cellW} height={cellW} radius={6} />
           </View>
         ) : (media.data?.length ?? 0) === 0 ? (
-          <Text style={{ paddingHorizontal: 20, fontSize: 12.5, color: colors.fog }}>
+          <Text variant="meta" className="px-4">
             Photos and videos sent in this chat show up here.
           </Text>
         ) : (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingHorizontal: space[4] }}>
             {(media.data ?? []).map((item) => (
               <Pressable
                 key={item.id}
                 onPress={() => setViewer(item)}
                 accessibilityLabel={item.kind === "video" ? "Open video" : "Open photo"}
-                haptic={false}
+                haptic="none"
               >
-                <View style={{ width: cellW, height: cellW, borderRadius: 6, overflow: "hidden", backgroundColor: colors.graphite }}>
+                <View
+                  style={{
+                    width: cellW,
+                    height: cellW,
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    backgroundColor: tokens.bg.raised
+                  }}
+                >
                   {item.kind === "image" ? (
                     <Image source={{ uri: item.uri }} contentFit="cover" style={{ flex: 1 }} transition={80} />
                   ) : (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" }}>
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: radius.pill,
+                          backgroundColor: colors.hairlineStrong,
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}
+                      >
                         <Play size={15} color={colors.white} fill={colors.white} strokeWidth={0} />
                       </View>
                     </View>
@@ -323,114 +381,72 @@ export default function ChatDetailsScreen() {
           </View>
         )}
 
-        {/* Actions */}
-        <SectionHeading>Options</SectionHeading>
-        <ActionRow
-          icon={
-            muted.data ? (
-              <Bell size={18} color={colors.white} strokeWidth={2} />
-            ) : (
-              <BellOff size={18} color={colors.white} strokeWidth={2} />
-            )
-          }
-          label={muted.data ? "Unmute notifications" : "Mute notifications"}
-          onPress={() => setMuted.mutate(!(muted.data ?? false))}
-        />
-        {!isGroup ? (
-          <ActionRow
-            icon={<Ban size={18} color={peerBlocked ? colors.white : "#EF4444"} strokeWidth={2} />}
-            label={peerBlocked ? "Unblock" : "Block"}
-            destructive={!peerBlocked}
-            onPress={toggleBlock}
+        <Section>Options</Section>
+        <View style={{ paddingHorizontal: space[2] }}>
+          <MenuRow
+            icon={
+              muted.data ? (
+                <Bell size={icon.size.sm} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />
+              ) : (
+                <BellOff size={icon.size.sm} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />
+              )
+            }
+            label={muted.data ? "Unmute notifications" : "Mute notifications"}
+            onPress={() => setMuted.mutate(!(muted.data ?? false))}
           />
-        ) : null}
-        <ActionRow
-          icon={<Flag size={18} color={colors.white} strokeWidth={2} />}
-          label={isGroup ? "Report chat" : "Report"}
-          onPress={openReport}
-        />
-        {isGroup ? (
-          <ActionRow
-            icon={<LogOut size={18} color="#EF4444" strokeWidth={2} />}
-            label="Leave group"
-            destructive
-            onPress={confirmLeave}
+          {!isGroup ? (
+            <MenuRow
+              icon={
+                <Ban
+                  size={icon.size.sm}
+                  color={peerBlocked ? tokens.text.primary : tokens.status.danger}
+                  strokeWidth={icon.stroke.regular}
+                />
+              }
+              label={peerBlocked ? "Unblock" : "Block"}
+              destructive={!peerBlocked}
+              onPress={toggleBlock}
+            />
+          ) : null}
+          <MenuRow
+            icon={<Flag size={icon.size.sm} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />}
+            label={isGroup ? "Report chat" : "Report"}
+            onPress={openReport}
           />
-        ) : null}
+          {isGroup ? (
+            <MenuRow
+              icon={<LogOut size={icon.size.sm} color={tokens.status.danger} strokeWidth={icon.stroke.regular} />}
+              label="Leave group"
+              destructive
+              onPress={confirmLeave}
+            />
+          ) : null}
+        </View>
       </ScrollView>
 
-      {/* Full-screen media viewer. */}
-      <Modal visible={Boolean(viewer)} transparent animationType="fade" onRequestClose={() => setViewer(null)} statusBarTranslucent>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.96)" }}>
+      {/* Full-screen media viewer — a system modal by design (covers navigation chrome). */}
+      <Modal
+        visible={Boolean(viewer)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewer(null)}
+        statusBarTranslucent
+      >
+        <View style={{ flex: 1, backgroundColor: colors.black }}>
           {viewer?.kind === "image" ? (
             <Image source={{ uri: viewer.uri }} contentFit="contain" style={{ flex: 1 }} transition={100} />
           ) : viewer ? (
             <VideoViewerBody uri={viewer.uri} />
           ) : null}
-          <Pressable
-            onPress={() => setViewer(null)}
+          <IconButton
+            variant="plain"
+            icon={<X size={icon.size.sm} color={colors.white} strokeWidth={icon.stroke.bold} />}
             accessibilityLabel="Close"
-            hitSlop={10}
-            style={{ position: "absolute", top: insets.top + 10, right: 16 }}
-          >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" }}>
-              <X size={18} color={colors.white} strokeWidth={2.2} />
-            </View>
-          </Pressable>
+            onPress={() => setViewer(null)}
+            style={{ position: "absolute", top: insets.top + space[2], right: space[3] }}
+          />
         </View>
       </Modal>
     </View>
-  );
-}
-
-function VideoViewerBody({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = true;
-    p.play();
-  });
-  return <VideoView player={player} style={{ flex: 1 }} contentFit="contain" nativeControls />;
-}
-
-function SectionHeading({ children }: { children: string }) {
-  return (
-    <Text
-      style={{
-        paddingHorizontal: 20,
-        paddingTop: 26,
-        paddingBottom: 10,
-        fontFamily: "GeistMono_400Regular",
-        fontSize: 10.5,
-        letterSpacing: 1.4,
-        textTransform: "uppercase",
-        color: colors.mist
-      }}
-    >
-      {children}
-    </Text>
-  );
-}
-
-function ActionRow({
-  icon,
-  label,
-  destructive,
-  onPress
-}: {
-  icon: React.ReactNode;
-  label: string;
-  destructive?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} accessibilityLabel={label}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, paddingHorizontal: 20 }}>
-        <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.iron, alignItems: "center", justifyContent: "center" }}>
-          {icon}
-        </View>
-        <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 14.5, color: destructive ? "#EF4444" : colors.white }}>
-          {label}
-        </Text>
-      </View>
-    </Pressable>
   );
 }

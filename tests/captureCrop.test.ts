@@ -23,9 +23,12 @@ describe("captureCropRect", () => {
 
   it("drops the sides the aspect-filled preview hid", () => {
     // Without previewRatio the crop keeps the FULL sensor width — 4:3 overflows
-    // the screen badly, so the post would include a lot the user never saw.
-    const blind = captureCropRect(PHOTO_12MP.w, PHOTO_12MP.h, null, POST_PHOTO_RATIO)!;
-    const honest = captureCropRect(PHOTO_12MP.w, PHOTO_12MP.h, SCREEN, POST_PHOTO_RATIO)!;
+    // a full-screen preview badly, so the post would include a lot the user
+    // never saw. (A 4:5 target: the 3:4 post ratio is sensor-native, so it
+    // would be a no-op and prove nothing here.)
+    const TARGET = 4 / 5;
+    const blind = captureCropRect(PHOTO_12MP.w, PHOTO_12MP.h, null, TARGET)!;
+    const honest = captureCropRect(PHOTO_12MP.w, PHOTO_12MP.h, SCREEN, TARGET)!;
     expect(honest.width).toBeLessThan(blind.width);
     // The visible width is the screen's share of the sensor height.
     expect(honest.width).toBeCloseTo(Math.round(PHOTO_12MP.h * SCREEN), 0);
@@ -61,6 +64,18 @@ describe("captureCropRect", () => {
   it("crops the dual selfie to the inset frame", () => {
     const rect = captureCropRect(PHOTO_12MP.w, PHOTO_12MP.h, SCREEN, INSET_RATIO)!;
     expect(ratioOf(rect)).toBeCloseTo(INSET_RATIO, 2);
+  });
+
+  it("is a no-op for a 3:4 sensor frame shot through the 3:4 viewfinder", () => {
+    // The daily camera: viewfinder ratio == post ratio == sensor ratio, so the
+    // whole capture posts untouched (no re-encode, no lost pixels).
+    expect(captureCropRect(PHOTO_12MP.w, PHOTO_12MP.h, POST_PHOTO_RATIO, POST_PHOTO_RATIO)).toBeNull();
+  });
+
+  it("trims a 16:9 sensor frame to exactly what the 3:4 viewfinder showed", () => {
+    const rect = captureCropRect(VIDEO_1080.w, VIDEO_1080.h, POST_PHOTO_RATIO, POST_PHOTO_RATIO)!;
+    expect(ratioOf(rect)).toBeCloseTo(POST_PHOTO_RATIO, 2);
+    expect(rect.width).toBe(VIDEO_1080.w);
   });
 
   it("handles a landscape-ish preview without inverting the crop", () => {

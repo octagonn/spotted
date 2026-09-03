@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import { Pressable } from "@/components/ui/Pressable";
 import type { MapBounds, MapGym } from "@/hooks/queries/useMapGyms";
 import { allowMapNavigation } from "@/lib/mapNavigation";
+import { Text } from "@/components/ui/Text";
 import { colors } from "@/theme/colors";
+import { radius, space, tokens } from "@/theme/tokens";
 
 /** Orange County fallback center when device location is unavailable. */
 const OC_CENTER = { latitude: 33.66, longitude: -117.78 };
@@ -67,9 +69,14 @@ export function MapCanvas({
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
-      let msg:
-        | { type?: string; ids?: string[]; minLat?: number; minLng?: number; maxLat?: number; maxLng?: number }
-        | null = null;
+      let msg: {
+        type?: string;
+        ids?: string[];
+        minLat?: number;
+        minLng?: number;
+        maxLat?: number;
+        maxLng?: number;
+      } | null = null;
       try {
         msg = JSON.parse(event.nativeEvent.data);
       } catch {
@@ -133,25 +140,22 @@ export function MapCanvas({
       {gyms.length > 0 ? (
         <Pressable
           onPress={() => onCluster(gyms)}
+          haptic="none"
           accessibilityRole="button"
           accessibilityLabel={`Browse ${gyms.length} nearby gyms as a list`}
           style={{
             position: "absolute",
-            top: 12,
+            top: space[3],
             alignSelf: "center",
-            paddingVertical: 8,
-            paddingHorizontal: 16,
-            borderRadius: 999,
-            backgroundColor: "rgba(0,0,0,0.6)",
+            paddingVertical: space[2],
+            paddingHorizontal: space[4],
+            borderRadius: radius.pill,
+            backgroundColor: tokens.bg.scrim,
             borderWidth: 1,
-            borderColor: colors.iron
+            borderColor: tokens.border.default
           }}
         >
-          <Text
-            allowFontScaling
-            maxFontSizeMultiplier={1.6}
-            style={{ fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}
-          >
+          <Text variant="meta-strong" className="text-white" maxFontSizeMultiplier={1.6}>
             Gym list
           </Text>
         </Pressable>

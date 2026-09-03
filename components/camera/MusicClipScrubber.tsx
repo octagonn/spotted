@@ -106,11 +106,24 @@ export function MusicClipScrubber({
         {/* Kept window: from the knob to the end of the preview. */}
         <Animated.View
           pointerEvents="none"
-          style={[{ position: "absolute", right: 0, height: 5, borderRadius: 2.5, backgroundColor: colors.silver }, highlightStyle]}
+          style={[
+            { position: "absolute", right: 0, height: 5, borderRadius: 2.5, backgroundColor: colors.silver },
+            highlightStyle
+          ]}
         />
         <Animated.View
           pointerEvents="none"
-          style={[{ position: "absolute", marginLeft: -9, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.white }, knobStyle]}
+          style={[
+            {
+              position: "absolute",
+              marginLeft: -9,
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              backgroundColor: colors.white
+            },
+            knobStyle
+          ]}
         />
       </View>
     </GestureDetector>

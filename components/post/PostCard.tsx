@@ -1,43 +1,39 @@
 import { BlurView } from "expo-blur";
-import { Image } from "expo-image";
 import { router } from "expo-router";
-import { Camera, Check, Flame, Heart, Home, MapPin, Medal, MessageCircle, MoreHorizontal, Send, Users, Volume2, VolumeX } from "lucide-react-native";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Flame, Volume2, VolumeX } from "lucide-react-native";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
 
 import { CommentsSheet, type CommentRow, type ReplyTarget } from "@/components/post/CommentsSheet";
+import { LikedByLine } from "@/components/post/LikedByLine";
+import { LikersSheet } from "@/components/post/LikersSheet";
 import { MediaFrame } from "@/components/post/MediaFrame";
+import { MusicChip } from "@/components/post/MusicChip";
+import { PostActions } from "@/components/post/PostActions";
+import { PostCaption } from "@/components/post/PostCaption";
+import { PostHeader } from "@/components/post/PostHeader";
+import { PostMedia } from "@/components/post/PostMedia";
 import { ReactionsSheet } from "@/components/post/ReactionsSheet";
 import { ContentMenu } from "@/components/ContentMenu";
 import { ShareToFriendSheet } from "@/components/friends/ShareToFriendSheet";
-import { useSheet } from "@/components/ui/Sheet";
-import { useDeletePost } from "@/hooks/queries/useContentModeration";
-import { MusicChip } from "@/components/post/MusicChip";
-import { PostMedia } from "@/components/post/PostMedia";
-import { ScenePhoto } from "@/components/post/ScenePhoto";
-import { Avatar } from "@/components/ui/Avatar";
-import { CachedImage } from "@/components/ui/CachedImage";
-import { CtxChip } from "@/components/ui/Chips";
 import { Pressable } from "@/components/ui/Pressable";
-import { usePostReactionSelfies } from "@/hooks/queries/usePostReactionSelfies";
+import { useSheet } from "@/components/ui/Sheet";
+import { Text } from "@/components/ui/Text";
+import { useDeletePost } from "@/hooks/queries/useContentModeration";
+import { useFriends } from "@/hooks/queries/useFriends";
 import { useAddComment, useDeleteComment, usePostComments } from "@/hooks/queries/usePostComments";
 import { usePostLikers, useMyReactions, useToggleLike } from "@/hooks/queries/usePostReactions";
-import { useRepostToStory } from "@/hooks/queries/useStories";
-import { LikedByLine } from "@/components/post/LikedByLine";
-import { LikersSheet } from "@/components/post/LikersSheet";
-import { useFriends } from "@/hooks/queries/useFriends";
+import { usePostReactionSelfies } from "@/hooks/queries/usePostReactionSelfies";
 import { useMyProfile } from "@/hooks/queries/useProfile";
-import { splitMentions } from "@/lib/mentions";
-import { type FeedCtxIcon, type FeedMockPost } from "@/lib/redesignData";
+import { useRepostToStory } from "@/hooks/queries/useStories";
+import { type FeedMockPost } from "@/lib/redesignData";
 import { useAudioStore } from "@/stores/audio";
 import { showToast, useUiStore } from "@/stores/ui";
 import { colors } from "@/theme/colors";
-import { tokens, typeScale } from "@/theme/tokens";
+import { icon, radius, space, tokens } from "@/theme/tokens";
 
 /** Real Supabase posts carry UUID ids; fixture/demo posts use short slugs. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const CTX_ICONS: Record<FeedCtxIcon, typeof MapPin> = { pin: MapPin, users: Users, flame: Flame };
 
 /** "3m" / "5h" / "2d" relative label for a comment timestamp. */
 function relTime(iso: string): string {
@@ -46,7 +42,6 @@ function relTime(iso: string): string {
   if (mins < 60 * 24) return `${Math.round(mins / 60)}h`;
   return `${Math.round(mins / (60 * 24))}d`;
 }
-
 
 type PostCardProps = {
   post: FeedMockPost;
@@ -61,8 +56,49 @@ type PostCardProps = {
   zoomPreview?: boolean;
 };
 
-/** Feed post card (spec §4.2–4.4). */
-export function PostCard({ post, locked = false, audible = false, onReact, zoomPreview = true }: PostCardProps) {
+/** Speaker control that sits on the media, over a scrim. */
+function MuteButton({
+  muted,
+  onPress,
+  side,
+  label
+}: {
+  muted: boolean;
+  onPress: () => void;
+  side: "left" | "right";
+  label: string;
+}) {
+  const Icon = muted ? VolumeX : Volume2;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={label}
+      accessibilityState={{ selected: muted }}
+      hitSlop={8}
+      haptic="none"
+      style={{
+        position: "absolute",
+        bottom: space[3],
+        [side]: space[3],
+        width: 30,
+        height: 30,
+        borderRadius: radius.pill,
+        backgroundColor: tokens.bg.scrim,
+        alignItems: "center",
+        justifyContent: "center"
+      }}
+    >
+      <Icon size={15} color={colors.white} strokeWidth={icon.stroke.bold} />
+    </Pressable>
+  );
+}
+
+/**
+ * Feed post card. Orchestrates data + sheets for one post and composes
+ * PostHeader → MusicChip → media → PostActions → LikedByLine → PostCaption.
+ * Media is the hero; every other block is a single spacing step around it.
+ */
+function PostCardInner({ post, locked = false, audible = false, onReact, zoomPreview = true }: PostCardProps) {
   const sheet = useSheet();
   const deletePost = useDeletePost();
   const isRealPost = UUID_RE.test(post.id);
@@ -75,10 +111,7 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
   // than one per card. It decides WHICH liker's name leads the "Liked by" line
   // — a name you recognise is the only reason that line is worth reading.
   const friends = useFriends();
-  const friendIds = useMemo(
-    () => new Set((friends.data ?? []).map((friend) => friend.id)),
-    [friends.data]
-  );
+  const friendIds = useMemo(() => new Set((friends.data ?? []).map((friend) => friend.id)), [friends.data]);
 
   // Real reactions from the backend — this is what surfaces a friend's reaction
   // on your feed. Only queried for real posts (fixtures have no rows).
@@ -167,7 +200,6 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
     post.kind !== "compare";
   const zoomUri =
     isPlainPhoto && zoomPreview ? (swapped && post.insetUri ? post.insetUri : post.mediaUri) || null : null;
-  const textBlur = locked ? { opacity: 0.55 } : null;
 
   const openProfile = () => {
     if (!locked) {
@@ -202,8 +234,6 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
     }
   };
 
-  const LocIcon = post.gym ? MapPin : Home;
-
   const isOwnPost = isRealPost && Boolean(myProfile.data?.username) && myProfile.data?.username === post.user.handle;
   // Tagged in this post (caption tags or on-photo tags) → the ⋯ menu offers
   // "Add to your story" (IG-style reshare; the RPC re-checks the tag).
@@ -229,9 +259,7 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
                   onError: (error) => {
                     const message = error instanceof Error ? error.message : "";
                     showToast(
-                      message.includes("already_reposted")
-                        ? "Already on your story"
-                        : "Couldn't add to your story"
+                      message.includes("already_reposted") ? "Already on your story" : "Couldn't add to your story"
                     );
                   }
                 })
@@ -253,52 +281,46 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
     );
   };
 
-  return (
-    // 16+16 bg.base gap between posts (no hairline) — 32px section separation.
-    <View style={{ paddingTop: 16, paddingBottom: 16, backgroundColor: tokens.bg.base }}>
-      {/* Header row */}
-      <View style={[{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 12 }, textBlur]}>
-        <Pressable onPress={openProfile} accessibilityLabel={`Open @${post.user.handle}'s profile`}>
-          <Avatar name={post.user.name} uri={post.user.avatarUrl} size={40} />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={{ ...typeScale.username, color: tokens.text.primary }}>
-            {post.user.handle}
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-            <LocIcon size={13} color={tokens.text.tertiary} strokeWidth={2} />
-            <Text
-              style={{
-                ...typeScale.meta,
-                color: post.gym ? tokens.text.secondary : tokens.text.tertiary,
-                fontStyle: post.gym ? "normal" : "italic"
-              }}
-            >
-              {post.gym ?? post.altLoc}
-            </Text>
-          </View>
-        </View>
-        <Text style={{ ...typeScale.meta, color: tokens.text.tertiary }}>{post.time}</Text>
-        {isRealPost && !locked ? (
-          <Pressable onPress={openMenu} accessibilityLabel="Post options" hitSlop={8} haptic={false} style={{ paddingLeft: 8 }}>
-            <MoreHorizontal size={18} color={tokens.text.tertiary} strokeWidth={2} />
-          </Pressable>
-        ) : null}
-      </View>
+  const dim = { opacity: locked ? 0.55 : 1 };
 
-      {/* Attached song — Instagram-style line under the header; auto-plays
-          while this post is the active one in the viewport. */}
+  return (
+    // 16 + 16 of base background between posts (no hairline) — 32pt separation.
+    <View style={{ paddingTop: space[4], paddingBottom: space[4], backgroundColor: tokens.bg.base }}>
+      <PostHeader
+        user={post.user}
+        gym={post.gym}
+        altLoc={post.altLoc}
+        time={post.time}
+        locked={locked}
+        onOpenProfile={openProfile}
+        onOpenMenu={isRealPost && !locked ? openMenu : undefined}
+      />
+
+      {/* Attached song — secondary line under the header; auto-plays while
+          this post is the active one in the viewport. */}
       {post.music ? (
-        <View style={textBlur}>
+        <View style={dim}>
           <MusicChip music={post.music} disabled={locked} active={audible && !locked} />
         </View>
       ) : null}
 
       {/* Owner-only: this post is hidden from others pending moderation review. */}
       {post.underReview ? (
-        <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: "rgba(232,180,76,0.4)", backgroundColor: "rgba(232,180,76,0.10)" }}>
-          <Flame size={14} color={colors.gold} strokeWidth={2.2} />
-          <Text style={{ flex: 1, ...typeScale.micro, color: colors.silver }}>
+        <View
+          style={{
+            marginHorizontal: space[4],
+            marginBottom: space[3],
+            flexDirection: "row",
+            alignItems: "center",
+            gap: space[2],
+            paddingVertical: space[2],
+            paddingHorizontal: space[3],
+            borderRadius: radius.sm,
+            backgroundColor: tokens.accent.goldSubtle
+          }}
+        >
+          <Flame size={14} color={tokens.accent.gold} strokeWidth={icon.stroke.bold} />
+          <Text variant="label" className="flex-1">
             Under review — hidden from others until it&apos;s checked.
           </Text>
         </View>
@@ -326,210 +348,54 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
             onToggleSwap={() => setSwapped((s) => !s)}
           />
         </MediaFrame>
-        {/* IG-style speaker, bottom-right of the media — only on posts with
-            audio (attached music). Videos keep their own tap-to-mute. */}
+        {/* Speaker, bottom-right — only on posts with attached music. */}
         {post.music?.previewUrl && !post.video && !locked ? (
-          <Pressable
+          <MuteButton
+            muted={audioMuted}
             onPress={toggleAudioMuted}
-            accessibilityLabel={audioMuted ? "Unmute sound" : "Mute sound"}
-            hitSlop={8}
-            haptic={false}
-            style={{
-              position: "absolute",
-              bottom: 12,
-              right: 12,
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: "rgba(0,0,0,0.65)",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            {audioMuted ? (
-              <VolumeX size={15} color={colors.white} strokeWidth={2.2} />
-            ) : (
-              <Volume2 size={15} color={colors.white} strokeWidth={2.2} />
-            )}
-          </Pressable>
+            side="right"
+            label={audioMuted ? "Unmute sound" : "Mute sound"}
+          />
         ) : null}
-        {/* Video posts autoplay muted with a tap-to-mute gesture; this is the
-            accessible, discoverable speaker control (bottom-left so it clears
-            the duration clock at bottom-right). */}
+        {/* Video posts autoplay muted with tap-to-mute; this is the accessible,
+            discoverable control (bottom-left so it clears the duration clock). */}
         {post.video && !locked ? (
-          <Pressable
+          <MuteButton
+            muted={audioMuted}
             onPress={toggleAudioMuted}
-            accessibilityLabel={audioMuted ? "Unmute" : "Mute"}
-            accessibilityState={{ selected: audioMuted }}
-            hitSlop={8}
-            haptic={false}
-            style={{
-              position: "absolute",
-              bottom: 12,
-              left: 12,
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: "rgba(0,0,0,0.65)",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            {audioMuted ? (
-              <VolumeX size={15} color={colors.white} strokeWidth={2.2} />
-            ) : (
-              <Volume2 size={15} color={colors.white} strokeWidth={2.2} />
-            )}
-          </Pressable>
+            side="left"
+            label={audioMuted ? "Unmute" : "Mute"}
+          />
         ) : null}
       </View>
 
-      {/* Reactions row */}
-      <View style={[{ flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 2 }, textBlur]}>
-        {isRealPost ? (
-          // Bare heart, IG-style — the count lives in the "Liked by" line below
-          // rather than being printed twice on the same card.
-          <Pressable
-            onPress={() => !locked && toggleLike.mutate({ postId: post.id, liked: !liked })}
-            accessibilityLabel={liked ? "Unlike" : "Like"}
-            accessibilityState={{ selected: liked }}
-            hitSlop={8}
-          >
-            <Heart
-              size={26}
-              color={liked ? "#FF2D55" : colors.silver}
-              fill={liked ? "#FF2D55" : "transparent"}
-              strokeWidth={2}
-            />
-          </Pressable>
-        ) : null}
-        {/* Comments — right after like, IG order. */}
-        <Pressable
-          onPress={() => !locked && setCommentsOpen((open) => !open)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-          accessibilityLabel="Toggle comments"
-          accessibilityState={{ expanded: commentsOpen }}
-          hitSlop={6}
-        >
-          <MessageCircle size={26} color={colors.silver} strokeWidth={2} />
-          <Text style={{ ...typeScale.meta, fontFamily: "Geist_500Medium", color: colors.silver }}>{commentCount}</Text>
-        </Pressable>
-        {/* Share — after comments, out of the 3-dots menu. */}
-        {isRealPost ? (
-          <Pressable
-            onPress={() =>
-              !locked &&
-              sheet.open(<ShareToFriendSheet sharedKind="post" sharedId={post.id} label={`${post.user.handle}'s post`} />)
-            }
-            accessibilityLabel="Share post"
-            hitSlop={6}
-          >
-            <Send size={25} color={colors.silver} strokeWidth={2} />
-          </Pressable>
-        ) : null}
-        <Pressable
-          onPress={handleReact}
-          accessibilityLabel="Add live reaction"
-          accessibilityState={{ selected: reacted }}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            borderWidth: 1.5,
-            borderStyle: "dashed",
-            borderColor: colors.slate,
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          {reacted ? (
-            <Check size={16} color={colors.silver} strokeWidth={2.2} />
-          ) : (
-            <Camera size={16} color={colors.silver} strokeWidth={2} />
-          )}
-        </Pressable>
-        {reactorCount > 0 ? (
-          <Pressable
-            onPress={() => {
-              if (serverReactions.length > 0) sheet.open(<ReactionsSheet reactors={serverReactions} postId={post.id} />);
-            }}
-            accessibilityLabel="See who reacted"
-            haptic={false}
-            style={{ flexDirection: "row" }}
-          >
-            {/* Real reactors from the backend (signed selfie or avatar fallback) */}
-            {serverReactions.slice(0, 5).map((reactor, index) => (
-              <View
-                key={reactor.userId}
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 17,
-                  overflow: "hidden",
-                  borderWidth: 2,
-                  borderColor: reactor.mine ? colors.white : colors.black,
-                  marginLeft: index === 0 ? 0 : -9,
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                {reactor.mediaUrl ? (
-                  <CachedImage source={{ uri: reactor.mediaUrl }} contentFit="cover" style={{ width: 34, height: 34 }} />
-                ) : (
-                  <Avatar name={reactor.name} size={30} borderWidth={0} />
-                )}
-              </View>
-            ))}
-            {/* Fixture reactors (demo posts only) */}
-            {post.reactions.map((reactor, index) => (
-              <View
-                key={reactor.name}
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 17,
-                  overflow: "hidden",
-                  borderWidth: 2,
-                  borderColor: colors.black,
-                  marginLeft: index === 0 && serverReactions.length === 0 ? 0 : -9
-                }}
-              >
-                <ScenePhoto scene={reactor.scene} legibility={false} />
-              </View>
-            ))}
-            {/* My just-captured selfie, before the server round-trips */}
-            {showLocalPending ? (
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 17,
-                  overflow: "hidden",
-                  borderWidth: 2,
-                  borderColor: colors.white,
-                  marginLeft: serverReactions.length || post.reactions.length ? -9 : 0,
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                {localSelfieUri ? (
-                  <Image source={{ uri: localSelfieUri }} contentFit="cover" style={{ width: 34, height: 34 }} />
-                ) : (
-                  <Avatar name={myName} uri={myProfile.data?.avatar_url} size={30} borderWidth={0} />
-                )}
-              </View>
-            ) : null}
-          </Pressable>
-        ) : null}
-        <Text style={{ ...typeScale.meta, color: colors.fog }}>
-          {`${reactorCount} live reaction${reactorCount === 1 ? "" : "s"}`}
-        </Text>
-      </View>
+      <PostActions
+        locked={locked}
+        isRealPost={isRealPost}
+        liked={liked}
+        onToggleLike={() => toggleLike.mutate({ postId: post.id, liked: !liked })}
+        commentCount={commentCount}
+        commentsOpen={commentsOpen}
+        onToggleComments={() => setCommentsOpen((open) => !open)}
+        onShare={() =>
+          sheet.open(<ShareToFriendSheet sharedKind="post" sharedId={post.id} label={`${post.user.handle}'s post`} />)
+        }
+        reacted={reacted}
+        onReact={handleReact}
+        serverReactions={serverReactions}
+        fixtureReactions={post.reactions}
+        pendingSelfie={
+          showLocalPending ? { uri: localSelfieUri ?? null, name: myName, avatarUrl: myProfile.data?.avatar_url } : null
+        }
+        reactorCount={reactorCount}
+        onOpenReactors={() => {
+          if (serverReactions.length > 0) sheet.open(<ReactionsSheet reactors={serverReactions} postId={post.id} />);
+        }}
+      />
 
-      {/* "Liked by <name> and N others" — IG puts this between the actions and
-          the caption. Hidden on a locked post along with the rest of the text. */}
+      {/* "Liked by <name> and N others" — between the actions and the caption. */}
       {isRealPost ? (
-        <View style={textBlur}>
+        <View style={dim}>
           <LikedByLine
             likers={likersQuery.data ?? []}
             myId={myId}
@@ -540,75 +406,7 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
         </View>
       ) : null}
 
-      {/* "Answered the Call" — posted within 3h of a taunt (spec B). */}
-      {post.answeredCall ? (
-        <View style={[{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 12 }, textBlur]}>
-          <Pressable onPress={() => !locked && router.push(`/user/${post.answeredCall}`)}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 999, borderWidth: 1, borderColor: "rgba(232,180,76,0.45)", backgroundColor: "rgba(232,180,76,0.12)", paddingVertical: 4, paddingHorizontal: 12 }}>
-              <Medal size={12} color={colors.gold} strokeWidth={2.2} />
-              <Text style={{ ...typeScale.micro, color: colors.gold }}>
-                Answered the Call · @{post.answeredCall}
-              </Text>
-            </View>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {/* Public-feed context chips */}
-      {post.ctx?.length ? (
-        <View style={[{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingTop: 12 }, textBlur]}>
-          {post.ctx.map((chip) => {
-            const Icon = CTX_ICONS[chip.icon];
-            return (
-              <CtxChip key={chip.label} icon={<Icon size={11} color={colors.silver} strokeWidth={2} />}>
-                {chip.label}
-              </CtxChip>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {/* Tagged friends — tappable names that open each profile */}
-      {post.taggedFriends?.length ? (
-        <View style={[{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 12 }, textBlur]}>
-          <Users size={12} color={colors.fog} strokeWidth={2} />
-          <Text style={{ ...typeScale.meta, color: colors.fog }}>with</Text>
-          {post.taggedFriends.map((friend) => (
-            <Pressable
-              key={friend.handle}
-              onPress={() => !locked && router.push(`/user/${friend.handle.replace(/^@/, "")}`)}
-              accessibilityLabel={`Open @${friend.handle}'s profile`}
-            >
-              <Text style={{ ...typeScale.meta, fontFamily: "Geist_600SemiBold", color: colors.white }}>
-                @{friend.handle.replace(/^@/, "")}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {/* Caption — @handles are live links to profiles */}
-      {post.caption ? (
-        <Text style={[{ ...typeScale.body, color: colors.bone, paddingHorizontal: 16, paddingTop: 2 }, textBlur]}>
-          <Text style={{ ...typeScale.bodyStrong, color: colors.white }}>{post.user.handle}</Text>
-          {"  "}
-          {splitMentions(post.caption).map((seg, i) =>
-            seg.handle ? (
-              <Text
-                key={`${seg.text}-${i}`}
-                suppressHighlighting
-                onPress={() => !locked && router.push(`/user/${seg.handle}`)}
-                accessibilityRole="link"
-                style={{ ...typeScale.bodyStrong, color: colors.white }}
-              >
-                {seg.text}
-              </Text>
-            ) : (
-              <Text key={`${seg.text}-${i}`}>{seg.text}</Text>
-            )
-          )}
-        </Text>
-      ) : null}
+      <PostCaption post={post} locked={locked} />
 
       {/* Comments open in a keyboard-avoiding bottom sheet so the input stays visible. */}
       <CommentsSheet
@@ -634,13 +432,15 @@ export function PostCard({ post, locked = false, audible = false, onReact, zoomP
 
       {/* Locked feed: frost the whole card (names, caption, media) and block taps. */}
       {locked ? (
-        <BlurView
-          intensity={30}
-          tint="dark"
-          experimentalBlurMethod="dimezisBlurView"
-          style={StyleSheet.absoluteFill}
-        />
+        <BlurView intensity={30} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
       ) : null}
     </View>
   );
 }
+
+/**
+ * Memoized: the feed re-renders on every viewability change (active post), so
+ * without this every visible card re-rendered on scroll. Only the card whose
+ * `audible`/`locked`/`post` actually changed re-renders now.
+ */
+export const PostCard = memo(PostCardInner);

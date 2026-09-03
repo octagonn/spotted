@@ -1,23 +1,12 @@
-const colors = {
-  black: "#000000",
-  ink: "#0A0A0A",
-  graphite: "#131315",
-  charcoal: "#1C1C1F",
-  iron: "#27272A",
-  slate: "#3F3F46",
-  ash: "#52525B",
-  fog: "#71717A",
-  silver: "#A1A1AA",
-  mist: "#D4D4D8",
-  bone: "#E4E4E7",
-  white: "#FAFAFA",
-  pure: "#FFFFFF",
-  glass: "rgba(255,255,255,0.06)",
-  "glass-strong": "rgba(255,255,255,0.10)",
-  "glass-soft": "rgba(255,255,255,0.04)",
-  "hairline": "rgba(255,255,255,0.08)",
-  "hairline-strong": "rgba(255,255,255,0.14)"
-};
+// Tailwind/NativeWind config. Colors, radii and spacing are DERIVED from
+// theme/palette.json — the single source of truth shared with theme/colors.ts
+// and theme/tokens.ts. Do not add hex values here; add them to the palette.
+// tests/theme.test.ts fails if this file drifts from the palette.
+const palette = require("./theme/palette.json");
+
+/** Tailwind class names use kebab-case; the TS palette uses camelCase. */
+const kebab = (key) => key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+const colors = Object.fromEntries(Object.entries(palette.colors).map(([k, v]) => [kebab(k), v]));
 
 module.exports = {
   darkMode: "class",
@@ -25,7 +14,11 @@ module.exports = {
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
-      colors,
+      colors: {
+        ...colors,
+        danger: palette.status.danger,
+        success: palette.status.success
+      },
       fontFamily: {
         display: ["Boldonse_400Regular"],
         anton: ["Anton_400Regular"],
@@ -37,10 +30,16 @@ module.exports = {
         monoMedium: ["GeistMono_500Medium"]
       },
       borderRadius: {
+        // Canonical scale — matches `radius` in theme/tokens.ts.
+        sm: `${palette.radius.sm}px`,
+        md: `${palette.radius.md}px`,
+        lg: `${palette.radius.lg}px`,
+        pill: `${palette.radius.pill}px`,
+        // LEGACY (pre-V2) aliases still referenced by ~16 call sites. Migrate
+        // to sm/md/lg during each screen's redesign phase, then delete.
         spotted: "18px",
         card: "22px",
-        sheet: "28px",
-        pill: "999px"
+        sheet: "28px"
       },
       spacing: {
         18: "72px",

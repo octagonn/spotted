@@ -30,6 +30,9 @@ export default function Index() {
     if (onboardingStage === "home-gym") {
       return <Redirect href="/home-gym" />;
     }
+    if (onboardingStage === "friends") {
+      return <Redirect href="/add-friends" />;
+    }
     return <Redirect href="/permissions" />;
   }
   return <Redirect href="/feed" />;

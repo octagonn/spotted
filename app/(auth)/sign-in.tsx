@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GrainOverlay } from "@/components/GrainOverlay";
 import { LegalModal } from "@/components/LegalModal";
+import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Button } from "@/components/ui/Button";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
@@ -17,6 +18,7 @@ import { LEGAL_VERSION, recordLegalAcceptance } from "@/lib/legal";
 import { logger } from "@/lib/logger";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
+import { icon } from "@/theme/tokens";
 
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
@@ -72,9 +74,7 @@ export default function SignInScreen() {
         message: cause instanceof Error ? cause.message : String(cause)
       });
       const hint = cause instanceof AppleSignInError ? cause.hint : undefined;
-      setErrorText(
-        hint ?? (cause instanceof Error ? cause.message : "Apple sign-in failed. Please try again.")
-      );
+      setErrorText(hint ?? (cause instanceof Error ? cause.message : "Apple sign-in failed. Please try again."));
     } finally {
       setAppleBusy(false);
     }
@@ -87,115 +87,109 @@ export default function SignInScreen() {
       <GrainOverlay opacity={0.06} />
 
       <Animated.View className="flex-1" style={fadeStyle}>
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{
-          paddingTop: insets.top + 16,
-          paddingHorizontal: 16,
-          paddingBottom: insets.bottom + 32,
-          flexGrow: 1
-        }}
-      >
-        <View className="flex-1 justify-end gap-6">
-          <View className="self-start rounded-pill border border-hairline-strong bg-glass-strong px-3 py-1">
-            <Text variant="micro" className="text-mist">
-              STEP 1 OF 5
-            </Text>
-          </View>
-          <Text variant="display-md">SIGN IN.</Text>
-          <Text variant="italic">Pick how you want in.</Text>
-          <View className="gap-3">
-            {/* Apple first (HIG: at least as prominent as other options). The
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            paddingTop: insets.top + 16,
+            paddingHorizontal: 16,
+            paddingBottom: insets.bottom + 32,
+            flexGrow: 1
+          }}
+        >
+          <View className="flex-1 justify-end gap-6">
+            <OnboardingHeader step={1} title="SIGN IN." body="Pick how you want in." />
+            <View className="gap-3">
+              {/* Apple first (HIG: at least as prominent as other options). The
                 native button can't be visually disabled — the handler enforces
                 the legal checkbox with the same error the email path shows. */}
-            {appleAvailable ? (
-              <View style={{ opacity: appleBusy ? 0.6 : 1 }}>
-                <AppleAuthentication.AppleAuthenticationButton
-                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-                  cornerRadius={26}
-                  style={{ width: "100%", height: 52 }}
-                  onPress={() => void handleApple()}
-                />
+              {appleAvailable ? (
+                <View style={{ opacity: appleBusy ? 0.6 : 1 }}>
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                    cornerRadius={26}
+                    style={{ width: "100%", height: 52 }}
+                    onPress={() => void handleApple()}
+                  />
+                </View>
+              ) : null}
+              <Button
+                icon={<Mail color={legalAccepted ? colors.black : colors.ash} size={icon.size.xs + 2} />}
+                onPress={handleEmail}
+                disabled={!legalAccepted}
+              >
+                Continue with email
+              </Button>
+            </View>
+            {errorText ? (
+              <View
+                accessibilityLiveRegion="assertive"
+                className="rounded-card border border-hairline-strong bg-glass-strong p-4"
+              >
+                <Text variant="micro" className="text-white">
+                  SIGN-IN ERROR
+                </Text>
+                <Text variant="caption" className="mt-2 text-mist">
+                  {errorText}
+                </Text>
               </View>
             ) : null}
-            <Button
-              icon={<Mail color={legalAccepted ? colors.black : colors.ash} size={18} />}
-              onPress={handleEmail}
-              disabled={!legalAccepted}
-            >
-              Continue with email
-            </Button>
-          </View>
-          {errorText ? (
-            <View
-              accessibilityLiveRegion="assertive"
-              className="rounded-card border border-hairline-strong bg-glass-strong p-4"
-            >
-              <Text variant="micro" className="text-white">
-                SIGN-IN ERROR
-              </Text>
-              <Text variant="caption" className="mt-2 text-mist">
-                {errorText}
-              </Text>
-            </View>
-          ) : null}
-          <View className="flex-row items-start gap-3">
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityLabel="Agree to the Terms of Use and Privacy Policy"
-              accessibilityState={{ checked: legalAccepted }}
-              className={`mt-0.5 h-6 w-6 items-center justify-center rounded-md border ${
-                legalAccepted ? "border-white bg-white" : "border-hairline-strong bg-glass-soft"
-              }`}
-              onPress={() => {
-                setLegalAccepted((accepted) => !accepted);
-                setErrorText(null);
-              }}
-            >
-              {legalAccepted ? <Check color={colors.black} size={16} strokeWidth={3} /> : null}
-            </Pressable>
-            <View className="flex-1 flex-row flex-wrap items-center">
-              <Text variant="caption" className="text-fog">
-                I agree to the{" "}
-              </Text>
+            <View className="flex-row items-start gap-3">
               <Pressable
-                haptic={false}
-                accessibilityRole="link"
-                pressedClassName="opacity-60"
+                accessibilityRole="checkbox"
+                accessibilityLabel="Agree to the Terms of Use and Privacy Policy"
+                accessibilityState={{ checked: legalAccepted }}
+                className={`mt-0.5 h-6 w-6 items-center justify-center rounded-md border ${
+                  legalAccepted ? "border-white bg-white" : "border-hairline-strong bg-glass-soft"
+                }`}
                 onPress={() => {
-                  setLegalTab("terms");
-                  setLegalOpen(true);
+                  setLegalAccepted((accepted) => !accepted);
+                  setErrorText(null);
                 }}
               >
-                <Text variant="caption" className="text-white underline">
-                  Terms of Use
-                </Text>
+                {legalAccepted ? <Check color={colors.black} size={16} strokeWidth={3} /> : null}
               </Pressable>
-              <Text variant="caption" className="text-fog">
-                {" "}
-                and{" "}
-              </Text>
-              <Pressable
-                haptic={false}
-                accessibilityRole="link"
-                pressedClassName="opacity-60"
-                onPress={() => {
-                  setLegalTab("privacy");
-                  setLegalOpen(true);
-                }}
-              >
-                <Text variant="caption" className="text-white underline">
-                  Privacy Policy
+              <View className="flex-1 flex-row flex-wrap items-center">
+                <Text variant="caption" className="text-fog">
+                  I agree to the{" "}
                 </Text>
-              </Pressable>
-              <Text variant="caption" className="text-fog">
-                .
-              </Text>
+                <Pressable
+                  haptic={false}
+                  accessibilityRole="link"
+                  pressedClassName="opacity-60"
+                  onPress={() => {
+                    setLegalTab("terms");
+                    setLegalOpen(true);
+                  }}
+                >
+                  <Text variant="caption" className="text-white underline">
+                    Terms of Use
+                  </Text>
+                </Pressable>
+                <Text variant="caption" className="text-fog">
+                  {" "}
+                  and{" "}
+                </Text>
+                <Pressable
+                  haptic={false}
+                  accessibilityRole="link"
+                  pressedClassName="opacity-60"
+                  onPress={() => {
+                    setLegalTab("privacy");
+                    setLegalOpen(true);
+                  }}
+                >
+                  <Text variant="caption" className="text-white underline">
+                    Privacy Policy
+                  </Text>
+                </Pressable>
+                <Text variant="caption" className="text-fog">
+                  .
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
       </Animated.View>
 
       <LegalModal visible={legalOpen} initialTab={legalTab} onClose={() => setLegalOpen(false)} />

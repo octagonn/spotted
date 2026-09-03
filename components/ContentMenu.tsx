@@ -11,6 +11,7 @@ import { type ShareKind } from "@/hooks/queries/useMessagesExtras";
 import { useBlockUser } from "@/hooks/queries/useSafety";
 import { showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
+import { tokens } from "@/theme/tokens";
 
 /**
  * The action sheet behind the kebab (⋯) on posts and stories. On your own
@@ -53,7 +54,7 @@ export function ContentMenu({
         title="Block this account?"
         body="They won't see your posts or profile, and you won't see theirs. They aren't notified. You can unblock in Settings → Blocked."
         confirmLabel="Block"
-        confirmIcon={<Ban size={18} color="#EF4444" strokeWidth={2} />}
+        confirmIcon={<Ban size={18} color={tokens.status.danger} strokeWidth={2} />}
         onConfirm={() => {
           blockUser.mutate(reportedUserId, {
             onSuccess: () => {
@@ -74,7 +75,7 @@ export function ContentMenu({
         title={`Delete this ${contentType}?`}
         body="This can't be undone. It'll be removed for everyone."
         confirmLabel="Delete"
-        confirmIcon={<Trash2 size={18} color="#EF4444" strokeWidth={2} />}
+        confirmIcon={<Trash2 size={18} color={tokens.status.danger} strokeWidth={2} />}
         onConfirm={() => onDelete?.()}
       />
     );
@@ -97,11 +98,18 @@ export function ContentMenu({
         <MenuRow
           icon={<Send size={18} color={colors.silver} strokeWidth={2} />}
           label="Send to a friend"
-          onPress={() => sheet.open(<ShareToFriendSheet sharedKind={share.kind} sharedId={share.id} label={share.label} />)}
+          onPress={() =>
+            sheet.open(<ShareToFriendSheet sharedKind={share.kind} sharedId={share.id} label={share.label} />)
+          }
         />
       ) : null}
       {onDelete ? (
-        <MenuRow icon={<Trash2 size={18} color="#EF4444" strokeWidth={2} />} label="Delete" destructive onPress={confirmDelete} />
+        <MenuRow
+          icon={<Trash2 size={18} color={tokens.status.danger} strokeWidth={2} />}
+          label="Delete"
+          destructive
+          onPress={confirmDelete}
+        />
       ) : (
         <>
           <MenuRow
@@ -109,7 +117,12 @@ export function ContentMenu({
             label="Report"
             onPress={() =>
               sheet.open(
-                <ReportSheet contentType={contentType} contentId={contentId} reportedUserId={reportedUserId} label={reportLabel} />
+                <ReportSheet
+                  contentType={contentType}
+                  contentId={contentId}
+                  reportedUserId={reportedUserId}
+                  label={reportLabel}
+                />
               )
             }
           />
@@ -123,7 +136,7 @@ export function ContentMenu({
                     title="Remove friend?"
                     body="You'll stop seeing each other's private posts and streaks. They aren't notified, and you can add each other again any time."
                     confirmLabel="Remove"
-                    confirmIcon={<UserMinus size={18} color="#EF4444" strokeWidth={2} />}
+                    confirmIcon={<UserMinus size={18} color={tokens.status.danger} strokeWidth={2} />}
                     onConfirm={onRemoveFriend}
                   />
                 )
@@ -131,7 +144,12 @@ export function ContentMenu({
             />
           ) : null}
           {reportedUserId ? (
-            <MenuRow icon={<Ban size={18} color="#EF4444" strokeWidth={2} />} label="Block account" destructive onPress={confirmBlock} />
+            <MenuRow
+              icon={<Ban size={18} color={tokens.status.danger} strokeWidth={2} />}
+              label="Block account"
+              destructive
+              onPress={confirmBlock}
+            />
           ) : null}
         </>
       )}

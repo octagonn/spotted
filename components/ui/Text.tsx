@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Text as NativeText, type TextProps as NativeTextProps } from "react-native";
 
-import { textVariants, type TextVariant } from "@/theme/typography";
+import { classesFor } from "@/theme/textClasses";
+import type { TextVariant } from "@/theme/typography";
 
 type TextProps = Omit<NativeTextProps, "style"> & {
   variant?: TextVariant;
@@ -27,7 +28,9 @@ export function Text({
   maxFontSizeMultiplier,
   ...props
 }: TextProps) {
-  const classes = className ? `${textVariants[variant]} ${className}` : textVariants[variant];
+  // A caller's text colour replaces the variant's (see theme/textClasses.ts —
+  // NativeWind would otherwise let the variant's colour win).
+  const classes = classesFor(variant, className);
   const isHeader = HEADER_VARIANTS.has(variant);
   return (
     <NativeText

@@ -74,6 +74,13 @@ function escapeSql(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+/** Coordinates come from third-party JSON/HTML; only a finite number may be spliced into SQL unquoted. */
+function sqlNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error(`sqlNumber: not a finite number: ${String(value)}`);
+  return String(n);
+}
+
 /** yoga/pilates studios get their own map category; everything else is a gym. */
 function categorize(tags) {
   const sport = (tags?.sport ?? "").toLowerCase();
@@ -139,7 +146,7 @@ for (let f = 0; f * ROWS_PER_INSERT * INSERTS_PER_FILE < rows.length; f++) {
     const values = batch
       .map(
         (g) =>
-          `(${escapeSql(g.name)}, ${escapeSql(g.address)}, ${g.latitude}, ${g.longitude}, ${escapeSql(g.category)}, 'osm', ${escapeSql(g.externalId)})`
+          `(${escapeSql(g.name)}, ${escapeSql(g.address)}, ${sqlNumber(g.latitude)}, ${sqlNumber(g.longitude)}, ${escapeSql(g.category)}, 'osm', ${escapeSql(g.externalId)})`
       )
       .join(",\n");
     // gym_dupe_exists: accent/prefix-normalized name match within ~165m —

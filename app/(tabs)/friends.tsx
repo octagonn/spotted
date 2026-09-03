@@ -75,7 +75,7 @@ export default function FriendsScreen() {
             paddingBottom: space[1]
           }}
         >
-          <Text variant="heading">Friends</Text>
+          <Text variant="screen-title">Friends</Text>
           {/* Compose: one friend → 1:1 chat, several → group. */}
           {tab === "Messages" ? (
             <IconButton

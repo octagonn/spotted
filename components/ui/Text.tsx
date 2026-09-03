@@ -17,7 +17,8 @@ const HEADER_VARIANTS = new Set<TextVariant>([
   "display-lg",
   "display-md",
   "display-sm",
-  "title"
+  "title",
+  "screen-title"
 ]);
 
 export function Text({

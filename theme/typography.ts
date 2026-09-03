@@ -13,6 +13,8 @@ export const textVariants = {
   italic: "font-sans text-[17px] leading-[26px] italic text-silver",
   mono: "font-mono text-[12px] leading-[16px] text-fog",
 
+  /** Top-left title of a tab screen (Friends, Communities) — 26 Bold; "heading" read tiny there (tester, 2026-09-02). */
+  "screen-title": "font-sansBold text-[26px] leading-[30px] tracking-[-0.2px] text-white",
   /** Screen / section headings in Geist (not Boldonse) — profile name, sheet titles. */
   heading: "font-sansBold text-[20px] leading-[24px] text-white",
   /** Sub-headings and emphasized row titles — 17 Semibold. */

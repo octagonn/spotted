@@ -115,9 +115,7 @@ export default function MapTabScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.black, paddingTop: insets.top + space[2] }}>
       <View style={{ paddingHorizontal: space[4], paddingBottom: space[1] }}>
-        <Text variant="heading" accessibilityRole="header">
-          {tab}
-        </Text>
+        <Text variant="screen-title">{tab}</Text>
       </View>
       <Segmented
         options={["Communities", "Map"]}

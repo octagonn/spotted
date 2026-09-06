@@ -32,7 +32,6 @@ export type RealInboxThread = {
   empty: boolean;
   /** Filter signals (#1). */
   answered: boolean;
-  storyReply: boolean;
   verified: boolean;
   muted: boolean;
   folderId: string | null;
@@ -200,7 +199,6 @@ export function useInboxThreads() {
             lastSentAt: last?.sent_at ?? convo.last_message_at ?? convo.updated_at,
             empty: !last,
             answered: !last || last.sender_id === userId,
-            storyReply: false,
             verified: false,
             muted: part?.muted ?? false,
             folderId: part?.folder_id ?? null
@@ -225,7 +223,10 @@ export function useInboxThreads() {
         // conversation. The old "Tap to start conversation" placeholder rows
         // are gone; friends are messaged from their profile or the search.
         if (!last) continue;
-        const content = last.content ?? "";
+        // Legacy: DMs sent as a reply to a (since removed) story may have no
+        // text — keep those threads readable instead of showing a blank row.
+        const content =
+          last.content || ((last as { reply_story_media?: string | null }).reply_story_media ? "Replied to a story" : "");
         threads.push({
           profileId: otherId,
           conversationId: convo.id,
@@ -240,7 +241,6 @@ export function useInboxThreads() {
           empty: false,
           // Unanswered = the other person spoke last (needs your reply).
           answered: last.sender_id === userId,
-          storyReply: Boolean((last as { reply_story_media?: string | null }).reply_story_media),
           verified,
           muted: part?.muted ?? false,
           folderId: part?.folder_id ?? null

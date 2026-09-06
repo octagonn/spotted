@@ -1,7 +1,9 @@
 /**
- * Canned taunt lines — 20 rotating roasts. There is no picker anymore: the
- * Taunt button sends ONE randomly-selected line (server still enforces
- * eligibility, daily limits, and quiet hours).
+ * Canned taunt lines — 20 rotating roasts. The Friends-list / profile / inbox
+ * buttons send ONE random line; the home-feed rail opens a sheet with three
+ * suggestions and a Shuffle. The server enforces eligibility (friends only,
+ * you posted, they haven't, no rest day), 15/day, and a 07:00–22:00
+ * target-local window.
  */
 
 export type TauntLine = {
@@ -39,4 +41,23 @@ export const TAUNT_LINE_BY_ID: Record<string, TauntLine> = Object.fromEntries(
 /** One random taunt from the rotation. */
 export function randomTauntLine(): TauntLine {
   return TAUNT_LINES[Math.floor(Math.random() * TAUNT_LINES.length)];
+}
+
+/**
+ * `count` distinct lines for the taunt sheet. Lines in `exclude` (the ones
+ * currently on screen) are skipped so Shuffle always shows something new.
+ */
+export function suggestTauntLines(count = 3, exclude: readonly string[] = []): TauntLine[] {
+  const skip = new Set(exclude);
+  const pool = TAUNT_LINES.filter((line) => !skip.has(line.id));
+  const source = pool.length >= count ? pool : TAUNT_LINES;
+  const picked: TauntLine[] = [];
+  const used = new Set<number>();
+  while (picked.length < Math.min(count, source.length)) {
+    const i = Math.floor(Math.random() * source.length);
+    if (used.has(i)) continue;
+    used.add(i);
+    picked.push(source[i]);
+  }
+  return picked;
 }

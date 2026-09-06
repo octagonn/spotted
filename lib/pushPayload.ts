@@ -14,7 +14,6 @@ export type PushContext = {
   trophyName?: string;
   workoutName?: string;
   reason?: string;
-  kind?: string;
   title?: string;
   body?: string;
 };
@@ -118,7 +117,7 @@ export function formatPushPayload(type: NotificationType, context: PushContext) 
     case "community_message":
       return { title: context.communityName ?? "Group chat", body: `${actorName}: ${context.text ?? "New message"}` };
     case "tagged":
-      return { title: `${actorName} tagged you`, body: `You're in their ${context.kind === "story" ? "story" : "post"}. Go look.` };
+      return { title: `${actorName} tagged you`, body: "You're in their post. Go look." };
     case "taunt_answered":
       return { title: `${actorName} took the bait`, body: pick(seed, ["They posted after your taunt. Respect.", "Your taunt worked. They posted.", "They answered. Go see it."]) };
     case "trophy_unlocked":
@@ -163,7 +162,6 @@ export function payloadToContext(payload: Json): PushContext {
         : undefined;
   const workoutName = typeof payload.workout_name === "string" ? payload.workout_name : undefined;
   const reason = typeof payload.reason === "string" ? payload.reason : undefined;
-  const kind = typeof payload.kind === "string" ? payload.kind : undefined;
   const title = typeof payload.title === "string" ? payload.title : undefined;
   const body = typeof payload.body === "string" ? payload.body : undefined;
   return {
@@ -178,7 +176,6 @@ export function payloadToContext(payload: Json): PushContext {
     trophyName,
     workoutName,
     reason,
-    kind,
     title,
     body
   };

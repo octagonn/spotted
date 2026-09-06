@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Ban, CirclePlus, Flag, Send, Trash2, UserMinus } from "lucide-react-native";
+import { Ban, Flag, Send, Trash2, UserMinus } from "lucide-react-native";
 import { View } from "react-native";
 
 import { ReportSheet } from "@/components/ReportSheet";
@@ -14,7 +14,7 @@ import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
 
 /**
- * The action sheet behind the kebab (⋯) on posts and stories. On your own
+ * The action sheet behind the kebab (⋯) on posts. On your own
  * content it offers Delete (with a confirm step); on someone else's it offers
  * Report. Pass `onDelete` only for content you own.
  */
@@ -25,7 +25,6 @@ export function ContentMenu({
   reportedUserId,
   onDelete,
   share,
-  onAddToStory,
   onRemoveFriend
 }: {
   contentType: ReportContentType;
@@ -36,8 +35,6 @@ export function ContentMenu({
   onDelete?: () => void;
   /** When set, adds a "Send to a friend" row (#8 in-app share). */
   share?: { kind: ShareKind; id: string; label: string };
-  /** When set, adds "Add to your story" (posts the viewer is tagged in). */
-  onAddToStory?: () => void;
   /** When set (viewing a friend's profile), adds "Remove friend". */
   onRemoveFriend?: () => void;
 }) {
@@ -61,7 +58,6 @@ export function ContentMenu({
               showToast("Blocked");
               // Their content disappears everywhere without a manual refresh.
               void queryClient.invalidateQueries({ queryKey: ["feed"] });
-              void queryClient.invalidateQueries({ queryKey: ["stories"] });
             }
           });
         }}
@@ -84,16 +80,6 @@ export function ContentMenu({
   return (
     <View>
       <SheetTitle>Options</SheetTitle>
-      {onAddToStory ? (
-        <MenuRow
-          icon={<CirclePlus size={18} color={colors.silver} strokeWidth={2} />}
-          label="Add to your story"
-          onPress={() => {
-            sheet.close();
-            onAddToStory();
-          }}
-        />
-      ) : null}
       {share ? (
         <MenuRow
           icon={<Send size={18} color={colors.silver} strokeWidth={2} />}

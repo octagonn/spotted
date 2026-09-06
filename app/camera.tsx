@@ -16,10 +16,8 @@ import {
   ChevronLeft,
   Download,
   Image as ImageIcon,
-  Lock,
   MapPin,
   Music,
-  Pencil,
   Plus,
   RefreshCw,
   Tag,
@@ -30,7 +28,6 @@ import {
   ZapOff
 } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as ImageManipulator from "expo-image-manipulator";
 import {
   ActivityIndicator,
@@ -52,7 +49,7 @@ import { FriendsSheet } from "@/components/camera/FriendsSheet";
 import { GymSheet } from "@/components/camera/GymSheet";
 import { LiftVideoReview, type VideoTrim } from "@/components/camera/LiftVideoReview";
 import { LiftVideoThumb, MediaPreview } from "@/components/camera/MediaPreview";
-import { MusicSheet, type SelectedTrack } from "@/components/camera/MusicSheet";
+import { MusicSheet } from "@/components/camera/MusicSheet";
 import { GYM_GEOFENCE_METERS, gymName, type Mode, type SelectedGym } from "@/components/camera/types";
 import { ShutterButton } from "@/components/camera/ShutterButton";
 import { type TrophyShareData } from "@/components/trophies/TrophyShareCard";
@@ -86,16 +83,12 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 import { useSheet } from "@/components/ui/Sheet";
 import { useGymSearch, type GymSearchCoords, type GymSearchResult } from "@/hooks/queries/useGymSearch";
 import { Image as ExpoImage } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
 import { captureRef } from "react-native-view-shot";
 
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { type MusicTrack } from "@/lib/music";
 import { useMyCommunities } from "@/hooks/queries/useCommunities";
-import { usePostedState } from "@/hooks/queries/usePostedState";
-import { usePostStory } from "@/hooks/queries/useStories";
-import { StoryDestinationSheet, type StoryDestination } from "@/components/story/StoryDestinationSheet";
 import { CameraKitCircleButton as CircleButton, cameraSurfaceProps } from "@/components/camera/CameraKit";
 import { FrontFlash } from "@/components/camera/FrontFlash";
 import { trackAnalyticsEvent } from "@/lib/analytics";
@@ -152,7 +145,6 @@ export default function CameraScreen() {
   const queryClient = useQueryClient();
   const keyboardVisible = useKeyboardVisible();
   const userId = useAuthStore((state) => state.userId);
-  const postStory = usePostStory();
   const [permission, requestPermission] = useCameraPermissions();
   // Freeze fix: the native camera session dies quietly when the screen loses
   // focus (saving a draft and leaving, resuming later, backgrounding). Unmount
@@ -173,26 +165,11 @@ export default function CameraScreen() {
   const videoReadyRef = useRef(false);
   const lastTapRef = useRef(0);
 
-  // Capture starts on Story or Daily; video is now always a hold-to-record
-  // action on the shutter, so there's no separate Video mode to start in.
-  // The camera page posts STORIES by default. The daily post is a distinct
-  // flow reached only via ?mode=daily (the "Post today's SPOTTED" button in the
-  // home-feed lock overlay) — there's no in-camera Daily/Story selector.
-  const [mode, setMode] = useState<Mode>(() => (params.mode === "daily" ? "daily" : "story"));
+  // Capture starts on Daily; video is always a hold-to-record action on the
+  // shutter, so there's no separate Video mode to start in. A hold routes the
+  // clip into the lift flow.
+  const [mode, setMode] = useState<Mode>("daily");
   const [dailyStep, setDailyStep] = useState<DailyStep>("capture");
-  // Stories are locked until today's SPOTTED is posted (feed-lock philosophy):
-  // offer to switch into the daily flow instead of letting a story compose.
-  const { postedToday, resolved: postedResolved } = usePostedState();
-  const storyGateShown = useRef(false);
-  useEffect(() => {
-    if (mode === "story" && postedResolved && !postedToday && !storyGateShown.current) {
-      storyGateShown.current = true;
-      appAlert("Post your SPOTTED first", "Stories unlock after you post today's SPOTTED.", [
-        { text: "Not now", style: "cancel", onPress: () => router.back() },
-        { text: "Post my SPOTTED", onPress: () => setMode("daily") }
-      ]);
-    }
-  }, [mode, postedResolved, postedToday, router]);
   const [liftStep, setLiftStep] = useState<LiftStep>("record");
   const [videoUri, setVideoUri] = useState<string>();
   const videoTrimRef = useRef<VideoTrim | null>(null);
@@ -283,7 +260,7 @@ export default function CameraScreen() {
   // Daily photos are shot through a 3:4 viewfinder (Instagram's feed ratio =
   // the sensor's native ratio) instead of a full-screen preview, so what's on
   // screen is exactly what posts and the feed shows all of it. Video (hold to
-  // record) and stories stay full-screen. The viewfinder sits between the top
+  // record) stays full-screen. The viewfinder sits between the top
   // controls and the shutter stack; on short screens it just overlaps them.
   const viewfinder = mode === "daily" && camMode === "picture";
   const viewfinderHeight = winW / POST_PHOTO_RATIO;
@@ -313,16 +290,9 @@ export default function CameraScreen() {
     typeof params.community === "string" && params.community ? [params.community] : []
   );
   const [caption, setCaption] = useState("");
-  const [storyOverlayText, setStoryOverlayText] = useState("");
   const [coords, setCoords] = useState<GymSearchCoords | null>(null);
   const [locationSettled, setLocationSettled] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  // Story music — same picker as daily posts, played during story viewing.
-  const [storyTrack, setStoryTrack] = useState<SelectedTrack | null>(null);
-  // Friends tagged on the story — rendered as tappable chips in the viewer.
-  const [storyTags, setStoryTags] = useState<string[]>([]);
-  // Share destination: My Story (id null) or one of the user's private stories.
-  const [storyDest, setStoryDest] = useState<StoryDestination>({ id: null, name: "My Story" });
 
   // ---- Draft system (#23, reworked) ----
   // Multiple drafts, saved ONLY on explicit intent: the "Save as draft" button
@@ -363,13 +333,8 @@ export default function CameraScreen() {
     if (draft.communities) setCommunities(draft.communities);
     if (draft.gym) setGym(draft.gym);
     if (draft.photoTags) setPhotoTags(draft.photoTags);
-    if (draft.storyTags) setStoryTags(draft.storyTags);
     if (draft.videoTrim) videoTrimRef.current = draft.videoTrim;
-    if (draft.track) {
-      const t = draft.track;
-      if (draft.mode === "story") setStoryTrack(t as SelectedTrack);
-      else setTrack(t as MusicTrack & { clipStart?: number });
-    }
+    if (draft.track) setTrack(draft.track as MusicTrack & { clipStart?: number });
   }, []);
   // On every focus: consume a pending resume from the drafts page, otherwise
   // just refresh the chip's count/preview. No interruption on plain opens.
@@ -387,7 +352,6 @@ export default function CameraScreen() {
   // Everything the draft needs to fully reconstruct this screen.
   const buildDraft = useCallback((): CameraDraftInput => {
     const step = mode === "lift" ? liftStep : dailyStep;
-    const activeTrack = mode === "story" ? storyTrack : track;
     return {
       mode,
       step,
@@ -396,14 +360,14 @@ export default function CameraScreen() {
       extraPhotos,
       videoUri,
       caption,
-      track: activeTrack
+      track: track
         ? {
-            id: activeTrack.id,
-            title: activeTrack.title,
-            artist: activeTrack.artist,
-            artworkUrl: activeTrack.artworkUrl,
-            previewUrl: activeTrack.previewUrl,
-            clipStart: activeTrack.clipStart
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            artworkUrl: track.artworkUrl,
+            previewUrl: track.previewUrl,
+            clipStart: track.clipStart
           }
         : null,
       liftExercise,
@@ -412,7 +376,6 @@ export default function CameraScreen() {
       communities,
       gym,
       photoTags,
-      storyTags,
       videoTrim: videoTrimRef.current
     };
   }, [
@@ -425,14 +388,12 @@ export default function CameraScreen() {
     videoUri,
     caption,
     track,
-    storyTrack,
     liftExercise,
     liftValue,
     tags,
     communities,
     gym,
-    photoTags,
-    storyTags
+    photoTags
   ]);
 
   // Explicitly save the current post as a draft and exit (details-page button).
@@ -461,21 +422,6 @@ export default function CameraScreen() {
       router.back();
       return;
     }
-    if (mode === "story") {
-      // Stories are ephemeral — X asks to delete, not to file image options.
-      appAlert("Discard this story?", "Your shot and edits will be gone.", [
-        { text: "Keep editing", style: "cancel" },
-        {
-          text: "Discard",
-          style: "destructive",
-          onPress: () => {
-            clearDraft();
-            router.back();
-          }
-        }
-      ]);
-      return;
-    }
     appAlert("Keep this as a draft?", "Your shot and edits will be here when you come back.", [
       {
         text: "Discard",
@@ -495,45 +441,6 @@ export default function CameraScreen() {
       { text: "Cancel", style: "cancel" }
     ]);
   }, [photoUri, videoUri, dailyStep, liftStep, userId, mode, buildDraft, clearDraft, router]);
-
-  // Music preview on the story review screen (2d): loop the chosen ~15s segment
-  // so the user hears exactly what viewers will, before posting.
-  const storyReviewActive = mode === "story" && dailyStep === "review";
-  const storyPreview = useAudioPlayer(storyTrack?.previewUrl ? { uri: storyTrack.previewUrl } : null);
-  const storyPreviewStatus = useAudioPlayerStatus(storyPreview);
-  const storyClipStart = storyTrack?.clipStart ?? 0;
-  useEffect(() => {
-    // A sheet open on top has its own player (the music picker auditions the
-    // song you are about to choose). Pause this one so both are not playing at
-    // once; it resumes automatically when the sheet is dismissed.
-    if (!storyReviewActive || sheet.isOpen || !storyTrack?.previewUrl || !storyPreviewStatus.isLoaded) {
-      try {
-        storyPreview.pause();
-      } catch {
-        // player torn down
-      }
-      return;
-    }
-    try {
-      void storyPreview.seekTo(storyClipStart);
-      storyPreview.play();
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storyReviewActive, sheet.isOpen, storyTrack?.previewUrl, storyClipStart, storyPreviewStatus.isLoaded]);
-  // Loop just the chosen 15s window.
-  useEffect(() => {
-    if (!storyReviewActive || sheet.isOpen || !storyTrack?.previewUrl) return;
-    if (storyPreviewStatus.currentTime > storyClipStart + 15) {
-      try {
-        void storyPreview.seekTo(storyClipStart);
-      } catch {
-        // ignore
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storyPreviewStatus.currentTime]);
 
   useEffect(() => {
     if (
@@ -660,89 +567,6 @@ export default function CameraScreen() {
       setVirtualZoom((prev) => stepZoom(prev, zoomBaseRef.current + (e.scale - 1) * 0.35));
     });
 
-  const shareStory = () => {
-    // Guard against a double-tap posting two stories: shareStory never set the
-    // `publishing` flag the button reads, so both taps fired before navigation.
-    if (postStory.isPending) {
-      return;
-    }
-    if (!photoUri) {
-      appAlert("No photo", "The photo didn't save. Go back and retake it.");
-      return;
-    }
-    // Backstop for the entry gate (e.g. the local day ticked over mid-compose).
-    if (postedResolved && !postedToday) {
-      appAlert("Post your SPOTTED first", "Stories unlock after you post today's SPOTTED.");
-      return;
-    }
-    const input = {
-      photoUri,
-      music: storyTrack
-        ? {
-            title: storyTrack.title,
-            artist: storyTrack.artist,
-            artworkUrl: storyTrack.artworkUrl,
-            previewUrl: storyTrack.previewUrl,
-            clipStart: storyTrack.clipStart ?? 0
-          }
-        : null,
-      tagUserIds: storyTags,
-      overlayText: storyOverlayText,
-      privateStoryId: storyDest.id,
-      privateStoryName: storyDest.id ? storyDest.name : null
-    };
-    // #24: post optimistically — the story shows immediately (optimistic cache
-    // insert), we navigate to the feed at once, and the upload retries in the
-    // background (retry:3 on the mutation). On final failure we surface a Retry
-    // so a story can never silently fail to post.
-    const post = () => {
-      showToast("Posting…");
-      postStory.mutate(input, {
-        onSuccess: () => {
-          trackAnalyticsEvent("story_published", { dual: Boolean(dualFrontUri) });
-          showToast("Added to your story");
-          clearDraft();
-        },
-        onError: (error) => {
-          logger.warn("story_publish_failed", { message: error instanceof Error ? error.message : String(error) });
-          appAlert("Couldn't post your story", "It didn't upload — poor connection?", [
-            { text: "Discard", style: "destructive", onPress: clearDraft },
-            { text: "Retry", onPress: post }
-          ]);
-        }
-      });
-    };
-    post();
-    // Clear the draft NOW: mutate-level onSuccess is dropped once this screen
-    // unmounts (router.replace below), so the posted story's photo used to
-    // linger as a "Resume draft" chip on the next camera open.
-    clearDraft();
-    setStoryTrack(null);
-    setStoryTags([]);
-    router.replace("/(tabs)/feed");
-    // Optimistic publish burst — the story is already on its way up.
-    triggerPostCelebration();
-  };
-
-  /** Story mode: pick an existing photo from the library instead of capturing. */
-  const pickStoryPhoto = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 0.9,
-        selectionLimit: 1,
-        // Skip iOS's transcode step — hand back the current representation so the
-        // picker returns fast instead of re-encoding the asset.
-        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current
-      });
-      if (result.canceled || !result.assets[0]) return;
-      setPhotoUri(result.assets[0].uri);
-      setDailyStep("review");
-    } catch {
-      showToast("Couldn't open your photo library");
-    }
-  };
-
   /** Save the daily review exactly as shown. Dual shots are flattened with the
    * selfie inset; regular shots retain the original full-resolution file. */
   const saveDailyPhoto = async () => {
@@ -823,7 +647,7 @@ export default function CameraScreen() {
       // post-processing) so the shutter feels instant; quality 1 for daily —
       // this file is the master every later step re-encodes from.
       const photo = await cameraRef.current?.takePictureAsync({
-        quality: mode === "story" ? 0.9 : 1,
+        quality: 1,
         skipProcessing: true
       });
       if (photo?.uri) {
@@ -831,14 +655,12 @@ export default function CameraScreen() {
         // photo matches the mirrored selfie preview. Daily trims to the 3:4
         // viewfinder — the sensor is already 3:4 so this is normally a no-op,
         // and on sensors that aren't it removes only what the aspect-filling
-        // preview hid, so the post is exactly what was on screen. Stories
-        // display full-screen from the same preview, so they keep the full
-        // frame (and a lighter encode — they're ephemeral).
+        // preview hid, so the post is exactly what was on screen.
         uri = await finalizeCapture(photo, {
           mirror: facing === "front",
-          ratio: mode === "story" ? null : POST_PHOTO_RATIO,
-          compress: mode === "story" ? 0.85 : 1,
-          previewRatio: mode === "story" ? null : POST_PHOTO_RATIO
+          ratio: POST_PHOTO_RATIO,
+          compress: 1,
+          previewRatio: POST_PHOTO_RATIO
         });
       }
     } catch {
@@ -849,9 +671,6 @@ export default function CameraScreen() {
     setDualPhase("off");
     setDailyStep("review");
     if (uri) trackAnalyticsEvent("photo_captured", { mode, dual: false });
-    // Stories land directly in edit mode (2a) — no separate "Edit" step. When
-    // the editor is done, the review screen (music/tags/share) shows.
-    if (mode === "story" && uri) setEditing(true);
   }, [facing, mode, permission?.canAskAgain, permission?.granted, requestPermission]);
 
   // Dual capture (BeReal-style): grab the current lens, flip, let the session
@@ -937,7 +756,6 @@ export default function CameraScreen() {
       setDualPhase("off");
       setDailyStep("review");
       trackAnalyticsEvent("photo_captured", { mode, dual: true });
-      if (mode === "story") setEditing(true);
     } finally {
       setDualBusy(false);
     }
@@ -964,8 +782,8 @@ export default function CameraScreen() {
     // Daily sits in picture mode for image quality, so a hold has to bring a
     // video session up first. Clear the ready flag BEFORE requesting the flip —
     // otherwise the wait loop below reads the outgoing session's `true` and
-    // calls recordAsync mid-reconfigure. Story/lift are already in video mode,
-    // so nothing remounts and recording still starts immediately.
+    // calls recordAsync mid-reconfigure. Lift is already in video mode, so
+    // nothing remounts and recording still starts immediately.
     if (camMode !== "video") {
       videoReadyRef.current = false;
       setRecordIntent(true);
@@ -982,7 +800,7 @@ export default function CameraScreen() {
           videoTrimRef.current = null;
           setVideoUri(result.uri);
           // Daily video stays in the daily flow (photo carousel becomes a clip);
-          // story/lift holds route to the lift review as before.
+          // lift holds route to the lift review as before.
           if (mode === "daily") {
             setDailyStep("review");
           } else {
@@ -1200,22 +1018,21 @@ export default function CameraScreen() {
     }
   };
 
-  // Photo editor — stories AND daily posts. The boundary keeps any editor crash
-  // from taking down the app: worst case you're back on preview.
+  // Photo editor for daily posts. The boundary keeps any editor crash from
+  // taking down the app: worst case you're back on preview.
   if (editing && photoUri) {
     return (
       <EditorBoundary onClose={() => setEditing(false)}>
         <PhotoEditor
           uri={photoUri}
-          // Both modes SHOW the dual selfie so you can compose around it, but
-          // only a story bakes it into the pixels. A daily post uploads it
-          // separately as inset_url and the feed draws the PIP from there —
-          // baking it here as well would show the same selfie twice.
+          // The editor SHOWS the dual selfie so you can compose around it but
+          // never bakes it into the pixels: a daily post uploads it separately
+          // as inset_url and the feed draws the PIP from there — baking it here
+          // as well would show the same selfie twice.
           insetUri={dualFrontUri}
-          bakeInset={mode === "story"}
-          onDone={(edited, overlayText) => {
+          bakeInset={false}
+          onDone={(edited) => {
             setPhotoUri(edited);
-            setStoryOverlayText(overlayText);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
@@ -1262,9 +1079,7 @@ export default function CameraScreen() {
           ? "DUAL · MAIN"
           : mode === "lift"
             ? "VIDEO"
-            : mode === "story"
-              ? "STORY"
-              : "TODAY'S PHOTO";
+            : "TODAY'S PHOTO";
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
         {permission?.granted && isFocused ? (
@@ -1285,7 +1100,7 @@ export default function CameraScreen() {
                 mute={!micPermission?.granted}
                 videoQuality="1080p"
                 // Flash rules + shutter animation live in the shared kit so the
-                // daily, story, chat and reaction cameras can never drift.
+                // daily, chat and reaction cameras can never drift.
                 {...cameraSurfaceProps({ flashOn, facing, videoMode: camMode === "video", recording })}
                 onCameraReady={() => {
                   videoReadyRef.current = true;
@@ -1447,7 +1262,7 @@ export default function CameraScreen() {
                 )}
               </CircleButton>
             ) : null}
-            {/* Dual (BeReal-style front+back) for daily and story photos. */}
+            {/* Dual (BeReal-style front+back) for daily photos. */}
             {!recording && mode !== "lift" ? (
               <CircleButton label={dualMode ? "Exit dual camera" : "Enter dual camera"} onPress={toggleDualMode}>
                 {dualBusy ? (
@@ -1563,14 +1378,8 @@ export default function CameraScreen() {
             </View>
           ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 34 }}>
-            {/* Library picker — story mode only (Snapchat-style). Hidden while recording. */}
-            {mode === "story" && !recording ? (
-              <CircleButton label="Choose from library" onPress={() => void pickStoryPhoto()}>
-                <ImageIcon color={colors.white} size={19} strokeWidth={2} />
-              </CircleButton>
-            ) : (
-              <View style={{ width: 40 }} />
-            )}
+            {/* Spacer keeps the shutter centred against the right-side button. */}
+            <View style={{ width: 40 }} />
             <ShutterButton
               recording={recording}
               locked={recordLocked}
@@ -1663,24 +1472,10 @@ export default function CameraScreen() {
     );
   }
 
-  if ((mode === "daily" || mode === "story") && dailyStep === "review") {
+  if (mode === "daily" && dailyStep === "review") {
     return (
       <View style={{ flex: 1, backgroundColor: colors.black }}>
-        {/* Full-bleed shot \u2014 tap it to (re)open the editor (2a). */}
-        {mode === "story" ? (
-          <Pressable
-            onPress={() => setEditing(true)}
-            accessibilityLabel="Tap photo to edit"
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-          >
-            <ScenePhoto
-              uri={photoUri}
-              scene="s2"
-              legibility={false}
-              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-            />
-          </Pressable>
-        ) : videoUri ? (
+        {videoUri ? (
           <LiftVideoThumb uri={videoUri} />
         ) : (
           /* Daily photo at its own full ratio — review shows exactly the frame
@@ -1696,9 +1491,9 @@ export default function CameraScreen() {
                 backgroundColor: colors.black
               }}
             >
-              {/* Tap to edit, same as a story (2a). Dual posts included: the
-                  editor shows the PIP but does not bake it, so the selfie is
-                  still stored once in inset_url. */}
+              {/* Tap to edit (2a). Dual posts included: the editor shows the
+                  PIP but does not bake it, so the selfie is still stored once
+                  in inset_url. */}
               <Pressable
                 onPress={() => setEditing(true)}
                 accessibilityLabel="Tap photo to edit"
@@ -1766,24 +1561,8 @@ export default function CameraScreen() {
           >
             <ChevronLeft color={colors.white} size={20} />
           </CircleButton>
-          <StepPill>{mode === "story" ? "STORY" : "YOUR SHOT"}</StepPill>
-          {mode === "story" ? (
-            // Edit is tap-the-photo now (2a); this stays a lightweight affordance.
-            <Pressable onPress={() => setEditing(true)} accessibilityLabel="Edit story" hitSlop={8}>
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: "rgba(0,0,0,0.45)",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                <Pencil size={18} color={colors.white} strokeWidth={2.2} />
-              </View>
-            </Pressable>
-          ) : !videoUri && !dualFrontUri && extraPhotos.length + 1 < 4 ? (
+          <StepPill>YOUR SHOT</StepPill>
+          {!videoUri && !dualFrontUri && extraPhotos.length + 1 < 4 ? (
             /* Multi-photo: bank this shot and go take another (carousel post).
                Hidden for video daily posts — a clip stands alone. */
             <Pressable
@@ -1824,141 +1603,25 @@ export default function CameraScreen() {
           style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 220 }}
         />
         <View style={{ position: "absolute", left: 18, right: 18, bottom: insets.bottom + 22 }}>
-          {mode === "story" ? (
-            <>
-              {/* Destination pill — My Story vs a private story (create/edit inside). */}
-              <Pressable
-                onPress={() => sheet.open(<StoryDestinationSheet selected={storyDest} onSelect={setStoryDest} />)}
-                accessibilityLabel={`Sharing to ${storyDest.name} — change destination`}
-                style={{ alignSelf: "center", marginBottom: 12 }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: storyDest.id ? tokens.accent.gold : colors.slate,
-                    backgroundColor: "rgba(0,0,0,0.5)"
-                  }}
-                >
-                  {storyDest.id ? (
-                    <Lock size={14} color={tokens.accent.gold} strokeWidth={2} />
-                  ) : (
-                    <Users size={14} color={colors.white} strokeWidth={2} />
-                  )}
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      maxWidth: 220,
-                      fontFamily: "Geist_600SemiBold",
-                      fontSize: 12.5,
-                      color: storyDest.id ? tokens.accent.gold : colors.white
-                    }}
-                  >
-                    {storyDest.id ? `Private · ${storyDest.name}` : "Sharing to My Story"}
-                  </Text>
-                </View>
-              </Pressable>
-              {/* Music pill — same catalog picker as daily posts. */}
-              <Pressable
-                onPress={() =>
-                  sheet.open(
-                    <MusicSheet
-                      selected={storyTrack}
-                      onChange={setStoryTrack}
-                      onSelect={(next) => {
-                        setStoryTrack(next);
-                        sheet.close();
-                      }}
-                    />
-                  )
-                }
-                accessibilityLabel="Add music to story"
-                style={{ alignSelf: "center", marginBottom: 12 }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: colors.slate,
-                    backgroundColor: "rgba(0,0,0,0.5)"
-                  }}
-                >
-                  <Music size={14} color={colors.white} strokeWidth={2} />
-                  <Text
-                    numberOfLines={1}
-                    style={{ maxWidth: 220, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}
-                  >
-                    {storyTrack ? `${storyTrack.title} · ${storyTrack.artist}` : "Add music"}
-                  </Text>
-                </View>
-              </Pressable>
-              {/* Tag friends pill — same picker as posts; renders tappable chips in the viewer. */}
-              <Pressable
-                onPress={() => sheet.open(<FriendsSheet initial={storyTags} onDone={setStoryTags} />)}
-                accessibilityLabel="Tag friends on story"
-                style={{ alignSelf: "center", marginBottom: 12 }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    paddingVertical: 8,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: colors.slate,
-                    backgroundColor: "rgba(0,0,0,0.5)"
-                  }}
-                >
-                  <Tag size={14} color={colors.white} strokeWidth={2} />
-                  <Text
-                    numberOfLines={1}
-                    style={{ maxWidth: 220, fontFamily: "Geist_600SemiBold", fontSize: 12.5, color: colors.white }}
-                  >
-                    {storyTags.length ? `${storyTags.length} tagged` : "Tag friends"}
-                  </Text>
-                </View>
-              </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "stretch", gap: 10 }}>
+            {photoUri && !videoUri ? (
               <Button
-                onPress={() => void shareStory()}
-                loading={publishing || postStory.isPending}
-                disabled={publishing || postStory.isPending}
+                variant="ghost"
+                onPress={() => void saveDailyPhoto()}
+                loading={savingToLibrary}
+                disabled={savingToLibrary}
+                icon={<Download size={18} color={colors.bone} strokeWidth={2.2} />}
+                style={{ minWidth: 104 }}
               >
-                {storyDest.id ? `Share to ${storyDest.name}` : "Share to story"}
+                Save
               </Button>
-            </>
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "stretch", gap: 10 }}>
-              {photoUri && !videoUri ? (
-                <Button
-                  variant="ghost"
-                  onPress={() => void saveDailyPhoto()}
-                  loading={savingToLibrary}
-                  disabled={savingToLibrary}
-                  icon={<Download size={18} color={colors.bone} strokeWidth={2.2} />}
-                  style={{ minWidth: 104 }}
-                >
-                  Save
-                </Button>
-              ) : null}
-              <View style={{ flex: 1 }}>
-                <Button onPress={() => setDailyStep("compose")} style={{ flex: 1 }}>
-                  Continue {"\u203a"}
-                </Button>
-              </View>
+            ) : null}
+            <View style={{ flex: 1 }}>
+              <Button onPress={() => setDailyStep("compose")} style={{ flex: 1 }}>
+                Continue {"\u203a"}
+              </Button>
             </View>
-          )}
+          </View>
         </View>
       </View>
     );

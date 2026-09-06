@@ -243,7 +243,7 @@ export function useRecommendedTracks() {
 }
 
 /**
- * Remember a song the user attached to a post or story. This is the only input
+ * Remember a song the user attached to a post. This is the only input
  * to the taste profile, so recommendations improve purely by using the app.
  * Best-effort: a failed write must never block posting.
  */

@@ -216,7 +216,7 @@ export default function RootLayout() {
   }, [loaded]);
 
   // Music previews must be audible even with the iPhone ring/silent switch on
-  // silent — without this, post/story audio plays but produces no sound.
+  // silent — without this, post audio plays but produces no sound.
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
   }, []);
@@ -340,10 +340,6 @@ export default function RootLayout() {
                 <Stack.Screen
                   name="community-new"
                   options={{ animation: "slide_from_bottom", gestureDirection: "vertical", animationMatchesGesture: true }}
-                />
-                <Stack.Screen
-                  name="story"
-                  options={{ presentation: "fullScreenModal", animation: "fade" }}
                 />
               </Stack>
               {/* IG-style pinch-zoom preview: rendered above navigation so a

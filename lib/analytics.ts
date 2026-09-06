@@ -56,9 +56,6 @@ export type AnalyticsEventName =
   | "gym_geofence_blocked"
   | "daily_post_published"
   | "daily_post_queued_offline"
-  | "story_published"
-  | "story_viewed"
-  | "story_reposted"
   // workouts
   | "workout_started"
   | "workout_completed"
@@ -71,7 +68,12 @@ export type AnalyticsEventName =
   | "friend_request_responded"
   | "friend_removed"
   | "suggestion_dismissed"
+  // taunts ("Not spotted yet" rail): impression → opened → sent is the funnel
+  | "taunt_rail_impression"
+  | "taunt_opened"
   | "taunt_sent"
+  | "home_gym_prompt_set"
+  | "home_gym_prompt_dismissed"
   | "message_sent"
   | "message_reacted"
   | "message_forwarded"
@@ -115,9 +117,6 @@ const ALLOWED_PROPERTIES: Record<AnalyticsEventName, readonly string[]> = {
   gym_geofence_blocked: [],
   daily_post_published: ["dual", "photo_count", "has_music", "has_workout", "tagged_count", "location_kind", "is_video"],
   daily_post_queued_offline: ["dual"],
-  story_published: ["dual"],
-  story_viewed: ["own"],
-  story_reposted: [],
 
   workout_started: ["source"],
   workout_completed: ["duration_bucket", "exercises", "sets", "prs", "source", "edited"],
@@ -130,7 +129,11 @@ const ALLOWED_PROPERTIES: Record<AnalyticsEventName, readonly string[]> = {
   friend_request_responded: ["accepted"],
   friend_removed: [],
   suggestion_dismissed: [],
-  taunt_sent: [],
+  taunt_rail_impression: ["friends", "open"],
+  taunt_opened: ["streak"],
+  taunt_sent: ["source"],
+  home_gym_prompt_set: [],
+  home_gym_prompt_dismissed: [],
   message_sent: ["reply", "conversation"],
   message_reacted: ["set"],
   message_forwarded: [],

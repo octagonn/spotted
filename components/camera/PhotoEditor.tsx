@@ -152,8 +152,8 @@ function DraggableOverlay({
 }
 
 /**
- * Snapchat/Instagram-style editor for stories, daily posts and non-daily
- * photos. Tools stack in one session: filters, pen drawing,
+ * Snapchat/Instagram-style editor for daily posts and non-daily photos.
+ * Tools stack in one session: filters, pen drawing,
  * draggable/resizable text + emoji stickers, rotate. "Done" flattens the
  * layers to a new image via view-shot (falls back to the original if capture
  * isn't available).
@@ -169,10 +169,8 @@ export function PhotoEditor({
   /** Optional dual-camera selfie shown as the corner PIP. */
   insetUri?: string | null;
   /**
-   * Whether the inset is FLATTENED into the exported image.
-   *
-   * Stories bake it (true): a story is one flat image — there is no separate
-   * inset column to draw from later.
+   * Whether the inset is FLATTENED into the exported image (true produces one
+   * flat image with no separate inset column to draw from later).
    *
    * Daily posts must NOT bake it (false): they upload the selfie separately as
    * `inset_url`, and the feed, profile grid and streak calendar all draw the
@@ -535,7 +533,7 @@ export function PhotoEditor({
       const out = await renderEditedPhoto();
       const result = await savePhotoToCameraRoll(out);
       if (result === "saved") {
-        trackAnalyticsEvent("photo_saved", { mode: "story", dual: Boolean(insetUri) });
+        trackAnalyticsEvent("photo_saved", { mode: "editor", dual: Boolean(insetUri) });
         showToast("Saved to camera roll");
       } else if (result === "denied") showToast("Allow photo access in Settings to save");
       else showToast("Saving photos isn't available on this device");
@@ -561,7 +559,7 @@ export function PhotoEditor({
     );
   };
 
-  // One definition, rendered either inside the captured frame (stories, where
+  // One definition, rendered either inside the captured frame (bakeInset, where
   // it must be flattened into the image) or outside it (daily posts, where the
   // selfie is uploaded separately as inset_url and drawn live by the feed).
   const insetPip = insetUri ? (
@@ -620,7 +618,7 @@ export function PhotoEditor({
           />
         ) : null}
 
-        {/* Baked only for stories. For a daily post this same PIP is rendered
+        {/* Baked only when bakeInset. For a daily post this same PIP is rendered
             OUTSIDE the captured view below, so it never lands in the pixels. */}
         {insetUri && bakeInset ? insetPip : null}
 
@@ -835,7 +833,7 @@ export function PhotoEditor({
         )}
       </View>
 
-      {/* Save the current flattened edit without leaving the story editor. */}
+      {/* Save the current flattened edit without leaving the editor. */}
       {tool === "none" && !dragging && !composing ? (
         <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 14 }}>
           <RoundBtn onPress={() => void saveToLibrary()} accessibilityLabel="Save photo to camera roll">

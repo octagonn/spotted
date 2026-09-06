@@ -357,7 +357,7 @@ export default function NotificationSettingsScreen() {
           />
           <Row
             title="Tags"
-            sub="When someone tags you in a post or story."
+            sub="When someone tags you in a post."
             right={<CategoryToggle value={p.tagsEnabled} field="tagsEnabled" update={update} />}
           />
 

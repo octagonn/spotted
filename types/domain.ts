@@ -60,25 +60,10 @@ export type DailyPrompt = {
   friend_skipped_count: number;
 };
 
-export type StoryReply = {
-  id: string;
-  from: Pick<Profile, "id" | "username" | "display_name" | "avatar_url">;
-  post_id: string;
-  preview: string;
-  unread: boolean;
-  sent_at: string;
-};
-
 export type RoutineItem = {
   day: string;
   muscle: string;
   time: string;
-};
-
-export type ProfileSignal = {
-  label: string;
-  value: string;
-  detail: string;
 };
 
 export type PermanentDrop = {

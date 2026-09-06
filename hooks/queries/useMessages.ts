@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { MOCK_CONVERSATION_ID, mockMessages } from "@/lib/mockData";
-import { compressStoryPhoto } from "@/lib/posts";
+import { compressChatPhoto } from "@/lib/posts";
 import { removePostObjects, uploadMediaObject } from "@/lib/r2";
 import { isDemoMode, isSupabaseConfigured, signedMessageUrl, supabase } from "@/lib/supabase";
 import { trackAnalyticsEvent } from "@/lib/analytics";
@@ -252,7 +252,7 @@ export function useSendMediaMessage(conversationId?: string | null) {
         throw new Error("Not ready to send");
       }
       const cfg = MEDIA_CFG[kind];
-      const uploadUri = kind === "image" ? await compressStoryPhoto(localUri) : localUri;
+      const uploadUri = kind === "image" ? await compressChatPhoto(localUri) : localUri;
       const response = await fetch(uploadUri);
       const body = await response.arrayBuffer();
       if (!body || body.byteLength === 0) {

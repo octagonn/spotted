@@ -7,7 +7,7 @@ import { colors } from "@/theme/colors";
 /**
  * Shared camera chrome + capture-surface rules.
  *
- * Every camera screen in the app (daily/story/lift capture, chat camera,
+ * Every camera screen in the app (daily/lift capture, chat camera,
  * reaction selfie) builds on these so behavior can't drift between them.
  */
 

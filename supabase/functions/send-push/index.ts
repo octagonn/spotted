@@ -138,7 +138,10 @@ function routeForNotification(notification: NotificationRow) {
       return postId ? `/post/${postId}` : "/inbox";
     case "tagged":
       if (postId) return `/post/${postId}`;
-      return actorUsername ? `/story?user=${actorUsername}` : "/inbox";
+      return actorUsername ? `/user/${actorUsername}` : "/inbox";
+    case "taunt":
+      // The only answer to a taunt is a post — land on the daily camera.
+      return "/camera?mode=daily";
     case "community_invite":
     case "community_nudge":
       return communityId ? `/community/${communityId}` : "/inbox";

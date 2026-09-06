@@ -6,10 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FindFriendsTab } from "@/components/friends/FindFriendsTab";
 import { FeedHeader } from "@/components/post/FeedHeader";
+import { HomeGymPrompt } from "@/components/post/HomeGymPrompt";
 import { LockOverlay } from "@/components/post/LockOverlay";
+import { NotSpottedRail } from "@/components/post/NotSpottedRail";
 import { PendingPostsStrip } from "@/components/post/PendingPostsStrip";
-import { StoriesRail } from "@/components/post/StoriesRail";
 import { PostCard } from "@/components/post/PostCard";
 import { ReactionCaptureSheet } from "@/components/post/ReactionCaptureSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -123,6 +125,9 @@ export default function HomeScreen() {
   const userId = useAuthStore((state) => state.userId);
   const friends = useFriends();
   const friendIds = useMemo(() => new Set((friends.data ?? []).map((f) => f.id)), [friends.data]);
+  // Friends tab with a KNOWN-empty crew (not loading, not offline): the empty
+  // state becomes the friend finder instead of a "go add friends" sign.
+  const noFriendsYet = tab === "Friends" && !offline && friends.isSuccess && (friends.data?.length ?? 0) === 0;
   // Pull-to-refresh bumps this to reshuffle the visible order.
   const [shuffleSeed, setShuffleSeed] = useState(0);
   // Spinner ONLY for a manual pull. Binding it to feed.isRefetching made the
@@ -201,8 +206,8 @@ export default function HomeScreen() {
   );
 
   // Which post's music is audible: the first mostly-visible post with a
-  // playable track — and only while this screen is focused, so opening a
-  // story (which renders on top of the mounted feed) silences the feed.
+  // playable track — and only while this screen is focused, so a screen pushed
+  // on top of the mounted feed (profile, camera) silences it.
   const isFocused = useIsFocused();
   // The single most-visible post drives BOTH music and video autoplay (IG-style).
   const [activePostId, setActivePostId] = useState<string | null>(null);
@@ -289,7 +294,12 @@ export default function HomeScreen() {
                 </View>
               </View>
             ) : null}
-            {tab === "Friends" ? <StoriesRail /> : null}
+            {/* "Not spotted yet" rail (stories' old slot): friends who haven't
+                posted today, one tap to taunt. Behind the LockOverlay until
+                the viewer has posted — you earn the right to talk. */}
+            {tab === "Friends" ? <NotSpottedRail /> : null}
+            {/* One-time nudge to set a home gym; retires itself. */}
+            {tab === "Friends" && !locked ? <HomeGymPrompt /> : null}
             <Segmented
               variant="quiet"
               options={["Friends", "Public"]}
@@ -299,6 +309,22 @@ export default function HomeScreen() {
             />
             {/* Posts captured offline, waiting in the upload queue. */}
             <PendingPostsStrip />
+            {/* Zero friends: the Friends feed IS the friend finder. Every other
+                screen is empty for the same reason, so the fix lives where
+                they're looking instead of a "go add friends" sign. Lives in
+                the header (not ListEmptyComponent) so it also shows above the
+                viewer's own posts. */}
+            {noFriendsYet ? (
+              <View style={{ paddingTop: space[2], paddingBottom: space[4] }}>
+                <View style={{ paddingHorizontal: space[4], paddingBottom: space[4] }}>
+                  <Text variant="title">Your feed is your friends</Text>
+                  <Text variant="body" className="text-silver mt-1">
+                    Add a few people and their daily SPOTTED shows up here — and you can taunt the ones who skip.
+                  </Text>
+                </View>
+                <FindFriendsTab />
+              </View>
+            ) : null}
           </View>
         }
         onViewableItemsChanged={onViewableItemsChanged}
@@ -318,6 +344,9 @@ export default function HomeScreen() {
               <PostCardSkeleton />
               <PostCardSkeleton />
             </View>
+          ) : noFriendsYet ? (
+            // The friend finder already sits in the header for this case.
+            null
           ) : (
             <EmptyState
               icon={

@@ -28,6 +28,7 @@ export function isSafeNotificationRoute(value: unknown): value is string {
   }
   return (
     value === "/(tabs)/feed" ||
+    value === "/camera?mode=daily" ||
     value === "/inbox" ||
     value === "/profile-section/trophies" ||
     value === "/settings/privacy" ||
@@ -36,8 +37,7 @@ export function isSafeNotificationRoute(value: unknown): value is string {
     /^\/chat\/[0-9a-f-]{36}(\?group=1)?$/i.test(value) ||
     /^\/post\/[0-9a-f-]{36}$/i.test(value) ||
     /^\/community\/[0-9a-f-]{36}(\?tab=(Chat|Board|Feed|Members))?$/i.test(value) ||
-    /^\/user\/[a-z0-9_]{3,20}$/.test(value) ||
-    /^\/story\?user=[a-z0-9_]{3,20}$/.test(value)
+    /^\/user\/[a-z0-9_]{3,20}$/.test(value)
   );
 }
 
@@ -72,7 +72,7 @@ export function routeForNotification(input: NotificationRouteInput): string {
       return postId ? `/post/${postId}` : "/inbox";
     case "tagged":
       if (postId) return `/post/${postId}`;
-      return actorUsername ? `/story?user=${actorUsername}` : "/inbox";
+      return actorUsername ? `/user/${actorUsername}` : "/inbox";
     case "community_invite":
     case "community_nudge":
       return communityId ? `/community/${communityId}` : "/inbox";
@@ -86,6 +86,10 @@ export function routeForNotification(input: NotificationRouteInput): string {
     case "daily_nudge":
     case "arrival_buzz":
       return "/(tabs)/feed";
+    case "taunt":
+      // A taunt has exactly one answer. Land on the daily camera, not the
+      // sender's profile — posting is what closes the loop (and credits them).
+      return "/camera?mode=daily";
     case "system_notice":
       // Actor-less notices carry their own destination (allowlisted above).
       return isSafeNotificationRoute(payload.route) ? payload.route : "/inbox";

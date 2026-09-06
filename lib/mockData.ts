@@ -6,9 +6,7 @@ import type {
   Gym,
   PermanentDrop,
   Profile,
-  ProfileSignal,
   RoutineItem,
-  StoryReply,
   Streak,
   ViewerPreview
 } from "@/types/domain";
@@ -387,31 +385,6 @@ export const mockRoutine: RoutineItem[] = [
   { day: "SUN", muscle: "Rest", time: "OFF" }
 ];
 
-export const mockProfileSignals: ProfileSignal[] = [
-  { label: "PROFILE VIEWS", value: "12", detail: "3 new since your last post" },
-  { label: "STORY REPLAYS", value: "6", detail: "Mia replayed twice" },
-  { label: "ROUTINE SAVES", value: "4", detail: "People studying the split" }
-];
-
-export const mockStoryReplies: StoryReply[] = [
-  {
-    id: "reply-mia-1",
-    from: mockProfiles[1],
-    post_id: "post-self-preview",
-    preview: "that lighting is insane",
-    unread: true,
-    sent_at: now
-  },
-  {
-    id: "reply-dre-1",
-    from: mockProfiles[2],
-    post_id: "post-self-preview",
-    preview: "you actually showed up for legs",
-    unread: false,
-    sent_at: now
-  }
-];
-
 export const mockPermanentDrops: PermanentDrop[] = [
   {
     id: "highlight-1",
@@ -426,15 +399,6 @@ export const mockPermanentDrops: PermanentDrop[] = [
     saved_at: now
   }
 ];
-
-export const mockSkipSignals = [
-  {
-    id: "skip-1",
-    display_name: "Jules",
-    muscle: "pull",
-    body: "Jules missed pull day yesterday. Quiet, but everybody saw it."
-  }
-] as const;
 
 export const MOCK_CONVERSATION_ID = "mock-conversation";
 

@@ -102,7 +102,11 @@ export function AudioBubble({ uri, mine }: { uri: string | null; mine: boolean }
   );
 }
 
-/** Thumbnail of the story a DM is replying to (story media lives in the posts bucket). */
+/**
+ * Legacy: older DMs sent as a reply to a (since removed) story still carry
+ * `reply_story_media`. Render a static "replied to a story" line + thumbnail
+ * so those threads keep making sense; there is no story viewer to open.
+ */
 export function StoryReplyPreview({ path, mine }: { path: string; mine: boolean }) {
   const media = useQuery({
     queryKey: ["story-reply-thumb", path],

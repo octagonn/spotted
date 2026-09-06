@@ -23,7 +23,7 @@ export function ReportSheet({
   contentType: ReportContentType;
   contentId: string;
   reportedUserId?: string | null;
-  /** e.g. "post", "story", "@user" — shown in the title. */
+  /** e.g. "post", "comment", "@user" — shown in the title. */
   label: string;
 }) {
   const sheet = useSheet();

@@ -117,7 +117,7 @@ export default function WelcomeScreen() {
 
         <View className="gap-4">
           <Animated.View entering={FadeInDown.duration(600).delay(150)}>
-            <StepPill>DAILY · GYM · STORIES</StepPill>
+            <StepPill>DAILY · GYM · FRIENDS</StepPill>
           </Animated.View>
 
           <SpottedReveal />

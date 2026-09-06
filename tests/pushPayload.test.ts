@@ -55,8 +55,7 @@ describe("push payload formatting", () => {
         text: "Leg day",
         communityName: "Iron Club",
         trophyName: "Century",
-        workoutName: "Push",
-        kind: "story"
+        workoutName: "Push"
       });
       expect(payload.title.length, type).toBeGreaterThan(0);
       expect(payload.body.length, type).toBeGreaterThan(0);

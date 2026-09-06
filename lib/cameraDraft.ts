@@ -21,7 +21,7 @@ import { logger } from "@/lib/logger";
 
 export type CameraDraft = {
   id: string;
-  mode: "daily" | "story" | "lift";
+  mode: "daily" | "lift";
   step: string;
   photoUri?: string | null;
   /** Front-camera frame for a dual post. */
@@ -45,8 +45,6 @@ export type CameraDraft = {
   gym?: { type: "gym"; id: string; name: string } | { type: "home" } | { type: "other" } | null;
   /** Positional photo tags (normalized 0–1 coords). */
   photoTags?: { userId: string; username: string; x: number; y: number }[];
-  /** Friends tagged on a story. */
-  storyTags?: string[];
   /** Lift video trim window (seconds). */
   videoTrim?: { start: number; end: number } | null;
   savedAt: number;

@@ -1,6 +1,6 @@
 /** Shared compose-flow types for the camera screen and its sheets. */
 
-export type Mode = "daily" | "lift" | "story";
+export type Mode = "daily" | "lift";
 
 /** Where the post happened: a real mapped gym row, or an unmapped location. */
 export type SelectedGym = { type: "gym"; id: string; name: string } | { type: "home" } | { type: "other" };

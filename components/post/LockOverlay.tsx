@@ -19,10 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Pressable } from "@/components/ui/Pressable";
+import { useNotSpotted, useTauntsReceivedToday, type ReceivedTaunt } from "@/hooks/queries/useNotSpotted";
 import { useActivityUnreadCount } from "@/hooks/queries/useNotifications";
 import { restDayMessage, useMarkRestDay } from "@/hooks/queries/useRestDay";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
 import { useAuthStore } from "@/stores/auth";
+import { TAUNT_LINE_BY_ID } from "@/lib/tauntLines";
 import { localDateKey, showToast } from "@/stores/ui";
 import { colors } from "@/theme/colors";
 import { tokens } from "@/theme/tokens";
@@ -42,6 +44,15 @@ function posterLine(posters: LockPoster[], total: number): string {
   if (names.length === 1 && rest <= 0) return `${names[0]} already went today.`;
   if (rest <= 0) return `${names.join(" and ")} went today.`;
   return `${names.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"} went today.`;
+}
+
+/** "Ethan taunted you." / "Ethan, Tori and 2 others are waiting on your post." */
+function tauntLine(taunts: ReceivedTaunt[]): string {
+  const names = taunts.slice(0, 2).map((t) => (t.display_name?.trim() || t.username).split(" ")[0]);
+  const rest = taunts.length - names.length;
+  if (taunts.length === 1) return `${names[0]} taunted you.`;
+  if (rest <= 0) return `${names.join(" and ")} are waiting on your post.`;
+  return `${names.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"} are waiting on your post.`;
 }
 
 /**
@@ -71,6 +82,13 @@ export function LockOverlay({
   // hidden behind this overlay while locked).
   const unreadCount = useActivityUnreadCount();
   const restToday = streakDays.data instanceof Map && streakDays.data.get(localDateKey())?.kind === "rest";
+  // The taunt loop's receiving end: who called you out today, and how many
+  // of your crew are still un-spotted (the rail behind this glass).
+  const received = useTauntsReceivedToday();
+  const taunts = received.data ?? [];
+  const latestLine = taunts[0] ? TAUNT_LINE_BY_ID[taunts[0].line_id]?.text : undefined;
+  const notSpotted = useNotSpotted();
+  const openCount = (notSpotted.data ?? []).filter((f) => !f.went_today && !f.rest_today).length;
 
   // Gentle breathing pulse on the CTA so it draws the eye.
   const pulse = useSharedValue(1);
@@ -205,6 +223,48 @@ export function LockOverlay({
             </Text>
           ) : null}
 
+          {/* You've been called out — the strongest reason to post right now. */}
+          {taunts.length > 0 ? (
+            <View
+              accessibilityRole="summary"
+              accessibilityLabel={`${tauntLine(taunts)}${latestLine ? ` ${latestLine}` : ""}`}
+              style={{
+                marginTop: 16,
+                alignSelf: "stretch",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: tokens.accent.gold,
+                backgroundColor: tokens.accent.goldSubtle
+              }}
+            >
+              <View style={{ flexDirection: "row" }}>
+                {taunts.slice(0, 3).map((t, i) => (
+                  <View
+                    key={t.taunt_id}
+                    style={{ marginLeft: i === 0 ? 0 : -10, borderWidth: 2, borderColor: colors.black, borderRadius: 16 }}
+                  >
+                    <Avatar name={t.display_name?.trim() || t.username} uri={t.avatar_url} size={28} />
+                  </View>
+                ))}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: "Geist_600SemiBold", fontSize: 13, lineHeight: 18, color: colors.white }}>
+                  {tauntLine(taunts)}
+                </Text>
+                {latestLine ? (
+                  <Text numberOfLines={1} style={{ fontSize: 12.5, lineHeight: 17, color: colors.silver }}>
+                    {`“${latestLine}”`}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
           {/* Social proof — avatar stack + first-name line. FOMO is the point. */}
           {friendsPostedToday > 0 ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 }}>
@@ -250,10 +310,15 @@ export function LockOverlay({
             </Text>
           )}
 
-          {/* Drops-waiting teaser. */}
+          {/* Drops-waiting teaser + the taunt rail waiting behind the glass. */}
           {lockedCount > 0 ? (
             <Text style={{ marginTop: 10, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.fog }}>
               {`${lockedCount} ${lockedCount === 1 ? "drop" : "drops"} waiting behind the glass`}
+            </Text>
+          ) : null}
+          {!restToday && openCount > 0 ? (
+            <Text style={{ marginTop: lockedCount > 0 ? 4 : 10, fontFamily: "Geist_500Medium", fontSize: 12, color: colors.fog }}>
+              {`${openCount} ${openCount === 1 ? "friend hasn't" : "friends haven't"} been spotted yet. Post first, then taunt.`}
             </Text>
           ) : null}
 

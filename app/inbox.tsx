@@ -35,7 +35,7 @@ function useDirectTaunt() {
     setPendingId(targetId);
     const line = randomTauntLine();
     guarded.mutate(
-      { targetId, lineId: line.id, lineText: line.text },
+      { targetId, lineId: line.id, lineText: line.text, source: "inbox" },
       // Errors surface via useSendTaunt's own toast.
       { onSuccess: () => showToast("Taunt sent"), onSettled: () => setPendingId(null) }
     );

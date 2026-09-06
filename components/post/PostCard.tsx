@@ -25,7 +25,6 @@ import { useAddComment, useDeleteComment, usePostComments } from "@/hooks/querie
 import { usePostLikers, useMyReactions, useToggleLike } from "@/hooks/queries/usePostReactions";
 import { usePostReactionSelfies } from "@/hooks/queries/usePostReactionSelfies";
 import { useMyProfile } from "@/hooks/queries/useProfile";
-import { useRepostToStory } from "@/hooks/queries/useStories";
 import { type FeedMockPost } from "@/lib/redesignData";
 import { useAudioStore } from "@/stores/audio";
 import { showToast, useUiStore } from "@/stores/ui";
@@ -130,7 +129,6 @@ function PostCardInner({ post, locked = false, audible = false, onReact, zoomPre
   // reaction rail.
   const myReactions = useMyReactions();
   const toggleLike = useToggleLike();
-  const repostToStory = useRepostToStory();
   // Who liked this post — drives the "Liked by …" line and the Likes sheet,
   // which share this cache entry. Optimistically patched by useToggleLike so
   // the line updates the instant you tap the heart.
@@ -235,15 +233,6 @@ function PostCardInner({ post, locked = false, audible = false, onReact, zoomPre
   };
 
   const isOwnPost = isRealPost && Boolean(myProfile.data?.username) && myProfile.data?.username === post.user.handle;
-  // Tagged in this post (caption tags or on-photo tags) → the ⋯ menu offers
-  // "Add to your story" (IG-style reshare; the RPC re-checks the tag).
-  const myHandle = myProfile.data?.username ?? null;
-  const taggedInPost =
-    isRealPost &&
-    !isOwnPost &&
-    Boolean(myHandle) &&
-    (Boolean(post.taggedFriends?.some((friend) => friend.handle.replace(/^@/, "") === myHandle)) ||
-      Boolean(post.photoTags?.some((tag) => tag.username === myHandle)));
   const openMenu = () => {
     sheet.open(
       <ContentMenu
@@ -251,20 +240,6 @@ function PostCardInner({ post, locked = false, audible = false, onReact, zoomPre
         contentId={post.id}
         reportLabel="post"
         reportedUserId={post.authorId ?? undefined}
-        onAddToStory={
-          taggedInPost && post.kind !== "video" && !post.video
-            ? () =>
-                repostToStory.mutate(post.id, {
-                  onSuccess: () => showToast("Added to your story"),
-                  onError: (error) => {
-                    const message = error instanceof Error ? error.message : "";
-                    showToast(
-                      message.includes("already_reposted") ? "Already on your story" : "Couldn't add to your story"
-                    );
-                  }
-                })
-            : undefined
-        }
         onDelete={
           isOwnPost
             ? () =>

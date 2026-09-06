@@ -36,7 +36,6 @@ import {
   useUserStreak
 } from "@/hooks/queries/useProfile";
 import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
-import { useStories } from "@/hooks/queries/useStories";
 import { useStreakDays } from "@/hooks/queries/useStreakDays";
 import { useTaggedPosts } from "@/hooks/queries/useTaggedPosts";
 import { useSendTaunt } from "@/hooks/queries/useTaunts";
@@ -93,7 +92,6 @@ export default function UserProfileScreen() {
   const streakDays = useStreakDays(profile?.id);
   const userStreak = useUserStreak(profile?.id);
   const mutuals = useMutualFriends(profile?.id);
-  const stories = useStories();
   const sendRequest = useSendFriendRequest();
   const sendTaunt = useSendTaunt();
   // Taunts only exist to call out friends who HAVEN'T gone yet — once they've
@@ -107,7 +105,7 @@ export default function UserProfileScreen() {
     if (!profile || sendTaunt.isPending || targetWentToday) return;
     const line = randomTauntLine();
     sendTaunt.mutate(
-      { targetId: profile.id, lineId: line.id, lineText: line.text },
+      { targetId: profile.id, lineId: line.id, lineText: line.text, source: "profile" },
       // Errors already toast inside useSendTaunt.
       { onSuccess: () => showToast("Taunt sent") }
     );
@@ -139,7 +137,6 @@ export default function UserProfileScreen() {
   const name = profile?.display_name ?? username.replace(/[._]/g, " ");
   const firstName = name.split(" ")[0];
   const handle = profile?.username ?? username;
-  const hasActiveStory = Boolean(profile && stories.data?.some((g) => g.userId === profile.id));
 
   // Public accounts are viewable by anyone; private ones unlock only for
   // friends. is_private is the content gate — discoverable only governs
@@ -274,18 +271,8 @@ export default function UserProfileScreen() {
             name={name}
             handle={handle}
             avatarUrl={profile?.avatar_url}
-            hasActiveStory={hasActiveStory}
-            avatarAccessibilityLabel={
-              hasActiveStory ? `${name}'s profile photo, has a story` : `${name}'s profile photo`
-            }
-            onAvatarPress={
-              hasActiveStory || profile?.avatar_url
-                ? () => {
-                    if (hasActiveStory && profile) router.push(`/story?user=${profile.id}`);
-                    else if (profile?.avatar_url) setAvatarZoom(true);
-                  }
-                : undefined
-            }
+            avatarAccessibilityLabel={`${name}'s profile photo`}
+            onAvatarPress={profile?.avatar_url ? () => setAvatarZoom(true) : undefined}
             // Hold-to-enlarge (Instagram-style).
             onAvatarLongPress={profile?.avatar_url ? () => setAvatarZoom(true) : undefined}
             postCount={postCount}

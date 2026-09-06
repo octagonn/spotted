@@ -18,9 +18,7 @@ describe("notification routing", () => {
         payload: { community_id: communityId }
       })
     ).toBe(`/community/${communityId}`);
-    expect(routeForNotification({ type: "tagged", actorUsername: "mia_lifts" })).toBe(
-      "/story?user=mia_lifts"
-    );
+    expect(routeForNotification({ type: "tagged", actorUsername: "mia_lifts" })).toBe("/user/mia_lifts");
     expect(routeForNotification({ type: "trophy_unlocked" })).toBe(
       "/profile-section/trophies"
     );
@@ -49,6 +47,13 @@ describe("notification routing", () => {
         url: "https://malicious.example"
       })
     ).toBe("/(tabs)/feed");
+  });
+
+  it("sends a taunt to the daily camera, not the sender's profile", () => {
+    expect(routeForNotification({ type: "taunt", actorUsername: "mia_lifts" })).toBe("/camera?mode=daily");
+    expect(isSafeNotificationRoute("/camera?mode=daily")).toBe(true);
+    expect(isSafeNotificationRoute("/camera?mode=lift")).toBe(false);
+    expect(routeForNotification({ type: "taunt_answered", payload: { post_id: postId } })).toBe(`/post/${postId}`);
   });
 });
 

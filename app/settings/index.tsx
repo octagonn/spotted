@@ -2,7 +2,6 @@ import { router, type Href } from "expo-router";
 import {
   Ban,
   Bell,
-  CircleUserRound,
   Download,
   FileText,
   Lock,
@@ -151,12 +150,6 @@ export default function SettingsScreen() {
           icon={glyph(Bell)}
           title="Notifications"
           onPress={() => router.push("/settings/notifications" as Href)}
-        />
-        <SettingNavRow
-          icon={glyph(CircleUserRound)}
-          title="Stories"
-          sub="Private stories — who's in them, edit, delete"
-          onPress={() => router.push("/settings/stories" as Href)}
         />
         <SettingNavRow
           icon={glyph(Ban)}

@@ -1,4 +1,4 @@
-import { ChevronRight, MapPin, Plus } from "lucide-react-native";
+import { ChevronRight, MapPin } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 
@@ -7,24 +7,19 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Pressable } from "@/components/ui/Pressable";
 import { Stat } from "@/components/ui/Stat";
 import { Text } from "@/components/ui/Text";
-import { colors } from "@/theme/colors";
 import { icon, radius, space, tokens } from "@/theme/tokens";
 
 export const PROFILE_GUTTER = space[4];
 const AVATAR_OUTER = 88;
-const RING = 2;
 
 type ProfileIdentityProps = {
   name: string;
   handle: string;
   avatarUrl?: string | null;
-  hasActiveStory: boolean;
-  /** Tapping the avatar (opens the story, or zooms / adds a story). */
+  /** Tapping the avatar (zooms the photo, or edits it on your own profile). */
   onAvatarPress?: () => void;
   onAvatarLongPress?: () => void;
   avatarAccessibilityLabel: string;
-  /** Owner only: the + badge that always opens the story camera. */
-  onAddStory?: () => void;
   postCount: number;
   friendCount: number;
   onPressFriends?: () => void;
@@ -39,18 +34,16 @@ type ProfileIdentityProps = {
 
 /**
  * The social identity block shared by own and other-user profiles:
- * avatar (story ring) · posts / friends · name · bio · gym · socials.
+ * avatar · posts / friends · name · bio · gym · socials.
  * Identity first; everything below it is context.
  */
 export function ProfileIdentity({
   name,
   handle,
   avatarUrl,
-  hasActiveStory,
   onAvatarPress,
   onAvatarLongPress,
   avatarAccessibilityLabel,
-  onAddStory,
   postCount,
   friendCount,
   onPressFriends,
@@ -60,7 +53,7 @@ export function ProfileIdentity({
   socialLinks,
   children
 }: ProfileIdentityProps) {
-  const avatarSize = hasActiveStory ? AVATAR_OUTER - 2 * (RING + 3) : AVATAR_OUTER - 4;
+  const avatarSize = AVATAR_OUTER - 4;
   return (
     <View>
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: PROFILE_GUTTER, gap: space[4] }}>
@@ -78,8 +71,6 @@ export function ProfileIdentity({
                 width: AVATAR_OUTER,
                 height: AVATAR_OUTER,
                 borderRadius: radius.pill,
-                borderWidth: hasActiveStory ? RING : 0,
-                borderColor: tokens.text.primary,
                 alignItems: "center",
                 justifyContent: "center"
               }}
@@ -87,29 +78,6 @@ export function ProfileIdentity({
               <Avatar name={name || handle || "?"} uri={avatarUrl} size={avatarSize} />
             </View>
           </Pressable>
-          {onAddStory ? (
-            <Pressable
-              onPress={onAddStory}
-              haptic="impact"
-              accessibilityLabel="Add to your story"
-              hitSlop={6}
-              style={{
-                position: "absolute",
-                right: 0,
-                bottom: 0,
-                width: 26,
-                height: 26,
-                borderRadius: radius.pill,
-                backgroundColor: colors.white,
-                borderWidth: 3,
-                borderColor: colors.black,
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              <Plus size={13} color={colors.black} strokeWidth={3} />
-            </Pressable>
-          ) : null}
         </View>
         <View style={{ flex: 1, flexDirection: "row" }}>
           <Stat value={postCount} label={postCount === 1 ? "post" : "posts"} />

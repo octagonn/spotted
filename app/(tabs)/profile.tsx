@@ -10,7 +10,6 @@ import {
   Grid3x3,
   Lock,
   Menu,
-  Plus,
   Tag,
   Trophy,
   Users
@@ -35,7 +34,7 @@ import { SettingNavRow } from "@/components/ui/SettingRow";
 import { Text } from "@/components/ui/Text";
 import { useFriends } from "@/hooks/queries/useFriends";
 import { useMyProfile } from "@/hooks/queries/useProfile";
-import { useHasActiveStory, useSetSplitPublic, useSetVisibility } from "@/hooks/queries/useProfileExtras";
+import { useSetSplitPublic, useSetVisibility } from "@/hooks/queries/useProfileExtras";
 import { restDayMessage, useMarkRestDay } from "@/hooks/queries/useRestDay";
 import { useSignedUserPosts } from "@/hooks/queries/useSignedUserPosts";
 import { useRecordStreakHighWater, useStreak } from "@/hooks/queries/useStreak";
@@ -79,7 +78,6 @@ export default function ProfileScreen() {
   const streak = useStreak();
   const streakDays = useStreakDays(profile?.id);
   const markRestDay = useMarkRestDay();
-  const hasStory = useHasActiveStory(profile?.id);
   const setVisibility = useSetVisibility();
   const [streakOpen, setStreakOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -135,7 +133,6 @@ export default function ProfileScreen() {
   // Persist a newly-observed high-water so "Longest" survives a streak break.
   useRecordStreakHighWater(currentStreak, streak.data?.longest_streak ?? 0);
   const trophies = useTrophyProgress();
-  const hasActiveStory = hasStory.data ?? false;
   const featuredTrophies = useMemo<FeaturedTrophy[]>(() => {
     const raw = profile?.featured_trophies;
     return Array.isArray(raw) ? (raw as FeaturedTrophy[]) : [];
@@ -166,10 +163,6 @@ export default function ProfileScreen() {
     [tagged.data]
   );
 
-  const openAvatarStory = () => {
-    if (hasActiveStory && profile) router.push(`/story?user=${profile.id}`);
-    else router.push("/camera?mode=story");
-  };
   const openTrophies = () => router.push("/profile-section/trophies" as Href);
 
   return (
@@ -180,7 +173,7 @@ export default function ProfileScreen() {
         }
         contentContainerStyle={{ paddingTop: insets.top + space[2], paddingBottom: tabBarClearance(insets.bottom) }}
       >
-        {/* Top bar: handle + visibility · add story · settings */}
+        {/* Top bar: handle + visibility · settings */}
         <View
           style={{
             flexDirection: "row",
@@ -203,34 +196,23 @@ export default function ProfileScreen() {
             </Text>
             <ChevronDown size={icon.size.xs} color={tokens.text.tertiary} strokeWidth={icon.stroke.regular} />
           </Pressable>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: space[4] }}>
-            <Pressable
-              onPress={() => router.push("/camera?mode=story")}
-              haptic="none"
-              accessibilityLabel="Add story"
-              hitSlop={6}
-            >
-              <Plus size={icon.size.md} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />
-            </Pressable>
-            <Pressable
-              onPress={() => router.push("/settings" as Href)}
-              haptic="none"
-              accessibilityLabel="Menu"
-              hitSlop={6}
-            >
-              <Menu size={icon.size.md} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => router.push("/settings" as Href)}
+            haptic="none"
+            accessibilityLabel="Menu"
+            hitSlop={6}
+          >
+            <Menu size={icon.size.md} color={tokens.text.primary} strokeWidth={icon.stroke.regular} />
+          </Pressable>
         </View>
 
         <ProfileIdentity
           name={name}
           handle={handle}
           avatarUrl={profile?.avatar_url}
-          hasActiveStory={hasActiveStory}
-          onAvatarPress={openAvatarStory}
-          avatarAccessibilityLabel="Your story"
-          onAddStory={() => router.push("/camera?mode=story")}
+          // Tapping your own photo goes straight to editing it.
+          onAvatarPress={() => router.push("/edit-profile")}
+          avatarAccessibilityLabel="Your profile photo. Edit profile"
           postCount={gridPosts.length}
           friendCount={friendCount}
           onPressFriends={() => router.push("/people/friends" as Href)}

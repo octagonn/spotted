@@ -30,8 +30,7 @@ export const queryClient = new QueryClient({
 
 /**
  * Query keys that must never be persisted. Presence/search/viewer lists are
- * ephemeral; "stories" is TODAY-only daily-reset content, so persisting it
- * would paint yesterday's stories on the next day's cold start.
+ * ephemeral.
  *
  * "feed" IS persisted (Instagram-style offline support): gyms often have dead
  * cell service, so the last-seen posts must survive a relaunch and render with
@@ -40,7 +39,6 @@ export const queryClient = new QueryClient({
  * replaces both the rows and the URLs.
  */
 const EPHEMERAL_KEYS = new Set([
-  "stories",
   "live-presence",
   "activity-status",
   "crew-activity",
@@ -49,13 +47,11 @@ const EPHEMERAL_KEYS = new Set([
   "message-reactions",
   "track-search",
   "people-search",
-  "story-viewers",
-  "story-likers",
   "post-viewers"
 ]);
 
 // Several queries hold Set/Map data (streak-days, message-hides, blocked-users,
-// nudges, taunts, trophy-rarity, story likes …). Plain JSON.stringify turns a
+// nudges, taunts, trophy-rarity …). Plain JSON.stringify turns a
 // Set/Map into "{}", so on rehydrate the consumer's .keys()/.has() blows up.
 // Tag them on the way out and rebuild them on the way in so persistence is
 // lossless. (Bottom-up reviver: inner entries are already revived here.)

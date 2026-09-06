@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 
-import type { StoryGroup } from "@/hooks/queries/useStories";
 import { removePostObjects } from "@/lib/r2";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { trackAnalyticsEvent } from "@/lib/analytics";
@@ -74,39 +73,7 @@ export function useDeletePost() {
   });
 }
 
-/** Delete one of your own stories. */
-export function useDeleteStory() {
-  const queryClient = useQueryClient();
-  const userId = useAuthStore((state) => state.userId);
-  return useMutation({
-    mutationFn: async ({ storyId, mediaPath }: { storyId: string; mediaPath?: string | null }) => {
-      if (!isSupabaseConfigured) return;
-      if (mediaPath && !mediaPath.startsWith("http")) {
-        await removePostObjects([mediaPath]).catch(() => {});
-      }
-      const { error } = await supabase.from("stories").delete().eq("id", storyId);
-      if (error) throw error;
-    },
-    // Optimistic: the story leaves the rail/viewer instantly (empty groups drop).
-    onMutate: async ({ storyId }) => {
-      await queryClient.cancelQueries({ queryKey: ["stories", userId] });
-      const prev = queryClient.getQueryData<StoryGroup[]>(["stories", userId]);
-      queryClient.setQueryData<StoryGroup[]>(["stories", userId], (old) =>
-        (old ?? [])
-          .map((group) => ({ ...group, stories: group.stories.filter((s) => s.id !== storyId) }))
-          .filter((group) => group.stories.length > 0)
-      );
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(["stories", userId], ctx.prev);
-      showToast("Couldn't delete the story");
-    },
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["stories"] })
-  });
-}
-
-export type ReportContentType = "post" | "story" | "user" | "comment" | "community" | "conversation";
+export type ReportContentType = "post" | "user" | "comment" | "community" | "conversation";
 
 export const REPORT_REASONS = [
   "Spam or scam",

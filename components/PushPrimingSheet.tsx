@@ -57,7 +57,7 @@ export function PushPrimingSheet({
             Know when your friends hit the gym
           </Text>
           <Text style={{ marginTop: 12, fontSize: 14, lineHeight: 21, color: colors.mist, textAlign: "center" }}>
-            Get friend check-ins, messages, reactions, and one daily reminder. You can tune every category and quiet hours anytime.
+            Taunts when you skip, a heads-up when a friend you taunted finally posts, plus messages and reactions. Tune every category and quiet hours anytime.
           </Text>
 
           <Pressable onPress={onEnable} accessibilityLabel="Turn on notifications" style={{ alignSelf: "stretch", marginTop: 24 }}>

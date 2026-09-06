@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocalSearchParams } from "expo-router";
 import { SquarePen } from "lucide-react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Keyboard, Platform, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -38,6 +39,12 @@ export default function FriendsScreen() {
   const sheet = useSheet();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("Messages");
+  // Deep link into a segment (the Not-Spotted rail's "Add friends" tile sends
+  // `?tab=Add Friends`). Re-navigating with a new value switches again.
+  const params = useLocalSearchParams<{ tab?: string }>();
+  useEffect(() => {
+    if (params.tab && TABS.includes(params.tab)) setTab(params.tab);
+  }, [params.tab]);
 
   // Tab screens never unmount, so nothing refetched on tab switch — new
   // messages and friend requests only appeared after backgrounding the app.

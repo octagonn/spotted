@@ -2464,6 +2464,34 @@ export type Database = {
         Args: { p_target: string; p_line_id: string; p_line_text: string; p_since: string }
         Returns: string
       }
+      friends_not_spotted_today: {
+        Args: Record<string, never>
+        Returns: {
+          user_id: string
+          username: string
+          display_name: string | null
+          avatar_url: string | null
+          went_today: boolean
+          rest_today: boolean
+          current_streak: number
+          taunted_by_me_today: boolean
+          answered: boolean
+          taunt_id: string | null
+        }[]
+      }
+      my_taunts_received_today: {
+        Args: Record<string, never>
+        Returns: {
+          taunt_id: string
+          sender_id: string
+          username: string
+          display_name: string | null
+          avatar_url: string | null
+          line_id: string
+          sent_at: string
+          answered: boolean
+        }[]
+      }
       wave_at_friend: { Args: { target: string; gym_name?: string | null }; Returns: undefined }
       search_profiles_fuzzy: {
         Args: { q: string; max_rows?: number }

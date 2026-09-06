@@ -43,7 +43,7 @@ export function notificationText(n: AppNotification): string {
         ? `nudged ${String(n.payload?.communityName ?? "your crew")}: "${String(n.payload.text)}"`
         : `nudged ${String(n.payload?.communityName ?? "your crew")} — it's been quiet`;
     case "tagged":
-      return `tagged you in their ${n.payload?.kind === "story" ? "story" : "post"}`;
+      return "tagged you in their post";
     case "second_workout":
       return `put in a second workout today — ${String(n.payload?.workout_name ?? "another session")}`;
     case "taunt_answered":

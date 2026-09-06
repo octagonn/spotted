@@ -6,7 +6,7 @@ import { removePostObjects, uploadPostObject } from "@/lib/r2";
 import { supabase } from "@/lib/supabase";
 
 /**
- * Feed/story upload size.
+ * Feed photo upload size.
  *
  * 1080 was chosen as "the Instagram standard", but that standard predates 3x
  * displays: the feed photo frame is full-bleed, so on a 390pt-wide phone at @3x
@@ -50,8 +50,8 @@ async function compressPhoto(uri: string): Promise<string> {
   }
 }
 
-/** Story photos are full-screen — same treatment as feed photos. */
-export async function compressStoryPhoto(uri: string): Promise<string> {
+/** Chat photos are full-screen — same treatment as feed photos. */
+export async function compressChatPhoto(uri: string): Promise<string> {
   return compressPhoto(uri);
 }
 

@@ -47,18 +47,20 @@ export function useNotSpotted() {
  * Rail order: the people a taunt can still change come first.
  *   1. not spotted, streak at risk (longest streak first — most to lose)
  *   2. not spotted, no streak
- *   3. taunted by me, waiting
- *   4. answered / went today (gold ✓, social proof at the end)
- * Rest days are hidden — a declared rest day is an answer, not an absence.
+ *   3. answered / went today (gold ✓, social proof at the end)
+ * Hidden: rest days (a declared rest day is an answer, not an absence) and
+ * anyone I've already taunted today who hasn't posted yet — one taunt per
+ * person per day, so their tile is done until they show up (then it comes
+ * back gold). useSendTaunt flips `taunted_by_me_today` optimistically, which
+ * is what makes the tile vanish the instant Send is tapped.
  */
 export function orderForRail(friends: NotSpottedFriend[]): NotSpottedFriend[] {
   const rank = (f: NotSpottedFriend) => {
-    if (f.went_today) return 3;
-    if (f.taunted_by_me_today) return 2;
+    if (f.went_today) return 2;
     return f.current_streak > 0 ? 0 : 1;
   };
   return friends
-    .filter((f) => !f.rest_today)
+    .filter((f) => !f.rest_today && !(f.taunted_by_me_today && !f.went_today))
     .sort((a, b) => rank(a) - rank(b) || b.current_streak - a.current_streak || a.username.localeCompare(b.username));
 }
 

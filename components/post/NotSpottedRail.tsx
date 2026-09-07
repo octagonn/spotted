@@ -23,6 +23,8 @@ const BADGE = 22;
 /** Below this many friends the rail can't do its job — show the add tile. */
 const THIN_CREW = 3;
 
+// "taunted" never reaches the rail (orderForRail drops those for the day) but
+// stays in the vocabulary so a stale cache entry still renders sanely.
 type TileState = "open" | "taunted" | "went";
 
 function stateOf(friend: NotSpottedFriend): TileState {
@@ -182,10 +184,13 @@ function SkeletonTile() {
 
 /**
  * "Not spotted yet" — the home-feed rail in the slot stories used to occupy.
- * Every friend, sorted so the people a taunt can still change come first
- * (streak-at-risk → no streak → already taunted → showed up). Tapping an open
- * tile opens the taunt sheet; a taunted tile or a gold one goes to their
- * profile. Rest-day friends are hidden (a declared rest day is an answer).
+ * Friends sorted so the people a taunt can still change come first
+ * (streak-at-risk → no streak → showed up). Tapping an open tile opens the
+ * taunt sheet; a gold one goes to their profile. Hidden: rest-day friends (a
+ * declared rest day is an answer) and anyone already taunted today — the
+ * tile leaves the moment Send is tapped and comes back gold when they post.
+ * The header counts still cover the whole crew, so "2 of 5 showed up" stays
+ * true even when three tiles are gone.
  *
  * Only visible once the viewer has posted — the LockOverlay covers the whole
  * feed until then and carries its own "you've been taunted" strip.
@@ -194,19 +199,24 @@ export function NotSpottedRail() {
   const router = useRouter();
   const sheet = useSheet();
   const query = useNotSpotted();
-  const friends = useMemo(() => orderForRail(query.data ?? []), [query.data]);
+  // crew = everyone who's in play today (rest days out); tiles = what we draw.
+  const crew = useMemo(() => (query.data ?? []).filter((f) => !f.rest_today), [query.data]);
+  const tiles = useMemo(() => orderForRail(query.data ?? []), [query.data]);
 
-  const openCount = friends.filter((f) => !f.went_today).length;
-  const wentCount = friends.length - openCount;
-  const everyoneWent = friends.length > 0 && openCount === 0;
+  const wentCount = crew.filter((f) => f.went_today).length;
+  const openCount = crew.length - wentCount;
+  const waitingCount = crew.filter((f) => !f.went_today && f.taunted_by_me_today).length;
+  const everyoneWent = crew.length > 0 && openCount === 0;
+  // Every open friend has already been taunted — nothing left to tap.
+  const allTaunted = openCount > 0 && waitingCount === openCount;
 
   // One impression per mount once data is in — the metric the rail is judged on.
   const logged = useRef(false);
   useEffect(() => {
     if (logged.current || !query.data) return;
     logged.current = true;
-    trackAnalyticsEvent("taunt_rail_impression", { friends: friends.length, open: openCount });
-  }, [query.data, friends.length, openCount]);
+    trackAnalyticsEvent("taunt_rail_impression", { friends: crew.length, open: openCount });
+  }, [query.data, crew.length, openCount]);
 
   if (query.isError) return null;
   // Zero friends: the feed's empty state carries the friend finder; a rail of
@@ -235,17 +245,19 @@ export function NotSpottedRail() {
           paddingBottom: space[2]
         }}
       >
-        <Text variant="micro">{everyoneWent ? "Everyone showed up" : "Not spotted yet"}</Text>
+        <Text variant="micro">
+          {everyoneWent ? "Everyone showed up" : allTaunted ? "Their move" : "Not spotted yet"}
+        </Text>
         {query.data ? (
           <Text variant="meta">
-            {everyoneWent ? "Full house today 🔥" : `${wentCount} of ${friends.length} showed up`}
+            {everyoneWent ? "Full house today 🔥" : `${wentCount} of ${crew.length} showed up`}
           </Text>
         ) : null}
       </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: space[3], paddingHorizontal: space[4] }}
+        contentContainerStyle={{ gap: space[3], paddingHorizontal: space[4], alignItems: "flex-start" }}
       >
         {!query.data ? (
           <>
@@ -255,9 +267,23 @@ export function NotSpottedRail() {
           </>
         ) : (
           <>
-            {friends.map((friend) => (
+            {tiles.map((friend) => (
               <Tile key={friend.user_id} friend={friend} onPress={() => onTile(friend)} />
             ))}
+            {tiles.length === 0 ? (
+              // Nothing to draw: every open friend is taunted (or it's rest
+              // day all round). Say so instead of leaving a blank strip.
+              <View style={{ height: AVATAR + (RING + GAP) * 2, justifyContent: "center", maxWidth: 260 }}>
+                <Text variant="body" className="text-white">
+                  {crew.length === 0 ? "Rest day all round" : "You've taunted everyone who's not spotted yet"}
+                </Text>
+                <Text variant="meta">
+                  {crew.length === 0
+                    ? "Nobody to taunt today."
+                    : `${waitingCount} still to post. You get credit when they do.`}
+                </Text>
+              </View>
+            ) : null}
             {query.data.length < THIN_CREW ? <AddTile onPress={goAddFriends} /> : null}
           </>
         )}

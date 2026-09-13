@@ -172,10 +172,13 @@ export function Terms() {
 
       <Heading>7. Gym Check-ins & Location</Heading>
       <P>
-        Spotted verifies posts are made at a participating gym using foreground (while-using) location. You
-        choose whether to grant this permission. We do not collect background location and we do not share
-        your precise coordinates with other users; we only display whether you are present at a gym, and only
-        to the friends you have explicitly added.
+        Spotted verifies posts and check-ins at a participating gym using location. You choose whether to
+        grant this permission, and at what level. With “While Using” access, check-ins happen when you open
+        the App at the gym. With optional “Always” access, your device monitors a single geofence around your
+        home gym and wakes the App when you arrive so it can check you in; Spotted does not run continuous
+        location tracking or keep a location history. We do not share your precise coordinates with other
+        users; we only display whether you are present at a gym, and only to the friends you have explicitly
+        added.
       </P>
 
       <Heading>8. Friends & Visibility</Heading>
@@ -314,7 +317,11 @@ export function Privacy() {
 
       <SubHeading>COLLECTED AUTOMATICALLY</SubHeading>
       <Bullet>Device, network, and app logs needed to operate and secure the Service, such as app version, OS version, IP address, request time, and error details.</Bullet>
-      <Bullet>Location: foreground (while-using) location, used only to verify check-ins at participating gyms. We do not collect background location.</Bullet>
+      <Bullet>
+        Location: used to verify check-ins at participating gyms. If you allow location “Always”, the App
+        registers a single geofence around your home gym so your device can wake it when you arrive or leave;
+        we do not run continuous GPS tracking and do not store a location history.
+      </Bullet>
       <Bullet>Notifications: an Expo Push Token linked to your account and app installation, device platform, permission and category settings, delivery ticket or receipt status, errors, and the time you open a notification.</Bullet>
       <Bullet>Content safety scans: photos and videos you upload are automatically analyzed by machine-learning moderation models, and captions, messages, and other text may be screened against blocked-term filters, to detect content that violates our Terms (see Automated Content Moderation below).</Bullet>
       <Bullet>Local storage: small amounts of data (sessions, preferences, cached lists) stored on-device via AsyncStorage and MMKV.</Bullet>
@@ -381,10 +388,19 @@ export function Privacy() {
 
       <Heading>6. Location</Heading>
       <P>
-        Location is requested only while you are actively using the App. We never collect location in the
-        background. Coordinates are used at the moment of check-in to verify proximity to a gym you select;
-        we store the gym you checked into, not your precise position. We do not share your latitude and
-        longitude with other users.
+        Coordinates are used at the moment of check-in to verify proximity to a gym you select; we store the
+        gym you checked into, not your precise position. We do not share your latitude and longitude with
+        other users.
+      </P>
+      <P>
+        Background arrival detection (optional). If you grant location “Always”, the App asks your device to
+        monitor one geofence around your home gym. Your device — not our servers — watches that boundary using
+        low-power system location. When you cross it, the device wakes the App briefly, which takes a short
+        position fix to confirm you are at the gym and records a check-in exactly as it would if you had
+        opened the App. We do not track your movements, do not run continuous GPS, and do not receive or
+        store any location other than the check-in itself. Switch it off at any time by setting the App’s
+        location permission to “While Using” or “Never” in device settings; check-ins then require opening
+        the App.
       </P>
 
       <Heading>7. Notifications</Heading>

@@ -12,6 +12,7 @@ import { OnboardingHeader } from "@/components/auth/OnboardingHeader";
 import { Pressable } from "@/components/ui/Pressable";
 import { Text } from "@/components/ui/Text";
 import { usePageFade } from "@/hooks/usePageFade";
+import { ensureBackgroundLocation, nativeSupportsBackgroundLocation } from "@/lib/gymGeofence";
 import { logger } from "@/lib/logger";
 import { registerDeviceToken } from "@/lib/notifications";
 import { advanceOnboarding } from "@/lib/onboarding";
@@ -29,9 +30,25 @@ export default function PermissionsScreen() {
   const [busy, setBusy] = useState(false);
   const userId = useAuthStore((state) => state.userId);
 
+  // Builds with the background mode compiled in chain straight to "Always"
+  // so the gym-arrival buzz works with the app closed. Older binaries and
+  // Expo Go stop at "While Using".
+  const backgroundCapable = nativeSupportsBackgroundLocation();
+
   async function handleLocation() {
     setBusy(true);
     try {
+      if (backgroundCapable) {
+        const result = await ensureBackgroundLocation();
+        if (result === "granted") {
+          setLocationStatus("granted");
+        } else {
+          // Always refused but While Using may still be on — that's still a win.
+          const fg = await Location.getForegroundPermissionsAsync();
+          setLocationStatus(fg.granted ? "granted" : "denied");
+        }
+        return;
+      }
       const fg = await Location.requestForegroundPermissionsAsync();
       setLocationStatus(fg.granted ? "granted" : "denied");
     } finally {
@@ -78,13 +95,21 @@ export default function PermissionsScreen() {
         <OnboardingHeader
           step={5}
           title="LET IT WATCH."
-          body="Location finds gyms near you and verifies check-ins. Notifications make skipping public enough to matter."
+          body={
+            backgroundCapable
+              ? "Location checks you in the moment you walk into your gym — even with the app closed. Notifications make skipping public enough to matter."
+              : "Location finds gyms near you and verifies check-ins. Notifications make skipping public enough to matter."
+          }
         />
 
         <View className="mt-8 gap-3">
           <Pressable
-            accessibilityLabel={`Location while using, ${statusLabel(locationStatus).toLowerCase()}`}
-            accessibilityHint="Verify gym check-ins and find nearby gyms"
+            accessibilityLabel={`${backgroundCapable ? "Location always" : "Location while using"}, ${statusLabel(locationStatus).toLowerCase()}`}
+            accessibilityHint={
+              backgroundCapable
+                ? "Detect when you arrive at your gym, even with the app closed"
+                : "Verify gym check-ins and find nearby gyms"
+            }
             className="flex-row items-center gap-4 rounded-card border border-hairline-strong bg-glass-strong p-4"
             onPress={handleLocation}
           >
@@ -92,9 +117,11 @@ export default function PermissionsScreen() {
               <MapPin color={colors.white} size={icon.size.sm} strokeWidth={icon.stroke.thin} />
             </View>
             <View className="flex-1">
-              <Text variant="body-strong">Location While Using</Text>
+              <Text variant="body-strong">{backgroundCapable ? "Location Always" : "Location While Using"}</Text>
               <Text variant="caption" className="mt-1 text-mist">
-                Verify gym check-ins and find nearby gyms.
+                {backgroundCapable
+                  ? "One low-power geofence on your gym. No tracking, no history."
+                  : "Verify gym check-ins and find nearby gyms."}
               </Text>
             </View>
             <Text variant="micro" accessibilityLiveRegion="polite" className={statusColor(locationStatus)}>

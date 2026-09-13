@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { ProfileWithGym } from "@/hooks/queries/useProfile";
+import { syncGymGeofenceById } from "@/lib/gymGeofence";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { showToast } from "@/stores/ui";
@@ -109,8 +110,10 @@ export function useSetHomeGym() {
       const { error } = await supabase.from("profiles").update({ home_gym_id: gymId }).eq("id", userId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, gymId) => {
       void queryClient.invalidateQueries({ queryKey: ["profile"] });
+      // Point the background arrival geofence at the new gym right away.
+      void syncGymGeofenceById(gymId).catch(() => undefined);
     },
     onError: () => showToast("Couldn't set your home gym — try again")
   });

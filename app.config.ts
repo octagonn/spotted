@@ -25,7 +25,11 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
   name: "Spotted",
   slug: "spotted",
   scheme: "spotted",
-  version: "1.2.1",
+  // 1.3.0 = first binary with background location (gym-arrival geofence).
+  // Because runtimeVersion follows appVersion, OTAs published from this config
+  // only reach 1.3.0 binaries — 1.2.1 installs never receive code that calls
+  // the background APIs. Hotfixes for 1.2.1 must be published from a 1.2.1 tag.
+  version: "1.3.0",
   orientation: "portrait",
   userInterfaceStyle: "dark",
   newArchEnabled: true,
@@ -57,12 +61,15 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
     },
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
+      // Lets iOS wake the app for geofence enter/exit events (and the short
+      // GPS "settle" stream that follows) while it is closed. See lib/gymGeofence.
+      UIBackgroundModes: ["location"],
       NSCameraUsageDescription: "Spotted uses the camera to capture your posts.",
       NSMicrophoneUsageDescription: "Spotted uses the microphone when you record video posts.",
       NSLocationAlwaysAndWhenInUseUsageDescription:
-        "Spotted uses location to verify gym check-ins and keep your presence accurate.",
+        "Spotted uses a single low-power geofence around your home gym so it can check you in and buzz you the moment you arrive — even with the app closed. No location history is stored.",
       NSLocationAlwaysUsageDescription:
-        "Spotted uses location to verify gym check-ins and keep your presence accurate.",
+        "Spotted uses a single low-power geofence around your home gym so it can check you in and buzz you the moment you arrive — even with the app closed. No location history is stored.",
       NSLocationWhenInUseUsageDescription: "Spotted uses location to verify gym check-ins and find nearby gyms.",
       NSPhotoLibraryUsageDescription: "Spotted accesses a photo only when you choose it for a post or your profile.",
       NSPhotoLibraryAddUsageDescription:
@@ -75,7 +82,16 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       backgroundColor: black,
       foregroundImage: "./assets/images/android-icon-foreground.png"
     },
-    permissions: ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "CAMERA", "RECORD_AUDIO", "POST_NOTIFICATIONS"]
+    permissions: [
+      "ACCESS_FINE_LOCATION",
+      "ACCESS_COARSE_LOCATION",
+      "ACCESS_BACKGROUND_LOCATION",
+      "FOREGROUND_SERVICE",
+      "FOREGROUND_SERVICE_LOCATION",
+      "CAMERA",
+      "RECORD_AUDIO",
+      "POST_NOTIFICATIONS"
+    ]
   },
   web: {
     output: "single",
@@ -91,7 +107,13 @@ export default ({ config: baseConfig }: ConfigContext): ExpoConfig => ({
       "expo-location",
       {
         locationAlwaysAndWhenInUsePermission:
-          "Spotted uses location to verify gym check-ins and keep your presence accurate."
+          "Spotted uses a single low-power geofence around your home gym so it can check you in and buzz you the moment you arrive — even with the app closed. No location history is stored.",
+        locationAlwaysPermission:
+          "Spotted uses a single low-power geofence around your home gym so it can check you in and buzz you the moment you arrive — even with the app closed. No location history is stored.",
+        locationWhenInUsePermission: "Spotted uses location to verify gym check-ins and find nearby gyms.",
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true
       }
     ],
     [

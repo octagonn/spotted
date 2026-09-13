@@ -1,6 +1,6 @@
 # Spotted Terms of Use
 
-**Effective date:** July 25, 2026  
+**Effective date:** September 12, 2026  
 **Contact:** [support@spotted.app](mailto:support@spotted.app)
 
 > These Terms form a binding agreement between you and Spotted. By creating an account, signing in, or using the Service, you agree to them. If you do not agree, do not use the Service.
@@ -37,7 +37,7 @@ We may remove content or terminate accounts that we believe violate these standa
 
 ## 5. Gym Check-ins and Location
 
-Spotted may use foreground (while-using) location to verify posts and check-ins at participating gyms. You choose whether to grant permission. We do not collect background location or share precise coordinates with other users. We display gym presence, rather than precise coordinates, to friends you explicitly add.
+Spotted may use location to verify posts and check-ins at participating gyms. You choose whether to grant permission, and at what level. With “While Using” access, check-ins happen when you open the App at the gym. With optional “Always” access, your device monitors a single geofence around your home gym and wakes the App when you arrive so it can check you in; Spotted does not run continuous location tracking or keep a location history. We do not share precise coordinates with other users. We display gym presence, rather than precise coordinates, to friends you explicitly add.
 
 ## 6. Friends and Visibility
 

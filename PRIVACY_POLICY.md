@@ -1,6 +1,6 @@
 # Spotted Privacy Policy
 
-**Effective date:** July 25, 2026  
+**Effective date:** September 12, 2026  
 **Contact:** [privacy@spotted.app](mailto:privacy@spotted.app)
 
 > This Policy explains how Spotted collects, uses, shares, and protects information when you use the App and related services (the “Service”).
@@ -19,7 +19,7 @@
 ### Information Collected Automatically
 
 - Device, network, and app logs needed to operate and secure the Service, such as app and OS version, IP address, request time, and error details.
-- Foreground location used only to verify check-ins at participating gyms. We do not collect background location.
+- Location used to verify check-ins at participating gyms. If you allow location “Always”, the App registers a single geofence around your home gym so the operating system can wake it when you arrive or leave; we do not run continuous GPS tracking and do not store a location history.
 - Expo Push Token, device platform, permission and category settings, delivery status, errors, and notification-open time when notifications are enabled.
 - Limited local storage for sessions, preferences, and cached lists.
 
@@ -66,7 +66,9 @@ Photos taken through the App are uploaded to private storage controlled by your 
 
 ## 6. Location
 
-Location is requested only while you actively use the App. Coordinates verify proximity to a selected gym at check-in; we store the gym checked into, not your precise position, and do not share latitude or longitude with other users.
+Location verifies proximity to a selected gym at check-in; we store the gym checked into, not your precise position, and do not share latitude or longitude with other users.
+
+**Background arrival detection (optional).** If you grant location “Always”, the App asks your device to monitor one geofence around your home gym. Your device — not our servers — watches that boundary using low-power system location. When you cross it, the device wakes the App briefly, which takes a short position fix to confirm you are at the gym and records a check-in exactly as it would if you had opened the App. We do not track your movements, do not run continuous GPS, and do not receive or store any location other than the check-in itself. You can switch this off at any time by setting the App’s location permission to “While Using” or “Never” in device settings; check-ins then require opening the App.
 
 ## 7. Notifications
 

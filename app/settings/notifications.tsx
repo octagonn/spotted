@@ -21,7 +21,14 @@ import {
   type FriendCheckinScope,
   type NotificationPrefs
 } from "@/hooks/queries/useNotificationPrefs";
+import {
+  ensureBackgroundLocation,
+  getBackgroundLocationStatus,
+  syncGymGeofenceById,
+  type BackgroundLocationStatus
+} from "@/lib/gymGeofence";
 import { getPushPermissionStatus, registerDeviceToken, type PushPermissionStatus } from "@/lib/notifications";
+import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { colors } from "@/theme/colors";
 import { icon, radius, space, tokens } from "@/theme/tokens";
@@ -179,12 +186,14 @@ export default function NotificationSettingsScreen() {
   const [osStatus, setOsStatus] = useState<PushPermissionStatus>("not_asked");
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [timeField, setTimeField] = useState<TimeField | null>(null);
+  const [bgLocation, setBgLocation] = useState<BackgroundLocationStatus>("unavailable");
 
   useEffect(() => {
     const refresh = () => {
       void getPushPermissionStatus()
         .then(setOsStatus)
         .catch(() => setOsStatus("denied"));
+      void getBackgroundLocationStatus().then(setBgLocation);
     };
     refresh();
     const subscription = AppState.addEventListener("change", (state) => {
@@ -207,6 +216,21 @@ export default function NotificationSettingsScreen() {
       void prefs.refetch();
     } finally {
       setPermissionBusy(false);
+    }
+  };
+
+  // "Always" location = arrival buzz fires with the app closed. Once the OS
+  // has an answer only the Settings app can change it, so route there.
+  const enableBackgroundLocation = async () => {
+    if (bgLocation === "denied") {
+      await Linking.openSettings();
+      return;
+    }
+    const result = await ensureBackgroundLocation();
+    setBgLocation(result);
+    if (result === "granted" && userId) {
+      const { data } = await supabase.from("profiles").select("home_gym_id").eq("id", userId).maybeSingle();
+      void syncGymGeofenceById(data?.home_gym_id ?? null).catch(() => undefined);
     }
   };
 
@@ -302,6 +326,34 @@ export default function NotificationSettingsScreen() {
             sub="Your daily nudge and check-in confirmations."
             right={<CategoryToggle value={p.gymRemindersEnabled} field="gymRemindersEnabled" update={update} />}
           />
+          {bgLocation !== "unavailable" ? (
+            <Row
+              title="Arrival buzz with the app closed"
+              sub={
+                bgLocation === "granted"
+                  ? "On — location set to Always. One low-power geofence on your gym, no history."
+                  : "Needs location set to Always so your gym can wake the app when you walk in."
+              }
+              right={
+                bgLocation === "granted" ? (
+                  <Text variant="meta-strong" className="text-gold">
+                    On
+                  </Text>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Turn on background arrival detection"
+                    onPress={() => void enableBackgroundLocation()}
+                    haptic="selection"
+                  >
+                    <Text variant="meta-strong" className="text-gold">
+                      {bgLocation === "denied" ? "Open Settings" : "Turn on"}
+                    </Text>
+                  </Pressable>
+                )
+              }
+            />
+          ) : null}
           <Row
             title="Daily nudge time"
             sub="Only sent if you haven't posted that day."

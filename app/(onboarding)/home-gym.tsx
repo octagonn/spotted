@@ -17,6 +17,7 @@ import { SkeletonRow } from "@/components/ui/Skeleton";
 import { Text } from "@/components/ui/Text";
 import { formatDistance, useGymSearch, type GymSearchCoords, type GymSearchResult } from "@/hooks/queries/useGymSearch";
 import { usePageFade } from "@/hooks/usePageFade";
+import { syncGymGeofenceById } from "@/lib/gymGeofence";
 import { seedGymsNear } from "@/lib/gymSeeding";
 import { logger } from "@/lib/logger";
 import { advanceOnboarding } from "@/lib/onboarding";
@@ -131,6 +132,8 @@ export default function HomeGymScreen() {
         throw error;
       }
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
+      // Arm the background arrival geofence now that a home gym exists.
+      void syncGymGeofenceById(selectedId).catch(() => undefined);
       useAuthStore.getState().setOnboardingStage("friends");
       fadeNavigate(() => router.replace("/add-friends"));
     } catch (error) {

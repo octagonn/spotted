@@ -39,6 +39,9 @@ import { PostCelebration } from "@/components/ui/PostCelebration";
 import { SheetProvider } from "@/components/ui/Sheet";
 import { ToastHost } from "@/components/ui/Toast";
 import { usePresenceSync } from "@/hooks/useGeofence";
+// Side-effect import: defines the background geofence tasks at module scope so
+// they exist when the OS cold-launches the bundle with no UI (gym arrival).
+import "@/lib/gymGeofence";
 import { useInAppBanners } from "@/hooks/useInAppBanners";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { TrophyEarnHost } from "@/components/trophies/TrophyEarnHost";

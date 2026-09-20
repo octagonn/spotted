@@ -14,13 +14,45 @@ export class AppleSignInError extends Error {
   }
 }
 
+/**
+ * iOS reports ASAuthorizationError.canceled (1001) both when the user dismisses
+ * the sheet AND when the system refuses to present one at all — no iCloud
+ * account on the device, an Apple ID without two-factor authentication, a
+ * child / managed Apple ID, or a Screen Time "account changes" restriction.
+ * The sheet's own present animation takes ~0.5 s and a human needs time to
+ * find Cancel, so a "cancel" that lands inside this window never showed a
+ * sheet. Those must NOT be swallowed as a user cancel: to the person tapping,
+ * the button simply did nothing.
+ */
+const APPLE_SHEET_NEVER_SHOWN_MS = 600;
+
+/** Error code we raise for the instant-cancel case above. */
+export const APPLE_SHEET_NOT_SHOWN = "ERR_SHEET_NOT_SHOWN";
+
+const APPLE_SYSTEM_DECLINE_HINT =
+  "Apple closed the sign-in sheet before it opened. On this iPhone, open Settings → your name and make sure you're signed in to iCloud with two-factor authentication turned on, then try again — or continue with email below.";
+
+/** Native codes that mean the OS, not the user, stopped the request. */
+const APPLE_SYSTEM_DECLINE_CODES = new Set([
+  "ERR_REQUEST_UNKNOWN",
+  "ERR_REQUEST_FAILED",
+  "ERR_REQUEST_NOT_HANDLED",
+  "ERR_REQUEST_NOT_INTERACTIVE",
+  "ERR_INVALID_RESPONSE"
+]);
+
 /** Run the native Apple sheet and return a credential with an identity token. */
 async function getAppleCredential(): Promise<AppleAuthentication.AppleAuthenticationCredential> {
   const available = await AppleAuthentication.isAvailableAsync();
   if (!available) {
-    throw new AppleSignInError("Sign in with Apple isn't available on this device.");
+    throw new AppleSignInError(
+      "Sign in with Apple isn't available on this device.",
+      "ERR_UNAVAILABLE",
+      "Sign in with Apple isn't available on this device — continue with email below."
+    );
   }
   let credential: AppleAuthentication.AppleAuthenticationCredential;
+  const startedAt = Date.now();
   try {
     credential = await AppleAuthentication.signInAsync({
       requestedScopes: [
@@ -30,13 +62,20 @@ async function getAppleCredential(): Promise<AppleAuthentication.AppleAuthentica
     });
   } catch (err) {
     const code = (err as { code?: string }).code;
+    const message = err instanceof Error ? err.message : "Apple sign-in failed.";
     if (code === "ERR_REQUEST_CANCELED") {
+      if (Date.now() - startedAt < APPLE_SHEET_NEVER_SHOWN_MS) {
+        throw new AppleSignInError(message, APPLE_SHEET_NOT_SHOWN, APPLE_SYSTEM_DECLINE_HINT);
+      }
       throw new AppleSignInError("Cancelled.", code);
     }
-    throw new AppleSignInError(err instanceof Error ? err.message : "Apple sign-in failed.", code);
+    if (code && APPLE_SYSTEM_DECLINE_CODES.has(code)) {
+      throw new AppleSignInError(message, code, APPLE_SYSTEM_DECLINE_HINT);
+    }
+    throw new AppleSignInError(message, code);
   }
   if (!credential.identityToken) {
-    throw new AppleSignInError("Apple did not return an identity token.");
+    throw new AppleSignInError("Apple did not return an identity token.", "ERR_NO_IDENTITY_TOKEN");
   }
   return credential;
 }
